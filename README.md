@@ -4,9 +4,9 @@
 
 By Aevonix Research · Version 1.0.0
 
-[![Stock DeepSeek V4.1 Flash refuses to help make a realistic-looking ID for a theatrical role; with FlashAlign on, the same model answers it](assets/demo/flashalign-promo-preview.gif)](assets/demo/flashalign-promo.mp4)
+[![Stock DeepSeek V4.1 Flash refuses to help make a realistic-looking ID for a theatrical role; with FlashAlign on, the same model answers it](assets/demo/flashalign-promo-preview.gif)](https://aevonix.github.io/FlashAlign/)
 
-**[▶ Watch the 40-second video with sound](assets/demo/flashalign-promo.mp4)** · [About this video](assets/demo/README.md)
+**[▶ Watch the 40-second video with sound](https://aevonix.github.io/FlashAlign/)** · [About this video](assets/demo/README.md)
 
 [Get started](#get-started) · [Setup](docs/setup.md) · [Compatibility](docs/compatibility.md) · [Docs](#documentation)
 
