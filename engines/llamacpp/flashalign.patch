@@ -1,0 +1,570 @@
+# FlashAlign modifications copyright (c) 2026 Aevonix Inc and contributors.
+# SPDX-License-Identifier: AGPL-3.0-only
+# Upstream context remains under the MIT terms in LICENSE.llama.cpp.
+# Commercial licensing is available from contact@aevonix.com.
+
+diff --git a/common/speculative.cpp b/common/speculative.cpp
+index 4305ac6ac..4cf9d5dca 100644
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -2642,6 +2642,9 @@ common_params common_base_params_to_speculative(const common_params & params) {
+         if (!params_spec.devices.empty()) {
+             result.devices           = params_spec.devices;
+         }
++        result.lora_adapters.erase(std::remove_if(result.lora_adapters.begin(), result.lora_adapters.end(),
++                [](const common_adapter_lora_info & entry) { return llama_adapter_is_output_projection(entry.ptr); }),
++                result.lora_adapters.end());
+         result.model                 = params_spec.mparams;
+         result.n_gpu_layers          = params_spec.n_gpu_layers;
+         result.tensor_buft_overrides = params_spec.tensor_buft_overrides;
+diff --git a/src/llama-adapter.cpp b/src/llama-adapter.cpp
+index 824601ed6..5760e8f00 100644
+--- a/src/llama-adapter.cpp
++++ b/src/llama-adapter.cpp
+@@ -1,10 +1,12 @@
+ #include "llama-adapter.h"
++#include "llama-ext.h"
+ 
+ #include "llama-impl.h"
+ #include "llama-mmap.h"
+ #include "llama-model.h"
+ 
+ #include <map>
++#include <cmath>
+ #include <cassert>
+ #include <cerrno>
+ #include <cstring>
+@@ -214,11 +216,38 @@ static void llama_adapter_lora_init_impl(llama_model & model, FILE * file, llama
+         }
+ 
+         auto adapter_type = get_kv_str(llm_kv(LLM_KV_ADAPTER_TYPE));
+-        if (adapter_type != "lora") {
+-            throw std::runtime_error("expect adapter.type to be 'lora', but got: " + adapter_type);
++        adapter.output_projection = adapter_type == "flashalign_projection";
++        if (adapter_type != "lora" && !adapter.output_projection) {
++            throw std::runtime_error("unsupported adapter.type: " + adapter_type);
++        }
++        if (adapter.output_projection && model.arch != LLM_ARCH_QWEN35 && model.arch != LLM_ARCH_GEMMA4) {
++            throw std::runtime_error("FlashAlign projection package supports qwen35 and gemma4 only");
++        }
++
++        if (adapter.output_projection) {
++            const int version_key = gguf_find_key(gguf_ctx, "flashalign.projection.version");
++            if (version_key >= 0) {
++                if (gguf_get_kv_type(gguf_ctx, version_key) != GGUF_TYPE_UINT32) {
++                    throw std::runtime_error("invalid FlashAlign projection version type");
++                }
++                adapter.output_projection_version = gguf_get_val_u32(gguf_ctx, version_key);
++            }
++            if (adapter.output_projection_version != 1 && adapter.output_projection_version != 2) {
++                throw std::runtime_error("unsupported FlashAlign projection version");
++            }
++            if (model.arch == LLM_ARCH_GEMMA4 && adapter.output_projection_version != 2) {
++                throw std::runtime_error("Gemma FlashAlign projections require explicit site strengths");
++            }
++            const int alpha_key = gguf_find_key(gguf_ctx, llm_kv(LLM_KV_ADAPTER_LORA_ALPHA).c_str());
++            if (alpha_key < 0 || gguf_get_kv_type(gguf_ctx, alpha_key) != GGUF_TYPE_FLOAT32) {
++                throw std::runtime_error("invalid FlashAlign alpha metadata");
++            }
+         }
+ 
+         adapter.alpha = get_kv_f32(llm_kv(LLM_KV_ADAPTER_LORA_ALPHA));
++        if (adapter.output_projection && adapter.alpha != 0.0f) {
++            throw std::runtime_error("FlashAlign projections require zero LoRA alpha");
++        }
+ 
+         // parse alora invocation sequence vector
+         const auto & key = llm_kv(LLM_KV_ADAPTER_ALORA_INVOCATION_TOKENS);
+@@ -288,6 +317,9 @@ static void llama_adapter_lora_init_impl(llama_model & model, FILE * file, llama
+                 ab_map[name].b = cur;
+             }
+         } else if (str_endswith(name, "_norm.weight")) {
++            if (adapter.output_projection) {
++                throw std::runtime_error("unexpected FlashAlign normalization tensor");
++            }
+             // TODO: add support for norm vector
+             // for now, we don't really care because most adapters still work fine without it
+             continue;
+@@ -296,6 +328,10 @@ static void llama_adapter_lora_init_impl(llama_model & model, FILE * file, llama
+         }
+     }
+ 
++    if (adapter.output_projection && ab_map.empty()) {
++        throw std::runtime_error("FlashAlign projection has no sites");
++    }
++
+     // get extra buffer types of the CPU
+     // TODO: a more general solution for non-CPU extra buft should be implemented in the future
+     //       ref: https://github.com/ggml-org/llama.cpp/pull/12593#pullrequestreview-2718659948
+@@ -361,7 +397,30 @@ static void llama_adapter_lora_init_impl(llama_model & model, FILE * file, llama
+ 
+         ggml_context * dev_ctx = ctx_for_buft(buft);
+         // validate tensor shape
+-        if (is_token_embd) {
++        if (adapter.output_projection) {
++            const int64_t width = is_token_embd ? model_tensor->ne[0] : model_tensor->ne[1];
++            const bool site = str_endswith(name, ".attn_output.weight") || str_endswith(name, ".ffn_down.weight") ||
++                              (model.arch == LLM_ARCH_QWEN35 && (is_token_embd || str_endswith(name, ".ssm_out.weight")));
++            const std::string scale_name = "flashalign.projection.scale." + name;
++            const int scale_key = gguf_find_key(ctx_gguf.get(), scale_name.c_str());
++            if (adapter.output_projection_version == 2) {
++                if (scale_key < 0 || gguf_get_kv_type(ctx_gguf.get(), scale_key) != GGUF_TYPE_FLOAT32) {
++                    throw std::runtime_error("missing or invalid FlashAlign site strength: " + name);
++                }
++                w.output_projection_scale = gguf_get_val_f32(ctx_gguf.get(), scale_key);
++                if (!llama_adapter_projection_scale_valid(w.output_projection_scale)) {
++                    throw std::runtime_error("FlashAlign site strength must be finite, positive and safe at request strength 2: " + name);
++                }
++            } else if (scale_key >= 0) {
++                throw std::runtime_error("explicit FlashAlign strengths require version 2");
++            }
++            if (!site || ggml_n_dims(model_tensor) > 2 || w.a->type != GGML_TYPE_F32 || w.b->type != GGML_TYPE_F32 ||
++                    ggml_n_dims(w.a) > 2 || ggml_n_dims(w.b) > 2 ||
++                    w.a->ne[0] != width || w.b->ne[1] != width ||
++                    w.a->ne[1] < 1 || w.a->ne[1] > 128 || w.a->ne[1] != w.b->ne[0]) {
++                throw std::runtime_error("invalid FlashAlign projection site or dimensions: " + name);
++            }
++        } else if (is_token_embd) {
+             // expect B to be non-transposed, A and B are flipped; see llm_build_inp_embd()
+             if (model_tensor->ne[0] != w.b->ne[1] || model_tensor->ne[1] != w.a->ne[1]) {
+                 throw std::runtime_error("tensor '" + name + "' has incorrect shape (hint: maybe wrong base model?)");
+@@ -381,6 +440,7 @@ static void llama_adapter_lora_init_impl(llama_model & model, FILE * file, llama
+         ggml_set_name(tensor_a, w.a->name);
+         ggml_set_name(tensor_b, w.b->name);
+         adapter.ab_map[name] = llama_adapter_lora_weight(tensor_a, tensor_b);
++        adapter.ab_map[name].output_projection_scale = w.output_projection_scale;
+     }
+ 
+     // allocate tensors / buffers and zero
+@@ -418,6 +478,28 @@ static void llama_adapter_lora_init_impl(llama_model & model, FILE * file, llama
+             auto dev  = it.second;
+             set_tensor(orig.a, dev.a);
+             set_tensor(orig.b, dev.b);
++            if (adapter.output_projection) {
++                const int64_t width = dev.a->ne[0];
++                const int64_t rank = dev.a->ne[1];
++                std::vector<float> a(width*rank), b(width*rank);
++                ggml_backend_tensor_get(dev.a, a.data(), 0, a.size()*sizeof(float));
++                ggml_backend_tensor_get(dev.b, b.data(), 0, b.size()*sizeof(float));
++                for (int64_t k = 0; k < rank; ++k) {
++                    for (int64_t i = 0; i < width; ++i) {
++                        if (!std::isfinite(a[k*width+i]) || !std::isfinite(b[i*rank+k]) ||
++                                b[i*rank+k] != -a[k*width+i]) {
++                            throw std::runtime_error("invalid FlashAlign projection basis or transpose");
++                        }
++                    }
++                    for (int64_t j = 0; j < rank; ++j) {
++                        double dot = 0.0;
++                        for (int64_t i = 0; i < width; ++i) dot += double(a[k*width+i])*a[j*width+i];
++                        if (std::abs(dot - (k == j ? 1.0 : 0.0)) > 2e-5) {
++                            throw std::runtime_error("FlashAlign projection rows must be orthonormal");
++                        }
++                    }
++                }
++            }
+         }
+     }
+ 
+@@ -525,3 +607,7 @@ const llama_token * llama_adapter_get_alora_invocation_tokens(const llama_adapte
+     GGML_ASSERT(adapter);
+     return adapter->alora_invocation_tokens.data();
+ }
++
++bool llama_adapter_is_output_projection(const llama_adapter_lora * adapter) {
++    return adapter != nullptr && adapter->output_projection;
++}
+diff --git a/src/llama-adapter.h b/src/llama-adapter.h
+index f0b1e50f8..6346b61ce 100644
+--- a/src/llama-adapter.h
++++ b/src/llama-adapter.h
+@@ -4,6 +4,8 @@
+ 
+ #include "ggml-cpp.h"
+ 
++#include <cmath>
++#include <limits>
+ #include <string>
+ #include <unordered_map>
+ #include <vector>
+@@ -45,9 +47,23 @@ using llama_adapter_cvec_ptr = std::shared_ptr<llama_adapter_cvec>;
+ // llama_adapter_lora
+ //
+ 
++inline bool llama_adapter_projection_scale_valid(float scale) {
++    return std::isfinite(scale) && scale > 0.0f && scale <= std::numeric_limits<float>::max()/2.0f;
++}
++
++inline ggml_tensor * llama_adapter_project_output(ggml_context * ctx, ggml_tensor * output,
++        ggml_tensor * a, ggml_tensor * b, float scale) {
++    if (scale == 0.0f) {
++        return output;
++    }
++    ggml_tensor * delta = ggml_mul_mat(ctx, b, ggml_mul_mat(ctx, a, output));
++    return ggml_add(ctx, output, ggml_scale(ctx, delta, scale));
++}
++
+ struct llama_adapter_lora_weight {
+     ggml_tensor * a = nullptr;
+     ggml_tensor * b = nullptr;
++    float output_projection_scale = 1.0f;
+ 
+     // get actual scale based on rank and alpha
+     float get_scale(float alpha, float adapter_scale) const {
+@@ -70,6 +86,8 @@ struct llama_adapter_lora {
+     std::vector<ggml_backend_buffer_ptr> bufs;
+ 
+     float alpha;
++    bool output_projection = false;
++    uint32_t output_projection_version = 1;
+ 
+     // gguf metadata
+     std::unordered_map<std::string, std::string> gguf_kv;
+diff --git a/src/llama-ext.h b/src/llama-ext.h
+index fcd91e912..650b0aba0 100644
+--- a/src/llama-ext.h
++++ b/src/llama-ext.h
+@@ -189,3 +189,6 @@ LLAMA_API uint32_t llama_model_get_tok_embd_rows(const struct llama_model * mode
+ 
+ // realtime models: number of tokens the output lags behind the audio input, used by mtmd; 0 if not applicable
+ LLAMA_API uint32_t llama_model_n_tokens_delay(const struct llama_model * model);
++
++// Runtime output projections are target-model adapters, not draft-model adapters.
++LLAMA_API bool llama_adapter_is_output_projection(const struct llama_adapter_lora * adapter);
+diff --git a/src/llama-graph.cpp b/src/llama-graph.cpp
+index cffd083d3..9ca66c28f 100644
+--- a/src/llama-graph.cpp
++++ b/src/llama-graph.cpp
+@@ -1668,6 +1668,13 @@ ggml_tensor * llm_graph_context::build_lora_mm(
+         const float adapter_scale = lora.second;
+         const float scale = lw->get_scale(lora.first->alpha, adapter_scale);
+ 
++        if (lora.first->output_projection) {
++            // A tied vocabulary head is not an embedding lookup.
++            if (strcmp(w->name, "token_embd.weight") == 0) continue;
++            res = llama_adapter_project_output(ctx0, res, lw->a, lw->b, adapter_scale * lw->output_projection_scale);
++            continue;
++        }
++
+         ggml_tensor * ab_cur = ggml_mul_mat(
+                 ctx0, lw->b,
+                 ggml_mul_mat(ctx0, lw->a, cur)
+@@ -2722,6 +2729,11 @@ ggml_tensor * llm_graph_context::build_inp_embd(ggml_tensor * tok_embd, float to
+             const float adapter_scale = lora.second;
+             const float scale = lw->get_scale(lora.first->alpha, adapter_scale);
+ 
++            if (lora.first->output_projection) {
++                cur = llama_adapter_project_output(ctx0, cur, lw->a, lw->b, adapter_scale * lw->output_projection_scale);
++                continue;
++            }
++
+             ggml_tensor * inpL_delta = ggml_scale(ctx0, ggml_mul_mat(
+                         ctx0, lw->b, // non-transposed lora_b
+                         ggml_get_rows(ctx0, lw->a, ids)
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 2e768cb38..23c30a651 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -400,3 +400,8 @@ if (TARGET gguf-model-data)
+     target_link_libraries(test-export-graph-ops PRIVATE gguf-model-data)
+     target_compile_definitions(test-export-graph-ops PRIVATE LLAMA_HF_FETCH)
+ endif()
++
++llama_build(test-flashalign-output.cpp)
++target_include_directories(test-flashalign-output PRIVATE ../src ../tools/server)
++target_link_libraries(test-flashalign-output PRIVATE server-context)
++llama_test(test-flashalign-output)
+diff --git a/tests/test-flashalign-output.cpp b/tests/test-flashalign-output.cpp
+new file mode 100644
+index 000000000..ac22ea6fe
+--- /dev/null
++++ b/tests/test-flashalign-output.cpp
+@@ -0,0 +1,104 @@
++// SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
++// SPDX-License-Identifier: AGPL-3.0-only
++// Commercial licensing: contact@aevonix.com.
++#include "llama-adapter.h"
++#include "ggml-cpu.h"
++#include "common.h"
++#include "speculative.h"
++#include "server-task.h"
++
++#ifdef NDEBUG
++#undef NDEBUG
++#endif
++#include <cassert>
++#include <cmath>
++#include <cstdio>
++#include <limits>
++
++int main() {
++    llama_adapter_lora projection(nullptr), ordinary(nullptr);
++    projection.output_projection = true;
++    common_params params;
++    params.speculative.draft.mparams.path = "fixture";
++    params.lora_adapters.push_back({ "projection", 1.0f, "", "", &projection });
++    params.lora_adapters.push_back({ "ordinary", 1.0f, "", "", &ordinary });
++    const auto draft = common_base_params_to_speculative(params);
++    assert(draft.lora_adapters.size() == 1 && draft.lora_adapters[0].ptr == &ordinary);
++    // Every stored prefix retains its immutable adapter identity and exact strength.
++    server_prompt_cache cache(16, 4096);
++    server_prompt owner;
++    owner.tokens = server_tokens(llama_tokens{ 1, 2, 3 }, false);
++    owner.adapter_identity = { { uintptr_t(1), 1.0f } };
++    assert(cache.alloc(owner, 4, 0)->prompt.adapter_identity == owner.adapter_identity);
++    server_prompt stock;
++    stock.tokens = server_tokens(llama_tokens{ 1, 2, 3 }, false);
++    assert(cache.alloc(stock, 4, 0)->prompt.adapter_identity.empty());
++    server_prompt reduced = owner.clone();
++    reduced.adapter_identity = { { uintptr_t(1), 0.5f } };
++    assert(cache.alloc(reduced, 4, 0)->prompt.adapter_identity == reduced.adapter_identity);
++    assert(cache.states.size() == 3);
++    assert(owner.clone().adapter_identity == owner.adapter_identity);
++    server_prompt shifted = owner.clone();
++    shifted.replace_tokens(llama_tokens{ 1, 3 });
++    assert(shifted.adapter_identity == owner.adapter_identity);
++    assert(shifted.tokens.get_tokens() == (llama_tokens{ 1, 3 }));
++    assert(shifted.checkpoints.empty());
++    server_prompt_cache shifted_cache(16, 4096);
++    assert(shifted_cache.alloc(shifted, 4, 0)->prompt.adapter_identity == owner.adapter_identity);
++    server_prompt shifted_stock;
++    assert(shifted_cache.load(shifted_stock, shifted.tokens, nullptr, nullptr, 0));
++    assert(shifted_stock.tokens.size() == 0);
++    // No cache of another profile/strength may even try to restore into a context.
++    server_prompt_cache owner_only(16, 4096);
++    owner_only.alloc(owner, 4, 0);
++    server_prompt empty_stock;
++    assert(owner_only.load(empty_stock, stock.tokens, nullptr, nullptr, 0));
++    assert(empty_stock.tokens.size() == 0);
++    reduced.clear();
++    assert(reduced.adapter_identity.empty());
++
++    for (float bad : { 0.0f, -1.0f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN() }) {
++        assert(!llama_adapter_projection_scale_valid(bad));
++    }
++    assert(!llama_adapter_projection_scale_valid(std::numeric_limits<float>::max()));
++    const float maximum_site_scale = std::numeric_limits<float>::max()/2.0f;
++    assert(llama_adapter_projection_scale_valid(maximum_site_scale));
++    assert(std::isfinite(2.0f*maximum_site_scale));
++    assert(!llama_adapter_projection_scale_valid(std::nextafter(maximum_site_scale, std::numeric_limits<float>::infinity())));
++    for (float site_scale : { 0.5f, 1.0f, 2.997997f, 3.0f }) {
++        assert(llama_adapter_projection_scale_valid(site_scale));
++        for (float alpha : { 0.0f, 0.25f, 1.0f }) {
++        ggml_init_params params = { 1024*1024, nullptr, false };
++        ggml_context * ctx = ggml_init(params);
++        auto * a = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 3, 2);
++        auto * b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 2, 3);
++        auto * y = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 3, 4);
++        const float basis[] = { 1, 0, 0, 0, 1, 0 };
++        const float transpose[] = { -1, 0, 0, -1, 0, 0 };
++        for (int i = 0; i < 6; ++i) {
++            static_cast<float *>(a->data)[i] = basis[i];
++            static_cast<float *>(b->data)[i] = transpose[i];
++        }
++        for (int i = 0; i < 12; ++i) static_cast<float *>(y->data)[i] = float(i-3);
++        auto * result = llama_adapter_project_output(ctx, y, a, b, alpha * site_scale);
++        if (alpha == 0.0f) {
++            assert(result == y);
++            static_cast<float *>(y->data)[0] = std::numeric_limits<float>::quiet_NaN();
++            assert(std::isnan(static_cast<float *>(result->data)[0]));
++        } else {
++            auto * graph = ggml_new_graph(ctx);
++            ggml_build_forward_expand(graph, result);
++            assert(ggml_graph_compute_with_ctx(ctx, graph, 2) == GGML_STATUS_SUCCESS);
++            for (int token = 0; token < 4; ++token) {
++                for (int channel = 0; channel < 3; ++channel) {
++                    float expected = float(token*3+channel-3);
++                    if (channel < 2) expected *= 1-alpha*site_scale;
++                    assert(std::abs(static_cast<float *>(result->data)[token*3+channel]-expected) < 1e-6f);
++                }
++            }
++        }
++        ggml_free(ctx);
++    }
++    }
++    std::puts("native GGML projection: zero identity, non-unit site strengths and alpha interpolation passed");
++}
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index 2bd1ab9ec..194413a79 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -16,6 +16,7 @@
+ #include "common.h"
+ #include "fit.h"
+ #include "llama.h"
++#include "../../src/llama-ext.h"
+ #include "log.h"
+ #include "sampling.h"
+ #include "speculative.h"
+@@ -45,6 +46,14 @@
+ 
+ constexpr int HTTP_POLLING_SECONDS = 1;
+ 
++static std::map<uintptr_t, float> flashalign_adapter_identity(const std::vector<common_adapter_lora_info> & adapters) {
++    std::map<uintptr_t, float> result;
++    for (const auto & entry : adapters) {
++        if (entry.scale != 0.0f) result[reinterpret_cast<uintptr_t>(entry.ptr)] = entry.scale;
++    }
++    return result;
++}
++
+ static common_speculative_output_limits server_output_limits(const common_params & params) {
+     if (!params.mmproj.path.empty()) {
+         const auto mcaps = mtmd_get_cap_from_file(params.mmproj.path.c_str());
+@@ -1796,6 +1805,8 @@ private:
+ 
+     server_slot * get_available_slot(const server_task & task) {
+         server_slot * ret = nullptr;
++        const auto requested_lora = task.params.lora.empty() ? params_base.lora_adapters : construct_lora_list(task.params.lora);
++        const auto requested_identity = flashalign_adapter_identity(requested_lora);
+ 
+         bool update_cache = false;
+ 
+@@ -1827,6 +1838,7 @@ private:
+                     continue;
+                 }
+ 
++                if (slot.prompt.adapter_identity != requested_identity) continue;
+                 const auto & tokens = slot.prompt.tokens;
+ 
+                 // skip the slot if it does not contains cached tokens
+@@ -1889,6 +1901,10 @@ private:
+                 const int64_t t_start = ggml_time_us();
+ 
+                 ret->prompt_save(*prompt_cache);
++                const auto next_lora = task.params.lora.empty() ? params_base.lora_adapters : construct_lora_list(task.params.lora);
++                const auto next_identity = flashalign_adapter_identity(next_lora);
++                if (ret->prompt.adapter_identity != next_identity) ret->prompt_clear();
++                ret->prompt.adapter_identity = next_identity;
+ 
+                 if (!ret->prompt_load(*prompt_cache, task.tokens)) {
+                     ret->prompt_clear();
+@@ -1949,22 +1965,11 @@ private:
+     }
+ 
+     bool launch_slot_with_task(server_slot & slot, server_task && task) {
+-        // process per-request lora adapters
+-        if (!task.params.lora.empty()) {
+-            auto task_loras = construct_lora_list(task.params.lora);
+-            if (!are_lora_equal(task_loras, slot.lora)) {
+-                // if lora has changed, check to see if the cache should be cleared
+-                if (lora_should_clear_cache(slot.lora, task_loras)) {
+-                    SLT_TRC(slot, "clearing cache for lora change. %zu loras -> %zu loras\n", slot.lora.size(), task.params.lora.size());
+-                    slot.prompt.clear();
+-                } else {
+-                    SLT_TRC(slot, "keeping cache for alora. %zu target loras\n", task_loras.size());
+-                }
+-                slot.lora = task_loras;
+-            }
+-        } else {
+-            slot.lora = params_base.lora_adapters;
+-        }
++        const auto next_lora = task.params.lora.empty() ? params_base.lora_adapters : construct_lora_list(task.params.lora);
++        const auto next_identity = flashalign_adapter_identity(next_lora);
++        if (slot.prompt.adapter_identity != next_identity) slot.prompt_clear();
++        slot.prompt.adapter_identity = next_identity;
++        slot.lora = next_lora;
+ 
+         // if using alora, make sure it's only a single one requested and active
+         size_t alora_invocation_start = task.tokens.size();
+@@ -3213,6 +3218,11 @@ private:
+                 } break;
+             case SERVER_TASK_TYPE_SLOT_SAVE:
+                 {
++                    if (std::any_of(params_base.lora_adapters.begin(), params_base.lora_adapters.end(),
++                            [](const common_adapter_lora_info & entry) { return llama_adapter_is_output_projection(entry.ptr); })) {
++                        send_error(task, "Disk slot persistence is unavailable with FlashAlign profiles; use the memory cache", ERROR_TYPE_NOT_SUPPORTED);
++                        break;
++                    }
+                     const int id_slot = task.slot_action.id_slot;
+                     server_slot * slot = get_slot_by_id(id_slot);
+                     if (slot == nullptr) {
+@@ -3275,6 +3285,11 @@ private:
+                 } break;
+             case SERVER_TASK_TYPE_SLOT_RESTORE:
+                 {
++                    if (std::any_of(params_base.lora_adapters.begin(), params_base.lora_adapters.end(),
++                            [](const common_adapter_lora_info & entry) { return llama_adapter_is_output_projection(entry.ptr); })) {
++                        send_error(task, "Disk slot persistence is unavailable with FlashAlign profiles; use the memory cache", ERROR_TYPE_NOT_SUPPORTED);
++                        break;
++                    }
+                     const int id_slot = task.slot_action.id_slot;
+                     server_slot * slot = get_slot_by_id(id_slot);
+                     if (slot == nullptr) {
+@@ -3819,8 +3834,7 @@ private:
+ 
+                     new_tokens.resize(slot.prompt.tokens.size() - n_discard);
+ 
+-                    slot.prompt.clear();
+-                    slot.prompt.tokens.insert(new_tokens);
++                    slot.prompt.replace_tokens(new_tokens);
+                 }
+ 
+                 slot.truncated = true;
+diff --git a/tools/server/server-task.cpp b/tools/server/server-task.cpp
+index 1a0d434a1..579710e0e 100644
+--- a/tools/server/server-task.cpp
++++ b/tools/server/server-task.cpp
+@@ -1756,6 +1756,7 @@ size_t server_prompt_cache::n_tokens() const {
+ server_prompt_cache_state * server_prompt_cache::alloc(const server_prompt & prompt, size_t state_size_tgt, size_t state_size_dft) {
+     // first check if the current state is contained fully in the cache
+     for (auto it = states.begin(); it != states.end(); ++it) {
++        if (it->prompt.adapter_identity != prompt.adapter_identity) continue;
+         const int cur_lcp_len = it->prompt.tokens.get_common_prefix(prompt.tokens);
+ 
+         if (cur_lcp_len == (int) prompt.tokens.size()) {
+@@ -1781,6 +1782,7 @@ server_prompt_cache_state * server_prompt_cache::alloc(const server_prompt & pro
+ 
+     // remove any cached prompts that are fully contained in the current prompt
+     for (auto it = states.begin(); it != states.end();) {
++        if (it->prompt.adapter_identity != prompt.adapter_identity) { ++it; continue; }
+         const int len = it->prompt.tokens.get_common_prefix(prompt.tokens);
+ 
+         if (len == (int) it->prompt.tokens.size()) {
+@@ -1825,6 +1827,7 @@ server_prompt_cache_state * server_prompt_cache::alloc(const server_prompt & pro
+         /*.prompt =*/ {
+             /*.tokens      =*/ prompt.tokens.clone(),
+             /*.checkpoints =*/ prompt.checkpoints,
++            /*.adapter_identity =*/ prompt.adapter_identity,
+         },
+         /*.data   =*/ {
+             /*.main =*/ std::move(state_data_tgt),
+@@ -1847,6 +1850,7 @@ bool server_prompt_cache::load(server_prompt & prompt, const server_tokens & tok
+ 
+     // find the most similar cached prompt, that would also preserve the most context
+     for (auto it = states.begin(); it != states.end(); ++it) {
++        if (it->prompt.adapter_identity != prompt.adapter_identity) continue;
+         const int lcp_cur = it->prompt.tokens.get_common_prefix(tokens_new);
+ 
+         const float f_keep_cur = float(lcp_cur) / it->prompt.tokens.size();
+diff --git a/tools/server/server-task.h b/tools/server/server-task.h
+index 21b649ac4..a59913d4e 100644
+--- a/tools/server/server-task.h
++++ b/tools/server/server-task.h
+@@ -687,10 +687,19 @@ struct server_prompt {
+     server_tokens tokens;
+ 
+     std::list<common_prompt_checkpoint> checkpoints;
++    std::map<uintptr_t, float> adapter_identity;
+ 
+     void clear() {
+         tokens.clear();
+         checkpoints.clear();
++        adapter_identity.clear();
++    }
++
++    // Replacing tokens after an in-place KV shift preserves the operator that produced the KV.
++    void replace_tokens(const llama_tokens & replacement) {
++        tokens.clear();
++        checkpoints.clear();
++        tokens.insert(replacement);
+     }
+ 
+     int n_tokens() const {
+@@ -701,6 +710,7 @@ struct server_prompt {
+         return server_prompt {
+             tokens.clone(),
+             checkpoints,
++            adapter_identity,
+         };
+     }
+ };

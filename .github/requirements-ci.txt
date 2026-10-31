@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+# Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
+# Test environment. Keep these pins separate from the supported runtime ranges.
+anyio==4.15.1
+certifi==2026.10.23
+exceptiongroup==1.3.1; python_version < "3.11"
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.20
+json5==0.17.3
+numpy==2.2.6
+PyYAML==6.0.3
+sniffio==1.3.1
+typing_extensions==4.16.0

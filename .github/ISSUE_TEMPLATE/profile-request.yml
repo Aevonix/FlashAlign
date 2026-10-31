@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+# Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
+name: Profile request
+description: Suggest a model and checkpoint pair for a future profile.
+title: '[Profile request]: '
+body:
+  - type: markdown
+    attributes:
+      value: A request does not guarantee a profile. Share public source links and synthetic examples only; do not upload private weights, tokens or conversations.
+  - type: input
+    id: stock
+    attributes:
+      label: Stock model and revision
+      description: Link to the checkpoint and pin a revision when possible.
+    validations:
+      required: true
+  - type: input
+    id: edited
+    attributes:
+      label: Edited checkpoint and revision
+      description: Link to the intended fitting target, if one exists.
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Source terms and measured quality
+      description: Link to license/provenance information and published quality measurements. Distinguish measured results from expectations.
+  - type: textarea
+    id: deployment
+    attributes:
+      label: Intended deployment
+      description: Engine/version, quantization, hardware and any required tool or media support.
+    validations:
+      required: true

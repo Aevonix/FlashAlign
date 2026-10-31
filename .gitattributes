@@ -1,0 +1,17 @@
+*.md text eol=lf
+*.py text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.svg text eol=lf
+*.png binary
+*.pdf binary
+*.zip binary
+*.safetensors binary
+# Preserve the upstream font license byte-for-byte.
+assets/brand/Geist-OFL.txt -whitespace
+# Retain the imported source license byte-for-byte, including line endings.
+profiles/qwen38-27b-v1/LICENSE -text -whitespace
+profiles/gemma4-26b-a4b-v1/LICENSE -text -whitespace
+engines/llamacpp/flashalign.patch -text -whitespace

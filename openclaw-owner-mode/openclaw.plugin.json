@@ -1,0 +1,28 @@
+{
+  "id": "owner-mode",
+  "name": "Aevonix FlashAlign",
+  "description": "Verified contacts and per-tool model access for OpenClaw",
+  "providers": ["owner-mode"],
+  "activation": {"onStartup": true, "onProviders": ["owner-mode"]},
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["bridgeUrl", "controlKeyFile", "model"],
+    "properties": {
+      "bridgeUrl": {"type": "string"},
+      "controlKeyFile": {"type": "string"},
+      "python": {"type": "string"},
+      "corePath": {"type": "string"},
+      "bridgeConfig": {"type": "string"},
+      "model": {"type": "object"},
+      "requestPolicy": {
+        "type": "object", "additionalProperties": false, "minProperties": 1,
+        "properties": {
+          "output_budget": {"const": "remaining_context"},
+          "supports_thinking_off": {"type": "boolean"},
+          "implicit_model_limit": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

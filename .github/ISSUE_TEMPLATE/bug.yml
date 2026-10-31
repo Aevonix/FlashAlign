@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+# Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
+name: Bug report
+description: Report unexpected FlashAlign behavior with a synthetic reproduction.
+title: '[Bug]: '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a security vulnerability, follow [SECURITY.md](https://github.com/Aevonix/FlashAlign/security/policy) instead of opening a public report.
+        Do not include keys, authentication headers, contact records, private conversations, or unredacted configuration.
+  - type: input
+    id: version
+    attributes:
+      label: FlashAlign version or commit
+      placeholder: Release version or full commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS/architecture, GPU, engine/version, model/profile, and harness/version. Omit hostnames, IP addresses and credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Use made-up identities and prompts. Include a minimal example, expected behavior and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Include relevant errors and effective-mode metadata only. Review every line before posting.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed credentials, authentication headers, contact records and private conversation content.
+          required: true

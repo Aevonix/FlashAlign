@@ -1,0 +1,247 @@
+{
+  "version": 1,
+  "name": "flashalign-sglang-glm53-flash",
+  "backend": "sglang",
+  "status": "experimental_gpu_verified",
+  "upstream": "https://github.com/sgl-project/sglang.git",
+  "upstream_tag": "v0.5.20",
+  "upstream_revision": "94602c9c2b7cbdb8efd5c52802dac6a1c180089e",
+  "model_types": [
+    "glm5_next",
+    "glm5_next_text"
+  ],
+  "transforms": [
+    "row_normalized_projection_v1"
+  ],
+  "tensor_parallel_sizes": [
+    4
+  ],
+  "expert_parallel_sizes": [
+    1
+  ],
+  "speculative_algorithms": [
+    "EAGLE",
+    "NEXTN"
+  ],
+  "native_mtp_layer": 45,
+  "allowed_model_metadata": [
+    {
+      "id": "zai-org/GLM-5.3-Flash",
+      "revision": "46a050bec13002ad29ee795c16e61cf4fa3c4a9c",
+      "sha256": {
+        "config.json": "bb8f01c42cb92a52ca72e65afb4d5bd8d11aef083cd210e8de25dfb904f23e9f",
+        "model.safetensors.index.json": "3c3f40366a53c3fd7974b4eab7881a365a98c2a4329150befebab99fe7c18b05"
+      }
+    }
+  ],
+  "requirements": [
+    "sglang==0.5.20",
+    "torch==2.13.0",
+    "triton==3.7.1",
+    "safetensors==0.8.0",
+    "transformers==5.12.1"
+  ],
+  "required_features": [
+    "row_gain",
+    "row_norm_preconditioning",
+    "separate_shared_experts",
+    "native_mtp_writers",
+    "native_mtp_writer_groups"
+  ],
+  "default_arguments": [
+    "--context-length",
+    "65536",
+    "--max-running-requests",
+    "2",
+    "--mem-fraction-static",
+    "0.90",
+    "--chunked-prefill-size",
+    "2048",
+    "--enable-cache-report"
+  ],
+  "variant": "glm53_flash",
+  "sites": [
+    "attn_out",
+    "shared_expert_out"
+  ],
+  "profile_native_mtp_layers": [
+    45
+  ],
+  "profile_site_inventory": "expected-sites.json",
+  "python_min_version": [
+    3,
+    12
+  ],
+  "compatible_models": [
+    {
+      "id": "zai-org/GLM-5.3-Flash",
+      "revision": "46a050bec13002ad29ee795c16e61cf4fa3c4a9c",
+      "model_type": "glm5_next",
+      "config_sha256": "bb8f01c42cb92a52ca72e65afb4d5bd8d11aef083cd210e8de25dfb904f23e9f",
+      "index_sha256": "3c3f40366a53c3fd7974b4eab7881a365a98c2a4329150befebab99fe7c18b05",
+      "quantization_config_sha256": "25134d29b9ca74499dff21e2e8a4e124bc576f6a2fe7a8f5b51b2c6109a212d7"
+    }
+  ],
+  "qualification": {
+    "status": "completed_with_quality_limitations",
+    "gpu_tested": true,
+    "harness_tested": true,
+    "tested_gpu_compute_capability": "12.0",
+    "tested_gpu_count": 4,
+    "tested_context_length": 65536,
+    "actual_capacity_input_tokens": 59042,
+    "tested_speculative_algorithm": "EAGLE",
+    "tested_tensor_parallel_size": 4,
+    "tested_expert_parallel_size": 1,
+    "common_fixtures_per_mode": 16,
+    "stock_common_passes": 16,
+    "profile_common_passes": 16,
+    "edited_reference_common_passes": 16,
+    "direct_protocol_passes": 18,
+    "direct_protocol_checks": 18,
+    "executed_profile_sites": 60,
+    "executed_target_sites": 58,
+    "executed_native_mtp_sites": 2,
+    "exact_reference_tensor_assignments": 380,
+    "exact_reference_rank_role_summaries": 8,
+    "mixed_stock_rows_byte_identical": 968,
+    "native_protocol_phases_passed": 8,
+    "native_protocol_phases_total": 8,
+    "native_strict_quality_phases_passed": 6,
+    "native_strict_quality_phases_total": 8,
+    "native_verified_modes": [
+      "hermes_text",
+      "hermes_child",
+      "hermes_images",
+      "openclaw"
+    ],
+    "native_always_on_modes": [
+      "hermes_text",
+      "hermes_child",
+      "hermes_images",
+      "openclaw"
+    ],
+    "image_transport_and_verification": "passed",
+    "image_answer_quality": "strict failures retained in stock, runtime-profile and exact-edited-reference tests",
+    "scope": "One host with four RTX PRO 6000 SM120 GPUs. SM121 has a kernel-only microcheck; no multi-host or SM121 full-model qualification. Native CLI uses supported low reasoning while ordinary native tasks use max. No semantic thinking-off support is claimed.",
+    "untested_speculative_algorithms": [
+      "NEXTN"
+    ],
+    "validation_date_utc": "2026-10-30"
+  },
+  "site_tensor_patterns": {
+    "attn_out": "model\\.language_model\\.layers\\.{layer}\\.self_attn\\.o_proj\\.weight",
+    "shared_expert_out": "model\\.language_model\\.layers\\.{layer}\\.mlp\\.shared_experts\\.down_proj\\.weight"
+  },
+  "profile_environment": "FLASHALIGN_PROFILES",
+  "key_environment": "FLASHALIGN_KEY_FILE",
+  "prepare": "prepare.py",
+  "launch": "launch.py",
+  "managed_stateful_launcher": true,
+  "checkpoint_integrity": {
+    "script": "verify_checkpoint.py",
+    "roles_by_algorithm": {
+      "EAGLE": [
+        "stock"
+      ],
+      "NEXTN": [
+        "stock"
+      ]
+    }
+  },
+  "native_speculative_algorithms": [
+    "EAGLE",
+    "NEXTN"
+  ],
+  "startup_timeout_seconds": 1800,
+  "input_modalities_by_model_type": {
+    "glm5_next": [
+      "text",
+      "image"
+    ],
+    "glm5_next_text": [
+      "text"
+    ]
+  },
+  "fixed_launch_arguments": [
+    "--tp-size",
+    "4",
+    "--ep-size",
+    "1",
+    "--disable-shared-experts-fusion",
+    "--moe-runner-backend",
+    "triton",
+    "--moe-a2a-backend",
+    "none",
+    "--cuda-graph-backend-decode",
+    "disabled",
+    "--cuda-graph-backend-prefill",
+    "disabled",
+    "--attention-backend",
+    "dsa",
+    "--dsa-prefill-backend",
+    "tilelang",
+    "--dsa-decode-backend",
+    "tilelang",
+    "--kv-cache-dtype",
+    "bfloat16",
+    "--speculative-eagle-topk",
+    "1",
+    "--speculative-num-steps",
+    "3",
+    "--speculative-num-draft-tokens",
+    "4",
+    "--tool-call-parser",
+    "glm47",
+    "--reasoning-parser",
+    "glm45",
+    "--load-format",
+    "safetensors",
+    "--model-loader-extra-config",
+    "{\"enable_multithread_load\":false}"
+  ],
+  "openclaw_compat_by_model_type": {
+    "glm5_next": {
+      "thinkingFormat": "openai",
+      "supportedReasoningEfforts": [
+        "low",
+        "high",
+        "max"
+      ]
+    },
+    "glm5_next_text": {
+      "thinkingFormat": "openai",
+      "supportedReasoningEfforts": [
+        "low",
+        "high",
+        "max"
+      ]
+    }
+  },
+  "request_compatibility_by_model_type": {
+    "glm5_next": {
+      "kind": "chat_template_reasoning_v1",
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ]
+    },
+    "glm5_next_text": {
+      "kind": "chat_template_reasoning_v1",
+      "efforts": [
+        "low",
+        "high",
+        "max"
+      ]
+    }
+  },
+  "openclaw_request_policy_by_model_type": {
+    "glm5_next": {
+      "supports_thinking_off": false
+    },
+    "glm5_next_text": {
+      "supports_thinking_off": false
+    }
+  }
+}

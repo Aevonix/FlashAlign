@@ -1,0 +1,31 @@
+{
+  "kind": "original upstream source provenance; not current package file hashes",
+  "upstream_archive": {
+    "name": "consumer-v2-runtime-v13.tar.gz",
+    "sha256": "a34e7c3326418a5c41d34970edcb07fe078df7752fabefce39026eef440d3401"
+  },
+  "original_file_sha256": {
+    "README.md": "fa37ea9388b65090e2c4c4e51414bf54e596544d9c1f70009a2c5b345a3d335b",
+    "REPLAY.md": "88001bcd437256b141a08bb4d89e6660d3d8c8441e087371820cb7327fec90a8",
+    "flashalign_deepseek/__init__.py": "a7b6a83d3e205577fe02b049f46a3d169b24577fac43a7bb5f71636e01ac0d28",
+    "flashalign_deepseek/__main__.py": "7225097a5dc4f99152ba1dc5324ed73d5ee09508cbc5268fa3b1114905340036",
+    "flashalign_deepseek/authentication.py": "1fdb88c765d0edc8a3c9cd6c3c610fa10d95e4822fd247e854918e8e5adb4e48",
+    "flashalign_deepseek/cli.py": "246416a9760e717cf1b5c47e1e6fbd9c580b8479d196e18b5c062779bfe91097",
+    "flashalign_deepseek/core.py": "c69f9692306672d0c98090f6f5a4de5a479a2ce0da6687d77692d5c4b634f088",
+    "flashalign_deepseek/flashalign_replay.py": "428ba27f5200c6ec0880b15627a4e368b4ecb38976af761697766b2632d04e1b",
+    "flashalign_deepseek/middleware.py": "f14c855dc8b8c00b5397b1ca9446987da962612476c270abd9389411d75c0082",
+    "flashalign_deepseek/model-pins.json": "a097de629f6aa61fbf7b62fb6ef79db03b7ea515be33962b45a20de82abd6dad",
+    "flashalign_deepseek/plugin.py": "977f4c2f1fbe6bf7569c27ffe9dc32bffdc62b28d95a9ba74ae234352a3a93d1",
+    "flashalign_deepseek/sm120.py": "48d21d46b01a71eb33ea2da21cf88d95c8bab447dd3589ca8b1aaf90ec5473b4",
+    "flashalign_deepseek/source-pins.json": "3813c3a94f3cd784e4936e91d76093170320cead3b294b98eafc239133c32320",
+    "flashalign_deepseek/stock_server.py": "b5b5f32d106501d5cafd5b87bc23feffdcea68e01b88b07524ad1aba26a687a1",
+    "flashalign_deepseek/verify_checkpoint.py": "7c31e054cbcdf85edea84b341740a2d71a865c311bf98a9c8e3b7b4bdf41e337",
+    "pyproject.toml": "f81fbd0a67f57c1409c44029cb94f14488fabb0473662c710228a568fb36b592",
+    "requirements-sm120.txt": "2e83bcef3e8eb47ff7d206776e4a82a1e5860e1e9f3b73971c5515c44ae89fd5",
+    "test_auth_compat.py": "32cc2b0da0de3d6e6c6a0e50b8f720c442ca802b938d7717be7021ef6ed40b97",
+    "test_checkpoint_receipt.py": "581eb3cc001c77b72e52d291855ff0d32d993e309b60a3a913a9fb3ef5370677",
+    "test_flashalign_replay.py": "27eb9f1dca9d9350d5e5dd0d7a523afd60f94d1d438df85a989bd775d3cbb99b"
+  },
+  "current_package_receipt": "sha256.json",
+  "contains_profiles": false
+}

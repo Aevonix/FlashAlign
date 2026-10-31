@@ -1,0 +1,16 @@
+{
+  "upstream": "https://github.com/ggml-org/llama.cpp",
+  "revision": "8642541b255bfb5dc39cd351a178be09013a55d6",
+  "patch_sha256": "f468b7db9b07e54cca2c6bc178fe77a4a0d1e8e3ce5e8465d0324bb5f91e59aa",
+  "adapter_type": "flashalign_projection",
+  "status": "Qwen3.8 and Gemma4 CUDA runtime qualified; native agent answer-quality limits documented",
+  "off_bypass": "zero-scale adapters removed before graph creation",
+  "caches": "adapter identity and exact FP32 strength retained across memory-cache allocation, cloning and context shifts; disk slot persistence rejected when profiles are loaded",
+  "draft_profile_inheritance": "Main-model projection adapters excluded from external draft model",
+  "architectures": [
+    "qwen35",
+    "gemma4"
+  ],
+  "projection_version": 2,
+  "site_scale": "finite positive FP32 metadata at most FLT_MAX/2, applied independently at each matrix output"
+}

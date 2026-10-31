@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "backend": "vllm",
+  "variant": "gemma4",
+  "name": "flashalign-vllm-gemma4",
+  "package": "flashalign-vllm-gemma",
+  "module": "flashalign_vllm",
+  "upstream": "https://github.com/vllm-project/vllm.git",
+  "upstream_tag": "v0.32.0",
+  "upstream_revision": "5df63a7203cdb9328d824a27b682e77c7b9928be",
+  "model_types": [
+    "gemma4",
+    "gemma4_text"
+  ],
+  "transforms": [
+    "projection"
+  ],
+  "sites": [
+    "attn_out",
+    "mlp_out"
+  ],
+  "tensor_parallel_sizes": [
+    1
+  ],
+  "pipeline_parallel_sizes": [
+    1
+  ],
+  "data_parallel_sizes": [
+    1
+  ],
+  "requires_eager": true,
+  "preserves_speculation": true,
+  "tested_speculative_methods": [
+    "ngram"
+  ],
+  "prepare": "prepare.py",
+  "launch": "launch.py",
+  "default_speculative_config": {
+    "method": "ngram",
+    "num_speculative_tokens": 3,
+    "prompt_lookup_min": 2,
+    "prompt_lookup_max": 3
+  },
+  "site_tensor_patterns": {
+    "attn_out": "model\\.language_model\\.layers\\.\\d+\\.self_attn\\.o_proj\\.weight",
+    "mlp_out": "model\\.language_model\\.layers\\.\\d+\\.mlp\\.down_proj\\.weight"
+  },
+  "default_arguments": [
+    "--reasoning-parser",
+    "gemma4",
+    "--tool-call-parser",
+    "gemma4",
+    "--enable-auto-tool-choice",
+    "--max-model-len",
+    "65536",
+    "--max-num-seqs",
+    "2",
+    "--gpu-memory-utilization",
+    "0.85"
+  ],
+  "requirements": [
+    "vllm==0.32.0",
+    "torch==2.13.0",
+    "triton==3.7.1",
+    "safetensors==0.8.0",
+    "transformers==5.19.0"
+  ],
+  "compatible_models": [
+    {
+      "id": "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",
+      "revision": "ed35d7abe5d940da41b4ff06eb482feb0be8cb44",
+      "model_type": "gemma4",
+      "config_sha256": "9781d0d5918127cc95a0a9f76040ea11c6dfd356e18a2db8ab1fdc2e2941dd42",
+      "quantization_config_sha256": "6d4dc6fb020cd6e8816881e26a3a984ee3c16cb3a705bced3612767b45d18cb3",
+      "weights_header": {
+        "file": "model.safetensors",
+        "sha256": "908f7910efa9d1d6df8a7c3ba303c40a99d8bc601292c160d49885872a52615d",
+        "size": 28641731036
+      }
+    }
+  ],
+  "tested_modalities": [
+    "text",
+    "image"
+  ],
+  "status": "experimental_gpu_verified",
+  "direct_engine": true,
+  "tested_context_lengths": [
+    4096,
+    8192,
+    65536
+  ],
+  "tool_call_parser": "gemma4",
+  "reasoning_parser": "gemma4",
+  "entrypoint": [
+    "python",
+    "launch.py"
+  ],
+  "arguments": {
+    "model": "--model",
+    "profile": "--profile",
+    "key_file": "--key-file",
+    "host": "--host",
+    "port": "--port",
+    "speculative_config": "--speculative-config"
+  },
+  "qualified_model_ids": [
+    "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic"
+  ],
+  "qualified_profiles": [
+    "gemma4-26b-a4b-v1"
+  ],
+  "tested_torch_build": "2.13.0+cu130",
+  "redistribution_status": "source_notices_retained",
+  "qualification": {
+    "native_sites_observed": 50,
+    "protocol_checks": 15,
+    "cpu_runtime_tests": 18,
+    "structured_tool_calls": 2,
+    "tool_choice": "auto",
+    "tools_executed": false,
+    "thinking_fixtures": {
+      "stock": 16,
+      "profile": 16,
+      "total": 16,
+      "truncated": 0
+    },
+    "thinking_disabled_fixtures": {
+      "stock": 16,
+      "profile": 15,
+      "total": 16,
+      "truncated": 0
+    },
+    "constrained_choice_screen": {
+      "stock": 118,
+      "profile": 120,
+      "total": 200,
+      "invalid": 0,
+      "truncated": 0,
+      "official_benchmark": false
+    },
+    "grammar_ngram_probes": {
+      "stock_draft_tokens": 6,
+      "profile_draft_tokens": 6
+    },
+    "fresh_dependency_install_tested": true,
+    "fresh_install_gpu_launch_tested": false,
+    "fresh_install_cpu_checks": 23,
+    "wizard_gpu_launch_tested": true,
+    "native_harness_cases": {
+      "hermes_protocol": 4,
+      "hermes_children": 2,
+      "openclaw": 6
+    },
+    "strict_first_contact_format": {
+      "hermes": {
+        "passed": 3,
+        "total": 4
+      },
+      "hermes_children": {
+        "passed": 1,
+        "total": 2
+      }
+    },
+    "long_input_retrieval": {
+      "prompt_tokens": 59987,
+      "standard_passed": true,
+      "profile_passed": true,
+      "truncated": false,
+      "scope": "bounded retrieval; not broad long-context quality"
+    },
+    "current_native_completion": {
+      "native_protocol_passes": 11,
+      "native_protocol_phases": 11,
+      "new_model_requests": 38,
+      "operator_sites_observed": 50,
+      "draft_tokens_observed": 11676,
+      "strict_quality_pass": false,
+      "hardware": "one GB10",
+      "max_model_len": 65536,
+      "max_num_seqs": 1,
+      "gpu_memory_utilization": 0.6,
+      "max_num_batched_tokens": 4096,
+      "tensor_parallel_size": 1,
+      "pipeline_parallel_size": 1,
+      "data_parallel_size": 1,
+      "speculative_method": "ngram",
+      "num_speculative_tokens": 3,
+      "retained_long_input_retrieval": {
+        "prompt_tokens": 59045,
+        "standard_passed": true,
+        "profile_passed": true,
+        "repeated_in_current_run": false
+      },
+      "quality_limits": [
+        "Exact-answer misses in text and child fixtures.",
+        "Unexpected vision-tool calls in two Hermes image fixtures.",
+        "One captionless image reached the 4096-token test reasoning budget before native recovery."
+      ],
+      "default_arguments_validated_by_current_run": false
+    }
+  },
+  "openclaw_compat_by_model_type": {
+    "gemma4": {
+      "thinkingFormat": "qwen-chat-template"
+    },
+    "gemma4_text": {
+      "thinkingFormat": "qwen-chat-template"
+    }
+  },
+  "request_compatibility_by_model_type": {
+    "gemma4": {
+      "kind": "gemma_boolean_thinking_v1"
+    },
+    "gemma4_text": {
+      "kind": "gemma_boolean_thinking_v1"
+    }
+  },
+  "starter_profile_status": "experimental_runtime_checked",
+  "input_modalities_by_model_type": {
+    "gemma4": [
+      "text",
+      "image"
+    ],
+    "gemma4_text": [
+      "text"
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+# Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
+name: Contribution acknowledgment
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  acknowledgment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # Run the checker and read the terms from the reviewed base revision.
+      # No pull-request code is checked out or executed by this job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - name: Check the contribution acknowledgment
+        run: >-
+          python3 .github/scripts/check_contribution_ack.py
+          --event "$GITHUB_EVENT_PATH"
+          --terms legal/CLA-TERMS.md
+          --output "$RUNNER_TEMP/contribution-acknowledgment.json"
+      - name: Save acknowledgment evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: contribution-acknowledgment-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/contribution-acknowledgment.json
+          if-no-files-found: error
+          retention-days: 90

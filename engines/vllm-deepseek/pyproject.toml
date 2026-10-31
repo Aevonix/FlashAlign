@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+classifiers = ["License :: OSI Approved :: GNU Affero General Public License v3"]
+license = {file = "LICENSE"}
+name = "flashalign-deepseek"
+version = "0.1.0rc1"
+description = "FlashAlign native V2 runtime for pinned DeepSeek V4.1 Flash"
+requires-python = ">=3.12"
+
+[project.entry-points."vllm.general_plugins"]
+flashalign_deepseek = "flashalign_deepseek.plugin:register"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["flashalign_deepseek*", "flashalign_vllm*"]
+
+[tool.setuptools.package-data]
+flashalign_deepseek = ["source-pins.json", "model-pins.json"]

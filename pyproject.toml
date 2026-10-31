@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+classifiers = ["License :: OSI Approved :: GNU Affero General Public License v3"]
+name = "aevonix-flashalign"
+version = "1.0.0"
+description = "FlashAlign engine client and verified harness integration"
+authors = [{name = "Aevonix Inc", email = "contact@aevonix.com"}]
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = ["httpx>=0.27,<1"]
+
+[project.scripts]
+flashalign-client = "flashalign.__main__:main"
+
+[tool.setuptools]
+packages = ["flashalign", "owner_mode"]
+package-dir = {owner_mode = "hermes-owner-mode"}
+
+[tool.setuptools.package-data]
+owner_mode = ["LICENSE", "NOTICE.md", "plugin.yaml", "engine_catalog.json", "terminal-logo.json"]

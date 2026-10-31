@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+# Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
+name: Engine or harness support
+description: Request or discuss a specific engine, platform or harness integration.
+title: '[Engine support]: '
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, private endpoints, contact records or private conversations.
+  - type: input
+    id: integration
+    attributes:
+      label: Engine or harness and version
+      description: Include an upstream project link and the exact release or commit if known.
+    validations:
+      required: true
+  - type: textarea
+    id: target
+    attributes:
+      label: Target configuration
+      description: Describe OS/architecture, hardware, model/checkpoint format and active speculative decoding.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Required behavior and current limitation
+      description: Explain the use case and any result from the existing compatibility checks. Use synthetic examples.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Upstream documentation or relevant implementation
+      description: Public links to request handling, model hooks, caching or speculative decoding are useful.

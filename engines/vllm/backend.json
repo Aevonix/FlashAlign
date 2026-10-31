@@ -1,0 +1,133 @@
+{
+  "backend": "vllm",
+  "package": "flashalign-vllm",
+  "module": "flashalign_vllm",
+  "requirements": [
+    "vllm==0.32.0"
+  ],
+  "model_types": [
+    "qwen3_5",
+    "qwen3_5_text"
+  ],
+  "transforms": [
+    "projection"
+  ],
+  "sites": [
+    "embedding_out",
+    "attn_out",
+    "mlp_out"
+  ],
+  "tensor_parallel_sizes": [
+    1
+  ],
+  "pipeline_parallel_sizes": [
+    1
+  ],
+  "data_parallel_sizes": [
+    1
+  ],
+  "requires_eager": true,
+  "preserves_speculation": true,
+  "tested_speculative_methods": [
+    "ngram"
+  ],
+  "status": "experimental; Qwen3.8 BF16 launch checks passed",
+  "entrypoint": [
+    "python",
+    "-m",
+    "flashalign_vllm"
+  ],
+  "arguments": {
+    "model": "--model",
+    "profile": "--profile",
+    "key_file": "--key-file",
+    "host": "--host",
+    "port": "--port",
+    "speculative_config": "--speculative-config",
+    "draft_model": "--draft-model",
+    "draft_method": "--draft-method"
+  },
+  "supported_speculative_methods": [
+    "ngram",
+    "ngram_gpu",
+    "eagle",
+    "eagle3",
+    "dflash",
+    "dspark"
+  ],
+  "quantizations_tested": [
+    "BF16"
+  ],
+  "runtime_source_pin": {
+    "repository": "https://github.com/vllm-project/vllm",
+    "version": "0.32.0",
+    "commit": "5df63a7203cdb9328d824a27b682e77c7b9928be",
+    "files": {
+      "vllm/v1/worker/gpu_model_runner.py": "4cf95efe4ea8caa3110dcd231ff95ceb97e8136f5056e6bdd388300a484c4a81",
+      "vllm/model_executor/models/qwen3_5.py": "ea7e71303c902b9678e85ff3e9a75a7ab6e69b5770605d540ad6ab1084e18187",
+      "vllm/model_executor/models/qwen3_next.py": "09ea2a385259edc9feadc79e304e86a31582b9770f80b8003d2d641782405818",
+      "vllm/entrypoints/launchers/app.py": "edb09bc78527440a037fd077b11e98971c7376a9380afe7e918c8c0d1ad88ec2",
+      "vllm/entrypoints/openai/chat_completion/protocol.py": "8744d5e2004b2d376e34cf17de51c919bca6d81b0cc8392da138db1ef05a7c61"
+    }
+  },
+  "qualified_model_ids": [
+    "Qwen/Qwen3.8-27B"
+  ],
+  "qualified_profiles": [
+    "qwen38-27b-v1"
+  ],
+  "cpu_tests": 18,
+  "gpu_checks": 15,
+  "quality_checks": {
+    "normal": 16,
+    "owner": 16,
+    "max_tokens": 512,
+    "temperature": 0,
+    "thinking": true
+  },
+  "direct_engine": true,
+  "default_arguments": [
+    "--max-model-len",
+    "65536",
+    "--max-num-seqs",
+    "4",
+    "--max-num-batched-tokens",
+    "8192",
+    "--gpu-memory-utilization",
+    "0.85",
+    "--enable-prefix-caching",
+    "--enable-prompt-tokens-details"
+  ],
+  "input_modalities_by_model_type": {
+    "qwen3_5": [
+      "text",
+      "image"
+    ],
+    "qwen3_5_text": [
+      "text"
+    ]
+  },
+  "qualification": {
+    "configured_context_length": 65536,
+    "actual_prompt_tokens": 65470,
+    "stock_and_profile_capacity_passed": true,
+    "common_fixtures_per_mode": 16,
+    "common_fixture_passes": 32,
+    "structured_tool_calls": 4,
+    "direct_image_color_cases": 2,
+    "native_hermes_requests": 11,
+    "native_openclaw_requests": 10,
+    "speculative_method": "ngram",
+    "drafted_tokens_in_serial_probe": 90,
+    "accepted_tokens_in_serial_probe": 50,
+    "scope": "Serial requests on one RTX PRO 6000; bounded fixtures and capacity, not broad quality certification"
+  },
+  "openclaw_compat_by_model_type": {
+    "qwen3_5": {
+      "thinkingFormat": "qwen-chat-template"
+    },
+    "qwen3_5_text": {
+      "thinkingFormat": "qwen-chat-template"
+    }
+  }
+}

@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
+# SPDX-License-Identifier: AGPL-3.0-only
+# Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Python ${{ matrix.python }} / Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: '3.10'
+            node: '24.22.1'
+          - python: '3.12'
+            node: '26.12.1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: .github/requirements-ci.txt
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install test dependencies
+        run: python -m pip install -r .github/requirements-ci.txt
+      - name: Contribution-check tests
+        run: python -m unittest discover -s .github/scripts -p 'test_*.py'
+      - name: Core and OpenClaw fixture tests
+        run: python -m unittest discover -s hermes-owner-mode/tests
+      - name: Shared engine gate and replay tests
+        env:
+          PYTHONPATH: engines/common
+        run: python -m unittest discover -s engines/tests
+      - name: Shell and JavaScript syntax
+        run: |
+          bash -n install.sh
+          for file in openclaw-owner-mode/*.mjs; do
+            node --check "$file"
+          done

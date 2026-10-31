@@ -1,0 +1,218 @@
+{
+  "input_modalities": [
+    "text"
+  ],
+  "version": 1,
+  "engine": "llamacpp",
+  "upstream": "https://github.com/ggml-org/llama.cpp",
+  "revision": "8642541b255bfb5dc39cd351a178be09013a55d6",
+  "status": "verified_qwen38_gemma4_cuda",
+  "model_format": "GGUF",
+  "model_architectures": [
+    "qwen35",
+    "gemma4"
+  ],
+  "profile_transforms": [
+    "projection"
+  ],
+  "profile_sites": [
+    "embedding_out",
+    "attn_out",
+    "mlp_out"
+  ],
+  "maximum_rank": 128,
+  "prepare": "install.py --state STATE --cuda on",
+  "launch": "launcher.py --binary BINARY --gguf-python MODULES --model MODEL --profile PROFILE --key-file KEY --state STATE",
+  "artifact_converter": "profile_gguf.py",
+  "profile_download_required": false,
+  "hermes_or_openclaw_required": false,
+  "key_bytes": 32,
+  "request_api": "OpenAI Chat Completions with FlashAlign HMAC header",
+  "qualified_profile_names": [
+    "qwen38-27b-v1",
+    "gemma4-26b-a4b-v1"
+  ],
+  "tested_model_ids": [
+    "Qwen/Qwen3.8-27B",
+    "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic"
+  ],
+  "tested_quantizations": [
+    "Q8_0"
+  ],
+  "default_arguments": [
+    "--ctx-size",
+    "131072",
+    "--parallel",
+    "2",
+    "--cache-ram",
+    "2048",
+    "--n-gpu-layers",
+    "99",
+    "--threads",
+    "8",
+    "--threads-batch",
+    "8",
+    "--no-webui",
+    "--metrics"
+  ],
+  "openclaw_compat_by_model_type": {
+    "qwen35": {
+      "thinkingFormat": "qwen-chat-template"
+    },
+    "gemma4": {
+      "thinkingFormat": "qwen-chat-template"
+    }
+  },
+  "site_scale_mode": "positive_finite",
+  "gguf_required_model_architectures": [
+    "gemma4"
+  ],
+  "gguf_models": [
+    {
+      "id": "ggml-org/gemma-4-26B-A4B-it-GGUF",
+      "revision": "9cf8c8db0f83fb4582f15381f8fb1a7c1b0b9ca2",
+      "architecture": "gemma4",
+      "header_sha256": "69f56e5056e1b6aebff2cc4707f08865f971148f2b00545945cc92df296c1923",
+      "size": 26859860992,
+      "profile_model": {
+        "id": "google/gemma-4-26B-A4B-it",
+        "revision": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
+      }
+    }
+  ],
+  "qualification_previous_revision": {
+    "tested_context_length": 65536,
+    "actual_prompt_tokens": 65470,
+    "actual_output_tokens": 3,
+    "context_total": 131072,
+    "parallel": 2,
+    "hardware": "RTX PRO 6000 Blackwell Max-Q",
+    "modes": [
+      "off",
+      "qwen38-27b-v1"
+    ],
+    "native_harnesses": [
+      "Hermes",
+      "OpenClaw"
+    ],
+    "scope": "Pinned Qwen3.8-27B Q8_0, stock/profile capacity and native tool inheritance; not a full benchmark"
+  },
+  "quality_comparison_previous_revision": {
+    "standard": {
+      "passed": 15,
+      "total": 16
+    },
+    "profile": {
+      "passed": 15,
+      "total": 16
+    },
+    "scope": "small math/code fixture set, not a full model benchmark"
+  },
+  "speculative_types_by_model_architecture": {
+    "qwen35": [
+      "draft-simple"
+    ],
+    "gemma4": [
+      "draft-mtp",
+      "ngram-simple"
+    ]
+  },
+  "draftless_speculative_types": [
+    "ngram-simple"
+  ],
+  "default_speculative_type_by_model_architecture": {
+    "gemma4": "ngram-simple"
+  },
+  "request_compatibility_by_model_type": {
+    "gemma4": {
+      "kind": "gemma_boolean_thinking_v1"
+    }
+  },
+  "native_mtp_qualified_by_model_architecture": {
+    "qwen35": false,
+    "gemma4": true
+  },
+  "qualification_by_model_architecture": {
+    "qwen35": {
+      "date": "2026-10-30",
+      "profile": "qwen38-27b-v1",
+      "profile_sites": 129,
+      "hardware": "one RTX PRO 6000 Blackwell Max-Q",
+      "quantization": "Q8_0",
+      "speculative_methods": [
+        "draft-simple"
+      ],
+      "direct_checks": {
+        "passed": 32,
+        "total": 32
+      },
+      "long_input_checks": {
+        "passed": 4,
+        "total": 4,
+        "prompt_tokens": 63927,
+        "warm_cached_tokens": 63923
+      },
+      "context_per_slot": 65536,
+      "parallel": 2,
+      "cache_ram_mib": 2048,
+      "request_model_id": "Qwen/Qwen3.8-27B",
+      "checkpoint": {
+        "id": "ggml-org/Qwen3.8-27B-GGUF",
+        "revision": "a316ea527fde32c12487be7574e2db5ac2ad2a7e",
+        "file": "Qwen3.8-27B-Q8_0.gguf"
+      },
+      "operator_sites_observed": 129,
+      "off_operator_sites_observed": 0
+    },
+    "gemma4": {
+      "date": "2026-10-30",
+      "profile": "gemma4-26b-a4b-v1",
+      "profile_sites": 50,
+      "hardware": "one RTX PRO 6000 Blackwell Max-Q",
+      "quantization": "Q8_0",
+      "speculative_methods": [
+        "draft-mtp",
+        "ngram-simple"
+      ],
+      "direct_checks_by_method": {
+        "draft-mtp": {
+          "passed": 32,
+          "total": 32
+        },
+        "ngram-simple": {
+          "passed": 32,
+          "total": 32
+        }
+      },
+      "long_input_checks": {
+        "passed": 8,
+        "total": 8,
+        "prompt_tokens": 63929,
+        "warm_cached_tokens": 63928,
+        "methods": [
+          "draft-mtp",
+          "ngram-simple"
+        ]
+      },
+      "context_per_slot": 65536,
+      "parallel": 2,
+      "cache_ram_mib": 2048,
+      "wizard_default": "ngram-simple",
+      "native_agent_limits": [
+        "Some exact-answer markers contain extra text.",
+        "Delegation fixtures included repeated or omitted tool calls; later isolated cases passed."
+      ],
+      "operator_sites_observed": 50,
+      "off_operator_sites_observed": 0,
+      "wizard_default_activation_tested": true,
+      "thinking_control_tested": true,
+      "same_turn_reasoning_replay_tested": true,
+      "request_model_id": "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",
+      "checkpoint": {
+        "id": "ggml-org/gemma-4-26B-A4B-it-GGUF",
+        "revision": "9cf8c8db0f83fb4582f15381f8fb1a7c1b0b9ca2",
+        "file": "gemma-4-26B-A4B-it-Q8_0.gguf"
+      }
+    }
+  }
+}

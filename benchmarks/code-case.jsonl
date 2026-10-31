@@ -1,0 +1,1 @@
+{"id":"merge-intervals","group":"safe","demo_safe":true,"messages":[{"role":"user","content":"Implement merge_intervals(intervals) in Python. Merge overlapping closed intervals, preserve zero-length intervals, accept unsorted input, and return an empty list for empty input. Return the function and three assert examples, without a prose explanation."}]}

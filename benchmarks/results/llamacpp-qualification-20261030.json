@@ -1,0 +1,419 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-30",
+  "engine": {
+    "name": "llama.cpp",
+    "version": "0.8.0",
+    "revision": "8642541b255bfb5dc39cd351a178be09013a55d6",
+    "flashalign_patch_sha256": "f468b7db9b07e54cca2c6bc178fe77a4a0d1e8e3ce5e8465d0324bb5f91e59aa"
+  },
+  "hardware": "NVIDIA RTX PRO 6000 Blackwell Max-Q; one GPU per model instance",
+  "input_modalities": [
+    "text"
+  ],
+  "settings": {
+    "context_per_slot": 65536,
+    "parallel": 2,
+    "cache_ram_mib": 2048
+  },
+  "profiles": {
+    "qwen38-27b-v1": {
+      "model": {
+        "id": "Qwen/Qwen3.8-27B",
+        "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+      },
+      "sha256": {
+        "profile.json": "7363f5d95eefdcb0f2df1edd06051366c86deb335576bfff6befdc5ee28a6ce8",
+        "profile.safetensors": "d7a9b49364c51e313e74b58ea7ac244d470c38609550bf0bd96129da0c222a87"
+      },
+      "sites": 129
+    },
+    "gemma4-26b-a4b-v1": {
+      "model": {
+        "id": "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",
+        "revision": "ed35d7abe5d940da41b4ff06eb482feb0be8cb44"
+      },
+      "sha256": {
+        "profile.json": "0d1a3dc23f5b413fa04ef3adc15a0f2b8d3b9b89751322618051057367d58c6b",
+        "profile.safetensors": "ca290c628c644091ad366c5cc16b6d6d167ce59b6e2b123386e68db992d1e451"
+      },
+      "sites": 50
+    }
+  },
+  "qualification": {
+    "qwen35": {
+      "date": "2026-10-30",
+      "profile": "qwen38-27b-v1",
+      "profile_sites": 129,
+      "hardware": "one RTX PRO 6000 Blackwell Max-Q",
+      "quantization": "Q8_0",
+      "speculative_methods": [
+        "draft-simple"
+      ],
+      "direct_checks": {
+        "passed": 32,
+        "total": 32
+      },
+      "long_input_checks": {
+        "passed": 4,
+        "total": 4,
+        "prompt_tokens": 63927,
+        "warm_cached_tokens": 63923
+      },
+      "context_per_slot": 65536,
+      "parallel": 2,
+      "cache_ram_mib": 2048,
+      "request_model_id": "Qwen/Qwen3.8-27B",
+      "checkpoint": {
+        "id": "ggml-org/Qwen3.8-27B-GGUF",
+        "revision": "a316ea527fde32c12487be7574e2db5ac2ad2a7e",
+        "file": "Qwen3.8-27B-Q8_0.gguf"
+      },
+      "operator_sites_observed": 129,
+      "off_operator_sites_observed": 0
+    },
+    "gemma4": {
+      "date": "2026-10-30",
+      "profile": "gemma4-26b-a4b-v1",
+      "profile_sites": 50,
+      "hardware": "one RTX PRO 6000 Blackwell Max-Q",
+      "quantization": "Q8_0",
+      "speculative_methods": [
+        "draft-mtp",
+        "ngram-simple"
+      ],
+      "direct_checks_by_method": {
+        "draft-mtp": {
+          "passed": 32,
+          "total": 32
+        },
+        "ngram-simple": {
+          "passed": 32,
+          "total": 32
+        }
+      },
+      "long_input_checks": {
+        "passed": 8,
+        "total": 8,
+        "prompt_tokens": 63929,
+        "warm_cached_tokens": 63928,
+        "methods": [
+          "draft-mtp",
+          "ngram-simple"
+        ]
+      },
+      "context_per_slot": 65536,
+      "parallel": 2,
+      "cache_ram_mib": 2048,
+      "wizard_default": "ngram-simple",
+      "native_agent_limits": [
+        "Some exact-answer markers contain extra text.",
+        "Delegation fixtures included repeated or omitted tool calls; later isolated cases passed."
+      ],
+      "operator_sites_observed": 50,
+      "off_operator_sites_observed": 0,
+      "wizard_default_activation_tested": true,
+      "thinking_control_tested": true,
+      "same_turn_reasoning_replay_tested": true,
+      "request_model_id": "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",
+      "checkpoint": {
+        "id": "ggml-org/gemma-4-26B-A4B-it-GGUF",
+        "revision": "9cf8c8db0f83fb4582f15381f8fb1a7c1b0b9ca2",
+        "file": "gemma-4-26B-A4B-it-Q8_0.gguf"
+      }
+    }
+  },
+  "gemma_gguf": {
+    "id": "ggml-org/gemma-4-26B-A4B-it-GGUF",
+    "revision": "9cf8c8db0f83fb4582f15381f8fb1a7c1b0b9ca2",
+    "architecture": "gemma4",
+    "header_sha256": "69f56e5056e1b6aebff2cc4707f08865f971148f2b00545945cc92df296c1923",
+    "size": 26859860992,
+    "profile_model": {
+      "id": "google/gemma-4-26B-A4B-it",
+      "revision": "4d7ae4984b7db7de8f8457170b3f1a419ee76d52"
+    }
+  },
+  "scope": "Small runtime, protocol and exact-answer checks; not a refusal-rate benchmark or proof of edited-checkpoint equivalence.",
+  "notes": [
+    "The earlier 512 MiB cache evicted mode-specific entries; 2 GiB retained the tested entries without cross-mode reuse.",
+    "Ngram activity was confirmed with a separate repeated-copy probe: 48 drafted and accepted tokens in each mode. Some prompts produced no lookup matches.",
+    "Native agent fixtures included extra answer text and repeated or omitted delegation calls. Fresh isolated policy cases passed; the unsuccessful cases remain part of the validation record.",
+    "Header fingerprints identify metadata and tensor layout, not complete weight payload integrity."
+  ],
+  "native_harness": {
+    "hermes": {
+      "protocol_phases": {
+        "passed": 4,
+        "total": 4
+      },
+      "model_requests": 22,
+      "exact_parent_markers": {
+        "passed": 8,
+        "total": 12
+      },
+      "exact_child_markers": {
+        "passed": 4,
+        "total": 4
+      }
+    },
+    "openclaw": {
+      "fresh_child_policy_cases": {
+        "passed": 3,
+        "total": 3
+      },
+      "exact_fresh_child_markers": {
+        "passed": 3,
+        "total": 3
+      },
+      "exact_fresh_parent_markers": {
+        "passed": 0,
+        "total": 3
+      },
+      "thinking_on_protocol_cases": {
+        "passed": 6,
+        "total": 6
+      },
+      "always_on_thinking_off_protocol_cases": {
+        "passed": 6,
+        "total": 6
+      },
+      "reasoning_history_matches": {
+        "passed": 10,
+        "total": 10
+      }
+    },
+    "limitations": [
+      "A reused-conversation test repeated a child call until its request cap; a separate run omitted the requested second child.",
+      "Later passing runs do not erase those workflow failures. Exact-marker misses include extra answer text."
+    ]
+  },
+  "prose_measurement": {
+    "fixture": {
+      "fixture_id": "flashalign-library-prose-v1",
+      "prompt": "Write a clear, factual 700-word explanation of how a city library organizes its collection and helps people find books. Use continuous prose.",
+      "request_parameters": {
+        "temperature": 0,
+        "seed": 77,
+        "max_tokens": 256,
+        "stream": true,
+        "stream_options": {
+          "include_usage": true
+        },
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      },
+      "sequence": "For each engine: one warmup per mode, then two measured requests per mode, alternating off/profile. Engines measured sequentially with no simultaneous generation.",
+      "engine_arguments": {
+        "ctx_size": 131072,
+        "parallel": 2,
+        "cache_ram_mib": 2048,
+        "n_gpu_layers": 99,
+        "threads": 8,
+        "threads_batch": 8,
+        "flash_attn": "on"
+      },
+      "measurement": "TTFT measured from HTTP request start to first streamed nonempty token; decode TPS is the engine-reported predicted_per_second. Both samples are 256 generated tokens. This is a small illustrative sample, not a general benchmark or refusal test.",
+      "hardware": {
+        "gpu": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+        "power_limit_observed_after_run_watts": 325,
+        "enforced_power_limit_observed_after_run_watts": 325,
+        "default_power_limit_watts": 300,
+        "power_limit_modified_by_this_test": false,
+        "power_observation_utc": "2026-10-30T23:55:39.278526+00:00"
+      }
+    },
+    "summary": [
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "draft-mtp",
+        "samples_per_mode": 2,
+        "output_tokens_per_request": 256,
+        "off": {
+          "median_decode_tokens_per_second": 264.6598302415588,
+          "median_ttft_seconds": 0.07573497702833265
+        },
+        "on": {
+          "median_decode_tokens_per_second": 235.0494816570943,
+          "median_ttft_seconds": 0.0891461445717141
+        }
+      },
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "ngram-simple",
+        "samples_per_mode": 2,
+        "output_tokens_per_request": 256,
+        "off": {
+          "median_decode_tokens_per_second": 208.9639068290498,
+          "median_ttft_seconds": 0.07555918302386999
+        },
+        "on": {
+          "median_decode_tokens_per_second": 198.50654382132925,
+          "median_ttft_seconds": 0.07329466741066426
+        }
+      },
+      {
+        "model": "Qwen3.8-27B",
+        "speculative_method": "draft-simple",
+        "samples_per_mode": 2,
+        "output_tokens_per_request": 256,
+        "off": {
+          "median_decode_tokens_per_second": 44.012692029255234,
+          "median_ttft_seconds": 0.19168221938889474
+        },
+        "on": {
+          "median_decode_tokens_per_second": 41.17755234131728,
+          "median_ttft_seconds": 0.12923752749338746
+        }
+      }
+    ],
+    "samples": [
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "draft-mtp",
+        "mode": "off",
+        "repeat": 1,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 264.6046184401402,
+        "ttft_seconds": 0.07833046396262944,
+        "drafted_tokens": 391,
+        "accepted_draft_tokens": 156
+      },
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "draft-mtp",
+        "mode": "off",
+        "repeat": 2,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 264.7150420429773,
+        "ttft_seconds": 0.07313949009403586,
+        "drafted_tokens": 391,
+        "accepted_draft_tokens": 156
+      },
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "draft-mtp",
+        "mode": "on",
+        "repeat": 1,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 234.99943323666105,
+        "ttft_seconds": 0.12162441504187882,
+        "drafted_tokens": 428,
+        "accepted_draft_tokens": 147
+      },
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "draft-mtp",
+        "mode": "on",
+        "repeat": 2,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 235.09953007752753,
+        "ttft_seconds": 0.05666787410154939,
+        "drafted_tokens": 428,
+        "accepted_draft_tokens": 147
+      },
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "ngram-simple",
+        "mode": "off",
+        "repeat": 1,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 209.10620627220214,
+        "ttft_seconds": 0.07462037703953683,
+        "drafted_tokens": 0,
+        "accepted_draft_tokens": 0
+      },
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "ngram-simple",
+        "mode": "off",
+        "repeat": 2,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 208.82160738589744,
+        "ttft_seconds": 0.07649798900820315,
+        "drafted_tokens": 0,
+        "accepted_draft_tokens": 0
+      },
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "ngram-simple",
+        "mode": "on",
+        "repeat": 1,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 198.55838823537655,
+        "ttft_seconds": 0.0911698208656162,
+        "drafted_tokens": 0,
+        "accepted_draft_tokens": 0
+      },
+      {
+        "model": "Gemma 4 26B A4B",
+        "speculative_method": "ngram-simple",
+        "mode": "on",
+        "repeat": 2,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 198.45469940728194,
+        "ttft_seconds": 0.05541951395571232,
+        "drafted_tokens": 0,
+        "accepted_draft_tokens": 0
+      },
+      {
+        "model": "Qwen3.8-27B",
+        "speculative_method": "draft-simple",
+        "mode": "off",
+        "repeat": 1,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 43.872598104290844,
+        "ttft_seconds": 0.23694816790521145,
+        "drafted_tokens": 320,
+        "accepted_draft_tokens": 108
+      },
+      {
+        "model": "Qwen3.8-27B",
+        "speculative_method": "draft-simple",
+        "mode": "off",
+        "repeat": 2,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 44.152785954219624,
+        "ttft_seconds": 0.14641627087257802,
+        "drafted_tokens": 320,
+        "accepted_draft_tokens": 108
+      },
+      {
+        "model": "Qwen3.8-27B",
+        "speculative_method": "draft-simple",
+        "mode": "on",
+        "repeat": 1,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 41.19447832443478,
+        "ttft_seconds": 0.12844031117856503,
+        "drafted_tokens": 324,
+        "accepted_draft_tokens": 102
+      },
+      {
+        "model": "Qwen3.8-27B",
+        "speculative_method": "draft-simple",
+        "mode": "on",
+        "repeat": 2,
+        "output_tokens": 256,
+        "cached_input_tokens": 38,
+        "decode_tokens_per_second": 41.160626358199785,
+        "ttft_seconds": 0.1300347438082099,
+        "drafted_tokens": 324,
+        "accepted_draft_tokens": 102
+      }
+    ],
+    "scope": "Two warm requests per mode, not a general throughput benchmark. The 256-token output cap measures a prefix, not completion of the requested 700-word explanation."
+  }
+}

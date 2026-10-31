@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "benchmark": "GSM8K chat-API capability pilot",
+  "model": {
+    "id": "mlx-community/gemma-4-26b-a4b-it-4bit",
+    "revision": "0d77464eeb233a2da68ebf9d7dc4edaac7db956d"
+  },
+  "engine": {
+    "name": "TensorFold native CUDA",
+    "version": "1.1.9",
+    "source_revision": "0635b884b61c1f6f3fc822d4c288cb326d53efbe",
+    "binary_sha256": "3cb201c8ece454e4d249df22238e3df48d57ee21ed6ef09480c4c0a41d984716",
+    "hardware": "one NVIDIA DGX Spark GB10"
+  },
+  "profile": {
+    "name": "gemma4-26b-a4b-v1",
+    "scale": 1,
+    "tensor_sha256": "ca290c628c644091ad366c5cc16b6d6d167ce59b6e2b123386e68db992d1e451"
+  },
+  "speculative_decoding": {
+    "method": "DFlash",
+    "active": true,
+    "drafter": "z-lab/gemma-4-26B-A4B-it-DFlash",
+    "revision": "77d4202772dfe50b2396ec7bac9cfffc7b9e7057"
+  },
+  "evaluation": {
+    "tool": "EleutherAI/lm-evaluation-harness",
+    "revision": "d6de81643928d653435c431bae19945d41d32520",
+    "dataset": "openai/gsm8k",
+    "dataset_revision": "740312add88f781978c0658806c59bc2815b9866",
+    "task_version": 3,
+    "split": "test",
+    "selection": "first16items",
+    "seed": 20261030,
+    "fewshot": 5,
+    "max_output_tokens": 512,
+    "enable_thinking": false,
+    "api": "chat/completions",
+    "chat_template_applied": true
+  },
+  "results": {
+    "off": {
+      "correct": 14,
+      "total": 16,
+      "metrics": {
+        "name": "gsm8k",
+        "alias": "gsm8k",
+        "sample_len": 16,
+        "exact_match,strict-match": 0.875,
+        "exact_match_stderr,strict-match": 0.08539125638299665,
+        "exact_match,flexible-extract": 0.875,
+        "exact_match_stderr,flexible-extract": 0.08539125638299665
+      }
+    },
+    "on": {
+      "correct": 15,
+      "total": 16,
+      "metrics": {
+        "name": "gsm8k",
+        "alias": "gsm8k",
+        "sample_len": 16,
+        "exact_match,strict-match": 0.9375,
+        "exact_match_stderr,strict-match": 0.0625,
+        "exact_match,flexible-extract": 0.9375,
+        "exact_match_stderr,flexible-extract": 0.0625
+      }
+    }
+  },
+  "limitations": [
+    "Small fixed-prefix pilot; this is not a full GSM8K score.",
+    "The one-answer difference does not establish an improvement.",
+    "These results do not measure refusal suppression or other models."
+  ]
+}

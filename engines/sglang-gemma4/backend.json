@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "backend": "sglang",
+  "name": "sglang-gemma4-projection",
+  "upstream": "https://github.com/sgl-project/sglang.git",
+  "upstream_tag": "v0.5.20",
+  "upstream_revision": "94602c9c2b7cbdb8efd5c52802dac6a1c180089e",
+  "requirements": [
+    "sglang==0.5.20",
+    "torch==2.13.0",
+    "triton==3.7.1",
+    "safetensors==0.8.0",
+    "transformers==5.12.1"
+  ],
+  "model_types": [
+    "gemma4",
+    "gemma4_text"
+  ],
+  "transforms": [
+    "projection"
+  ],
+  "tensor_parallel_sizes": [
+    1
+  ],
+  "speculative_algorithms": [
+    "NGRAM"
+  ],
+  "profile_environment": "FLASHALIGN_PROFILES",
+  "key_environment": "FLASHALIGN_KEY_FILE",
+  "prepare": "prepare.py",
+  "launch": "launch.py",
+  "status": "experimental_runtime_checked",
+  "default_arguments": [
+    "--context-length",
+    "65536",
+    "--mem-fraction-static",
+    "0.60",
+    "--max-running-requests",
+    "2",
+    "--attention-backend",
+    "triton",
+    "--speculative-num-draft-tokens",
+    "3",
+    "--disable-overlap-schedule",
+    "--enable-cache-report"
+  ],
+  "input_modalities_by_model_type": {
+    "gemma4": [
+      "text",
+      "image"
+    ],
+    "gemma4_text": [
+      "text"
+    ]
+  },
+  "openclaw_compat_by_model_type": {
+    "gemma4": {
+      "thinkingFormat": "qwen-chat-template"
+    },
+    "gemma4_text": {
+      "thinkingFormat": "qwen-chat-template"
+    }
+  },
+  "variant": "gemma4",
+  "compatible_models": [
+    {
+      "id": "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",
+      "revision": "ed35d7abe5d940da41b4ff06eb482feb0be8cb44",
+      "model_type": "gemma4",
+      "config_sha256": "9781d0d5918127cc95a0a9f76040ea11c6dfd356e18a2db8ab1fdc2e2941dd42",
+      "quantization_config_sha256": "6d4dc6fb020cd6e8816881e26a3a984ee3c16cb3a705bced3612767b45d18cb3",
+      "weights_header": {
+        "file": "model.safetensors",
+        "sha256": "908f7910efa9d1d6df8a7c3ba303c40a99d8bc601292c160d49885872a52615d",
+        "size": 28641731036
+      }
+    }
+  ],
+  "draftless_speculative_algorithms": [
+    "NGRAM"
+  ],
+  "python_min_version": [
+    3,
+    12
+  ],
+  "profile_site_inventory": "expected-sites.json",
+  "tested_modalities": [
+    "text"
+  ],
+  "qualified_model_ids": [
+    "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic"
+  ],
+  "qualified_profiles": [
+    "gemma4-26b-a4b-v1"
+  ],
+  "request_compatibility_by_model_type": {
+    "gemma4": {
+      "kind": "gemma_boolean_thinking_v1"
+    },
+    "gemma4_text": {
+      "kind": "gemma_boolean_thinking_v1"
+    }
+  },
+  "qualification": {
+    "date": "2026-10-30",
+    "hardware": "one NVIDIA GB10",
+    "native_sites_observed": 50,
+    "cpu_runtime_tests": 26,
+    "cpu_setup_tests": 48,
+    "configured_context_length": 65536,
+    "tested_max_running_requests": 2,
+    "tested_mem_fraction_static": 0.6,
+    "speculative_algorithm": "NGRAM",
+    "speculative_num_draft_tokens": 3,
+    "direct_model_requests": 16,
+    "direct_fixture_pass": true,
+    "direct_fixture_proposed_draft_tokens": 422,
+    "mixed_forward_batches": 34,
+    "basic_text_quality": {
+      "passed": 6,
+      "total": 6
+    },
+    "native_hermes_protocol": {
+      "passed": 4,
+      "total": 4,
+      "model_requests": 5
+    },
+    "native_strict_answers": {
+      "passed": 3,
+      "total": 4
+    },
+    "native_aggregate_status": "native_failed",
+    "fresh_dependency_install_tested": true,
+    "full_wizard_engine_activation_tested": false,
+    "image_inputs_tested": false,
+    "long_context_capacity_tested": false,
+    "openclaw_tested": false,
+    "quality_limits": [
+      "The initial approved Hermes no-tool case appended an unsolicited introduction after the requested number; its strict answer check failed."
+    ]
+  }
+}

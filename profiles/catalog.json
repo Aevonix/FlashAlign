@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "name": "FlashAlign starter profiles",
+  "models": [
+    {
+      "path": "deepseek41-flash1017-v1",
+      "profile": "deepseek41-flash1017-v1",
+      "model_ids": [
+        "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+        "DeepSeek-V4.1-Flash-1017",
+        "LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw"
+      ],
+      "model_types": [
+        "deepseek_v41",
+        "deepseek_v41_text"
+      ],
+      "hidden_size": 5120,
+      "status": "experimental_runtime_checked"
+    },
+    {
+      "path": "glm53-full-v1",
+      "profile": "glm53-full-v1",
+      "model_ids": [
+        "Mia-AiLab/GLM-5.3-EXL3-2.75bpw-TensorFold",
+        "glm-5.3",
+        "glm53"
+      ],
+      "model_types": [
+        "glm_moe_dsa"
+      ],
+      "hidden_size": 6144,
+      "status": "experimental_runtime_checked"
+    },
+    {
+      "path": "glm53-flash-v1",
+      "profile": "glm53-flash-v1",
+      "model_ids": [
+        "zai-org/GLM-5.3-Flash",
+        "GLM-5.3-Flash",
+        "nvidia/GLM-5.3-Flash-NVFP4"
+      ],
+      "model_types": [
+        "glm5_next",
+        "glm5_next_text"
+      ],
+      "hidden_size": 4096,
+      "status": "experimental_runtime_checked"
+    },
+    {
+      "path": "qwen38-27b-v1",
+      "profile": "qwen38-27b-v1",
+      "model_ids": [
+        "Qwen/Qwen3.8-27B",
+        "Qwen3.8-27B",
+        "TensorFold/Qwen3.8-27B-MLX-4bit",
+        "Mia-AiLab/Qwen3.8-27B-EXL3-2.0bpw"
+      ],
+      "model_types": [
+        "qwen3_5",
+        "qwen3_5_text"
+      ],
+      "hidden_size": 5120,
+      "status": "experimental_runtime_checked"
+    },
+    {
+      "path": "gemma4-26b-a4b-v1",
+      "profile": "gemma4-26b-a4b-v1",
+      "model_ids": [
+        "RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic",
+        "mlx-community/gemma-4-26b-a4b-it-4bit"
+      ],
+      "model_types": [
+        "gemma4",
+        "gemma4_text"
+      ],
+      "hidden_size": 2816,
+      "status": "experimental_runtime_checked"
+    }
+  ],
+  "author": "Aevonix Inc"
+}

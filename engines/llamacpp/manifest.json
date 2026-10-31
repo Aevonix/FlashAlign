@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "engine": "llamacpp",
+  "files": {
+    "LICENSE": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+    "LICENSE.llama.cpp": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d",
+    "NOTICE.md": "c8a365bb3b0f9da0a3269abbe62f924a23628a11409e2b6f8d0aee006f5d7a7a",
+    "README.md": "e81b877b52c49fff2f87754ef80f731e6f0c5415fce521049146170c39392224",
+    "backend.json": "97dd095e397a883247d2f9c07ae0edc395e147ea4623024004506a6508ca9ca3",
+    "flashalign.patch": "f468b7db9b07e54cca2c6bc178fe77a4a0d1e8e3ce5e8465d0324bb5f91e59aa",
+    "flashalign_replay.py": "6e2730a89fc4d70636bf3b139c5ab5eb8d7b205483ac28684aa529df6f565162",
+    "install.py": "9d1b42e0d25bcd862f1c52f39e8e89bebbbf123b0b2f6a25fb586f4aa2e501b4",
+    "launcher.py": "2ab306ac12d7635af422776d29fea674c54682adccf00827745250d0bfcb19aa",
+    "patch.json": "08a83baec7103decef830cc48857597f973cc90e88358c03416951acc8e6fd9c",
+    "profile_gguf.py": "719cd7876c755751a1ecb0b6179145d88f6e6948ee1a98bb8d5221d28259e4af",
+    "requirements.txt": "98ded5c9f84709b88f264219238780e800cfb996507de721b533e6fcadfda2e7",
+    "tests/test_backend.py": "a4b29aa51322d1d31ed4056726e63cc199223f178dcaf525bf7015fc8bc937e0"
+  },
+  "source_revision": "8642541b255bfb5dc39cd351a178be09013a55d6",
+  "validation_previous_revision": {
+    "native_gpu": "Qwen3.8-27B Q8_0, 129-site profile; auth/cache/streaming/speculation passed",
+    "quality_fixtures": {
+      "standard": 15,
+      "owner": 15,
+      "total": 16
+    },
+    "scope": "small fixture set; not broad model-quality equivalence"
+  },
+  "validation": {
+    "python_tests": {
+      "passed": 17,
+      "total": 17
+    },
+    "native_cpu": "v0.8.0 server build and GGML arithmetic, cache, context-shift and speculation regression passed",
+    "native_gpu": "Gemma 50 executed sites, stock bypass, runtime/auth/cache/context/wizard tests passed; Qwen direct and 64K regression passed",
+    "direct_checks": {
+      "gemma_mtp": {
+        "passed": 32,
+        "total": 32
+      },
+      "gemma_ngram": {
+        "passed": 32,
+        "total": 32
+      },
+      "qwen_draft_simple": {
+        "passed": 32,
+        "total": 32
+      }
+    },
+    "scope": "Small qualification fixtures; native agent answer-quality limitations are documented separately."
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "benchmark": "GSM8K chat-API capability pilot",
+  "model": {
+    "id": "Mia-AiLab/Qwen3.8-27B-EXL3-2.0bpw",
+    "revision": "b4925724092da59826c02d25a7201fb272bf4f34",
+    "base_model": "Qwen/Qwen3.8-27B",
+    "format": "EXL3",
+    "bits": 2.0,
+    "head_bits": 3,
+    "mtp_bits": 2,
+    "vision_bits": 3
+  },
+  "engine": {
+    "name": "TensorFold native CUDA",
+    "version": "1.1.9",
+    "source_revision": "0635b884b61c1f6f3fc822d4c288cb326d53efbe",
+    "binary_sha256": "62c2f34743116c1656cb3471ef621a64c23979022c040a84caea4e42b2301521",
+    "artifact": "linux-x86_64-0635b88 stripped r2",
+    "hardware": "one NVIDIA RTX PRO 6000 Blackwell Max-Q,325W",
+    "context": 8192,
+    "kv_cache": "fp8"
+  },
+  "profile": {
+    "name": "qwen38-27b-v1",
+    "scale": 1,
+    "tensor_sha256": "d7a9b49364c51e313e74b58ea7ac244d470c38609550bf0bd96129da0c222a87"
+  },
+  "speculative_decoding": {
+    "method": "DFlash2 plus copy drafts",
+    "active": true,
+    "drafter": "z-lab/Qwen3.8-27B-DFlash2",
+    "revision": "50307d4c4cde6860d4eee73e2547cd786fe8e8a4"
+  },
+  "evaluation": {
+    "tool": "EleutherAI/lm-evaluation-harness",
+    "revision": "d6de81643928d653435c431bae19945d41d32520",
+    "dataset": "openai/gsm8k",
+    "dataset_revision": "740312add88f781978c0658806c59bc2815b9866",
+    "task_version": 3,
+    "split": "test",
+    "selection": "first32items",
+    "seed": 20261030,
+    "fewshot": 5,
+    "max_output_tokens": 512,
+    "enable_thinking": false,
+    "api": "chat/completions",
+    "chat_template_applied": true
+  },
+  "results": {
+    "off": {
+      "correct": 31,
+      "total": 32,
+      "metrics": {
+        "name": "gsm8k",
+        "alias": "gsm8k",
+        "sample_len": 32,
+        "exact_match,strict-match": 0.96875,
+        "exact_match_stderr,strict-match": 0.03125,
+        "exact_match,flexible-extract": 0.96875,
+        "exact_match_stderr,flexible-extract": 0.03125
+      }
+    },
+    "on": {
+      "correct": 31,
+      "total": 32,
+      "metrics": {
+        "name": "gsm8k",
+        "alias": "gsm8k",
+        "sample_len": 32,
+        "exact_match,strict-match": 0.96875,
+        "exact_match_stderr,strict-match": 0.03125,
+        "exact_match,flexible-extract": 0.96875,
+        "exact_match_stderr,flexible-extract": 0.03125
+      }
+    }
+  },
+  "limitations": [
+    "Small fixed-prefix pilot; this is not a full GSM8K score.",
+    "Equal aggregate scores do not prove identical answers or quality across other tasks.",
+    "This result does not measure refusal suppression, long-context accuracy or other models."
+  ],
+  "execution": {
+    "completed_requests": 64,
+    "thinking_disabled_requests": 64,
+    "requests_with_draft_tokens": 64,
+    "max_observed_completion_tokens": 261,
+    "request_failures": 0
+  }
+}

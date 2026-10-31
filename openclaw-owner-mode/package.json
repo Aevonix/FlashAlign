@@ -1,0 +1,32 @@
+{
+  "name": "@aevonix/flashalign",
+  "version": "1.0.0",
+  "description": "FlashAlign by Aevonix: on-demand model profiles for verified contacts and tools",
+  "author": "Aevonix Inc",
+  "license": "AGPL-3.0-only",
+  "homepage": "https://github.com/Aevonix/FlashAlign",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Aevonix/FlashAlign.git",
+    "directory": "openclaw-owner-mode"
+  },
+  "engines": {
+    "node": ">=24.22.1 <25 || >=26.12.1 <27"
+  },
+  "type": "module",
+  "files": [
+    "index.mjs",
+    "terminal.mjs",
+    "terminal-runner.mjs",
+    "model-params.mjs",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./index.mjs"
+    ]
+  }
+}

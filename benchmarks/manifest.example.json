@@ -1,0 +1,17 @@
+{
+  "model": {
+    "id": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "quantization": "REPLACE_WITH_ACTUAL_SERVING_FORMAT"
+  },
+  "engine": {
+    "name": "REPLACE_WITH_ACTUAL_ENGINE",
+    "version": "REPLACE_WITH_PINNED_VERSION"
+  },
+  "hardware": {"accelerator": "REPLACE_WITH_ACTUAL_HARDWARE", "accelerator_count": 1},
+  "speculation": {"enabled": false},
+  "profile": {
+    "name": "qwen38-27b-v1",
+    "artifact_sha256": "REPLACE_WITH_SHA256_OF_PROFILE_SAFETENSORS"
+  }
+}

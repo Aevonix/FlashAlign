@@ -1,0 +1,295 @@
+{
+  "name": "glm53-full-v1",
+  "hidden_size": 6144,
+  "model": {
+    "id": "Mia-AiLab/GLM-5.3-EXL3-2.75bpw-TensorFold",
+    "revision": "cf1fee8923b770b0c47f7a032e1b0f30a57c626a",
+    "format": "exl3"
+  },
+  "transform": "input_low_rank_delta_v1",
+  "requires": [
+    "matrix_input"
+  ],
+  "sites": [
+    {
+      "layer": 30,
+      "site": "attn_out",
+      "tensor": "model.layers.30.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 31,
+      "site": "attn_out",
+      "tensor": "model.layers.31.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 32,
+      "site": "attn_out",
+      "tensor": "model.layers.32.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 33,
+      "site": "attn_out",
+      "tensor": "model.layers.33.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 34,
+      "site": "shared_expert_out",
+      "tensor": "model.layers.34.mlp.shared_experts.down_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 2048
+    },
+    {
+      "layer": 34,
+      "site": "attn_out",
+      "tensor": "model.layers.34.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 35,
+      "site": "shared_expert_out",
+      "tensor": "model.layers.35.mlp.shared_experts.down_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 2048
+    },
+    {
+      "layer": 38,
+      "site": "shared_expert_out",
+      "tensor": "model.layers.38.mlp.shared_experts.down_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 2048
+    },
+    {
+      "layer": 38,
+      "site": "attn_out",
+      "tensor": "model.layers.38.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 39,
+      "site": "shared_expert_out",
+      "tensor": "model.layers.39.mlp.shared_experts.down_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 2048
+    },
+    {
+      "layer": 39,
+      "site": "attn_out",
+      "tensor": "model.layers.39.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 40,
+      "site": "shared_expert_out",
+      "tensor": "model.layers.40.mlp.shared_experts.down_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 2048
+    },
+    {
+      "layer": 40,
+      "site": "attn_out",
+      "tensor": "model.layers.40.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 41,
+      "site": "shared_expert_out",
+      "tensor": "model.layers.41.mlp.shared_experts.down_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 2048
+    },
+    {
+      "layer": 41,
+      "site": "attn_out",
+      "tensor": "model.layers.41.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 42,
+      "site": "shared_expert_out",
+      "tensor": "model.layers.42.mlp.shared_experts.down_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 2048
+    },
+    {
+      "layer": 42,
+      "site": "attn_out",
+      "tensor": "model.layers.42.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 43,
+      "site": "shared_expert_out",
+      "tensor": "model.layers.43.mlp.shared_experts.down_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 2048
+    },
+    {
+      "layer": 43,
+      "site": "attn_out",
+      "tensor": "model.layers.43.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 44,
+      "site": "shared_expert_out",
+      "tensor": "model.layers.44.mlp.shared_experts.down_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 2048
+    },
+    {
+      "layer": 44,
+      "site": "attn_out",
+      "tensor": "model.layers.44.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 46,
+      "site": "attn_out",
+      "tensor": "model.layers.46.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 51,
+      "site": "attn_out",
+      "tensor": "model.layers.51.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 52,
+      "site": "attn_out",
+      "tensor": "model.layers.52.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 58,
+      "site": "attn_out",
+      "tensor": "model.layers.58.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 59,
+      "site": "attn_out",
+      "tensor": "model.layers.59.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 60,
+      "site": "attn_out",
+      "tensor": "model.layers.60.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 61,
+      "site": "attn_out",
+      "tensor": "model.layers.61.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    },
+    {
+      "layer": 62,
+      "site": "attn_out",
+      "tensor": "model.layers.62.self_attn.o_proj.weight",
+      "rank": 16,
+      "scale": 1.0,
+      "input_size": 16384
+    }
+  ],
+  "status": "experimental_runtime_checked",
+  "source": {
+    "stock": {
+      "id": "zai-org/GLM-5.3",
+      "revision": "ba32f8c19c8738e2c57c71798c601d477a7bf844",
+      "license": "LicenseRef-GLM-5.3",
+      "license_declaration_url": "https://huggingface.co/zai-org/GLM-5.3/blob/ba32f8c19c8738e2c57c71798c601d477a7bf844/README.md",
+      "license_name": "GLM-5.3",
+      "license_metadata_tag": "other",
+      "license_url": "https://huggingface.co/zai-org/GLM-5.3/blob/ba32f8c19c8738e2c57c71798c601d477a7bf844/LICENSE"
+    },
+    "edited": {
+      "id": "MoonMath-ai/GLM-5.3-Uncensored-FP8",
+      "revision": "4aaa244f0a1ca704e70d96b460eb18fb6b94ee76",
+      "url": "https://huggingface.co/MoonMath-ai/GLM-5.3-Uncensored-FP8/tree/4aaa244f0a1ca704e70d96b460eb18fb6b94ee76",
+      "license": "LicenseRef-GLM-5.3",
+      "license_declaration_url": "https://huggingface.co/MoonMath-ai/GLM-5.3-Uncensored-FP8/blob/4aaa244f0a1ca704e70d96b460eb18fb6b94ee76/README.md",
+      "license_name": "GLM-5.3",
+      "license_metadata_tag": "other",
+      "license_url": "https://huggingface.co/MoonMath-ai/GLM-5.3-Uncensored-FP8/blob/4aaa244f0a1ca704e70d96b460eb18fb6b94ee76/LICENSE"
+    },
+    "attribution": "Edited checkpoint by MoonMath. Fitting and runtime packaging by Aevonix."
+  },
+  "compatible_models": [
+    {
+      "id": "Mia-AiLab/GLM-5.3-EXL3-2.75bpw-TensorFold",
+      "revision": "cf1fee8923b770b0c47f7a032e1b0f30a57c626a",
+      "model_type": "glm_moe_dsa",
+      "config_sha256": "e7d294bdc0623e585e90d55444b3dc930c3b94fa1a3261fb7ba2116e94855ad0",
+      "quantization_config_sha256": "03f8b4df24ce36dc38e40b7c044751a47285d93765c1fb43fc7d93b1a02fb449",
+      "index_sha256": "5c2998eacaea648176e1be91eb5398faa48ebf4848839761b13ed21d43f26d38"
+    },
+    {
+      "id": "Mia-AiLab/GLM-5.3-EXL3-2.75bpw-TensorFold",
+      "revision": "cf1fee8923b770b0c47f7a032e1b0f30a57c626a",
+      "model_type": "glm_moe_dsa",
+      "config_sha256": "d7c4a8ac38b8559a5a6597db7e374a619004b7b897902676ce3cb146be67121c",
+      "quantization_config_sha256": "241b3dd959a5b75a22688dd0540d8d247ae475b4516c4c887482c836d550bb84",
+      "index_sha256": "5c2998eacaea648176e1be91eb5398faa48ebf4848839761b13ed21d43f26d38"
+    }
+  ],
+  "author": "Aevonix Inc",
+  "license_notice": {
+    "license": "LicenseRef-GLM-5.3",
+    "file": "LICENSE",
+    "sha256": "96e1622099fc9d6b70c9760f007d99e66d7497eec636b63c60fe208401e9170c",
+    "scope": "retained_model_source_terms"
+  }
+}

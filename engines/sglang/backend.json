@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "backend": "sglang",
+  "name": "sglang-qwen-projection",
+  "upstream": "https://github.com/sgl-project/sglang.git",
+  "upstream_tag": "v0.5.20",
+  "upstream_revision": "94602c9c2b7cbdb8efd5c52802dac6a1c180089e",
+  "requirements": [
+    "sglang==0.5.20",
+    "torch==2.13.0",
+    "triton==3.7.1",
+    "safetensors==0.8.0",
+    "transformers==5.12.1"
+  ],
+  "model_types": [
+    "qwen3_5",
+    "qwen3_5_text"
+  ],
+  "transforms": [
+    "projection"
+  ],
+  "tensor_parallel_sizes": [
+    1
+  ],
+  "speculative_algorithms": [
+    "DFLASH"
+  ],
+  "draft_model_architectures": [
+    "DFlash2DraftModel",
+    "DFlashDraftModel"
+  ],
+  "profile_environment": "FLASHALIGN_PROFILES",
+  "key_environment": "FLASHALIGN_KEY_FILE",
+  "prepare": "prepare.py",
+  "launch": "launch.py",
+  "status": "experimental_gpu_verified",
+  "tested_models": [
+    {
+      "id": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+      "format": "BF16",
+      "profile": "qwen38-27b-v1",
+      "draft_model": "z-lab/Qwen3.8-27B-DFlash2",
+      "context_length": 65536,
+      "draft_revision": "50307d4c4cde6860d4eee73e2547cd786fe8e8a4"
+    }
+  ],
+  "default_arguments": [
+    "--context-length",
+    "65536",
+    "--mem-fraction-static",
+    "0.82",
+    "--max-running-requests",
+    "2",
+    "--attention-backend",
+    "triton",
+    "--enable-cache-report"
+  ],
+  "qualification": {
+    "tested_context_length": 65536,
+    "actual_capacity_input_tokens": 65000,
+    "consumer_revision": "e77b8194e02de95879e4cb7a5aaea99168155adc",
+    "common_fixtures_per_mode": 16,
+    "common_fixture_passes": 32,
+    "structured_tool_calls": 4,
+    "native_hermes_requests": 15,
+    "native_openclaw_checks": 7,
+    "native_openclaw_requests": 11,
+    "actual_wizard_configuration_unchanged": true,
+    "speculative_algorithm": "DFLASH",
+    "tested_max_running_requests": 2,
+    "tested_mem_fraction_static": 0.82,
+    "dependency_environment": "reused pinned environment",
+    "scope": "serial requests on one 95 GiB RTX PRO 6000 Blackwell Max-Q GPU; no new simultaneous mixed-batch or lower-memory qualification"
+  },
+  "resources": {
+    "gpu_count": 1,
+    "observed_peak_gpu_memory_mib": [
+      83866
+    ],
+    "measurement_interval_seconds": 1,
+    "note": "Observed during the 65,536-token managed wizard and native harness qualification. This peak is not a measured minimum; host memory was shared with other jobs."
+  },
+  "input_modalities_by_model_type": {
+    "qwen3_5": [
+      "text",
+      "image"
+    ],
+    "qwen3_5_text": [
+      "text"
+    ]
+  },
+  "openclaw_compat_by_model_type": {
+    "qwen3_5": {
+      "thinkingFormat": "qwen-chat-template"
+    },
+    "qwen3_5_text": {
+      "thinkingFormat": "qwen-chat-template"
+    }
+  }
+}

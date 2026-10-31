@@ -1,0 +1,955 @@
+{
+  "name": "qwen38-27b-v1",
+  "model": {
+    "id": "Qwen/Qwen3.8-27B",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+  },
+  "hidden_size": 5120,
+  "sites": [
+    {
+      "layer": 0,
+      "site": "embedding_out",
+      "tensor": "model.language_model.embed_tokens.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 0,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.0.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 0,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.0.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 1,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.1.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 1,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.1.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 10,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.10.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 10,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.10.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 11,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.11.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 11,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.11.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 12,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.12.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 12,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.12.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 13,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.13.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 13,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.13.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 14,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.14.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 14,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.14.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 15,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.15.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 15,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.15.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 16,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.16.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 16,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.16.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 17,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.17.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 17,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.17.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 18,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.18.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 18,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.18.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 19,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.19.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 19,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.19.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 2,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.2.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 2,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.2.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 20,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.20.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 20,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.20.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 21,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.21.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 21,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.21.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 22,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.22.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 22,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.22.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 23,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.23.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 23,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.23.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 24,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.24.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 24,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.24.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 25,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.25.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 25,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.25.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 26,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.26.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 26,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.26.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 27,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.27.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 27,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.27.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 28,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.28.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 28,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.28.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 29,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.29.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 29,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.29.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 3,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.3.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 3,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.3.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 30,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.30.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 30,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.30.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 31,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.31.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 31,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.31.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 32,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.32.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 32,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.32.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 33,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.33.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 33,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.33.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 34,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.34.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 34,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.34.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 35,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.35.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 35,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.35.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 36,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.36.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 36,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.36.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 37,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.37.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 37,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.37.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 38,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.38.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 38,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.38.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 39,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.39.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 39,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.39.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 4,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.4.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 4,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.4.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 40,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.40.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 40,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.40.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 41,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.41.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 41,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.41.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 42,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.42.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 42,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.42.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 43,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.43.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 43,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.43.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 44,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.44.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 44,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.44.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 45,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.45.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 45,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.45.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 46,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.46.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 46,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.46.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 47,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.47.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 47,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.47.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 48,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.48.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 48,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.48.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 49,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.49.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 49,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.49.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 5,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.5.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 5,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.5.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 50,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.50.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 50,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.50.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 51,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.51.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 51,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.51.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 52,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.52.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 52,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.52.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 53,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.53.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 53,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.53.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 54,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.54.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 54,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.54.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 55,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.55.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 55,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.55.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 56,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.56.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 56,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.56.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 57,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.57.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 57,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.57.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 58,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.58.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 58,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.58.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 59,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.59.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 59,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.59.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 6,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.6.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 6,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.6.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 60,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.60.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 60,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.60.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 61,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.61.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 61,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.61.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 62,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.62.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 62,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.62.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 63,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.63.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 63,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.63.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 7,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.7.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 7,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.7.self_attn.o_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 8,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.8.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 8,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.8.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 9,
+      "site": "attn_out",
+      "tensor": "model.language_model.layers.9.linear_attn.out_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    },
+    {
+      "layer": 9,
+      "site": "mlp_out",
+      "tensor": "model.language_model.layers.9.mlp.down_proj.weight",
+      "rank": 1,
+      "scale": 1.0
+    }
+  ],
+  "status": "experimental_runtime_checked",
+  "source": {
+    "stock": {
+      "id": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+      "license": "Apache-2.0",
+      "license_declaration_url": "https://huggingface.co/Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/README.md"
+    },
+    "runtime_scope": "Main-model embedding and residual-writing outputs. Native MTP is outside this profile; external DFlash2 remains enabled.",
+    "edited": {
+      "id": "orcarouter/Qwen3.8-27B-Uncensored",
+      "revision": "0f639a9bde23fe229a7b064b40a5153c5bec0b48",
+      "url": "https://huggingface.co/orcarouter/Qwen3.8-27B-Uncensored/tree/0f639a9bde23fe229a7b064b40a5153c5bec0b48",
+      "license": "Apache-2.0",
+      "license_declaration_url": "https://huggingface.co/orcarouter/Qwen3.8-27B-Uncensored/blob/0f639a9bde23fe229a7b064b40a5153c5bec0b48/README.md"
+    },
+    "attribution": "Edited checkpoint by OrcaRouter. Fitting and runtime packaging by Aevonix."
+  },
+  "author": "Aevonix Inc",
+  "compatible_models": [
+    {
+      "id": "TensorFold/Qwen3.8-27B-MLX-4bit",
+      "revision": "22d8d538154e0e5b6f8dcb1fcc74a60a0798104c",
+      "model_type": "qwen3_5",
+      "config_sha256": "14b65a0ee06517060a6bbd979bb1a8ff54e7b304b1a1f01d54344b88b8285e85",
+      "index_sha256": "13b840162b4cb35c66fef7df072f7dbb4717908204364f5e5d9f9655a2758fa8",
+      "quantization_config_sha256": "4816c1f4598804ce99e6dfb1c2ab084cc1d1cfa3f2daa48df649f7c567f3f3b3"
+    },
+    {
+      "id": "Mia-AiLab/Qwen3.8-27B-EXL3-2.0bpw",
+      "revision": "b4925724092da59826c02d25a7201fb272bf4f34",
+      "model_type": "qwen3_5",
+      "config_sha256": "dd800226988cd64f99025617a04ea130562976886c89a23299ee264f0543fef4",
+      "index_sha256": "fe4ad50a61850ee2f159cf113b37761807a2f5be9f84343ffa11d1375871ce69"
+    }
+  ],
+  "license_notice": {
+    "license": "Apache-2.0",
+    "file": "LICENSE",
+    "sha256": "bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a",
+    "scope": "retained_model_source_terms"
+  }
+}

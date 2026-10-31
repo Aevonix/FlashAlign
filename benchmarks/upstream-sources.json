@@ -1,0 +1,32 @@
+{
+  "checked_utc": "2026-10-30",
+  "tools": [
+    {
+      "name": "lm-evaluation-harness",
+      "repository": "https://github.com/EleutherAI/lm-evaluation-harness",
+      "revision": "d6de81643928d653435c431bae19945d41d32520",
+      "use": "Retained capability, including GSM8K and MMLU where completion logprobs are available",
+      "code_license": "MIT",
+      "data_note": "Task datasets retain their own terms and revisions. Pin dataset revisions in the experiment record."
+    },
+    {
+      "name": "XSTest",
+      "repository": "https://github.com/paul-rottger/xstest",
+      "revision": "d7bb5bd738c1fcbc36edd83d5e7d1b71a3e2d84d",
+      "use": "Over-refusal on safe prompts and contrast-set refusal, scored separately",
+      "data_path": "xstest_prompts.csv",
+      "data_license": "CC-BY-4.0",
+      "scoring": "Manual or pinned semantic classification into full compliance, partial refusal and full refusal. No opening-phrase matcher."
+    },
+    {
+      "name": "HarmBench",
+      "repository": "https://github.com/centerforaisafety/HarmBench",
+      "revision": "8e1604d1171fe8a48d8febecd22f600e462bdcdd",
+      "use": "Harmful-compliance measurement using official semantic classifiers",
+      "code_license": "MIT",
+      "classifier": "cais/HarmBench-Llama-2-13b-cls",
+      "data_note": "Review dataset and classifier terms separately; pin classifier checkpoint revision and evaluate the same output-token budget in both modes."
+    }
+  ],
+  "bundled_data": "Only original benign demonstration prompts are included. No third-party benchmark data or classifier weights are bundled."
+}

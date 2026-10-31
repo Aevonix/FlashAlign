@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-10-30",
+  "scope": "Selected native TensorFold qualification measurements; not a full benchmark suite",
+  "deepseek": {
+    "model": {
+      "repository": "LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw",
+      "revision": "04a492fc3b4d25ddbab8f2d2f07f235ec77c9010",
+      "config_sha256": "2cbc57cd18428f62aba490870ceda44d2b0639649c05754d6040a5be8e976cf4",
+      "index_sha256": "002568f81f402b357a92e2601e6eb664216ab8b27f02c6053d4233a9fdbc72e4"
+    },
+    "checkpoint_integrity_scope": "Public config and index hashes matched the tested pack. The full checkpoint payload was not rehashed during these native runs.",
+    "engine": {
+      "name": "TensorFold native CUDA",
+      "version": "1.1.9",
+      "source_revision": "9a759f3bd4e1c5b7538ba1a058e01b6baf18a77f",
+      "leader_sha256": "1d98da655006c27f467ad1b01a34ec9555cabd42f94816730b392be8aaa1ac80",
+      "follower_sha256": "f2e5a13a374808c5043e5802b10e84579d21668a8fada00395a4aa465b142a3d"
+    },
+    "hardware": {
+      "gpu": "NVIDIA RTX PRO 6000 Blackwell Max-Q",
+      "gpu_count": 4,
+      "gpu_memory_mib_each": 97887,
+      "gpu_power_limit_watts_each": 325,
+      "cpu": "AMD EPYC 9255, 96 logical CPUs",
+      "cuda_architecture": "sm_120"
+    },
+    "profile": {
+      "name": "deepseek41-flash1017-v1",
+      "scale": 1,
+      "tensor_sha256": "db96d4e9a1f93f1a4f3ed4476ebfedc4b21f4f8f19be71c23ef19cee957f04f3"
+    },
+    "speculative_decoding": {
+      "method": "DSpark",
+      "active": true
+    },
+    "cuda_graphs_active": true,
+    "short_workloads": {
+      "context_tokens": 4096,
+      "pool_tokens": 8192,
+      "live_slots": 1,
+      "warmup_pairs_per_run": 1,
+      "selected_cases": [
+        {
+          "case_id": "linux-process",
+          "run_record_sha256": "2c6c577b1900890bebca915bd2042bcd053e053d9c63877bddb465f5b7b856ef",
+          "results": {
+            "off": {
+              "n": 3,
+              "completion_tokens": [
+                256,
+                256,
+                256
+              ],
+              "cached_prompt_tokens": [
+                0,
+                0,
+                0
+              ],
+              "mean_ttft_s": 0.4566108523285948,
+              "mean_engine_decode_tps": 180.18968662115842,
+              "mean_total_s": 1.8638903306564316
+            },
+            "on": {
+              "n": 3,
+              "completion_tokens": [
+                256,
+                256,
+                256
+              ],
+              "cached_prompt_tokens": [
+                0,
+                0,
+                0
+              ],
+              "mean_ttft_s": 0.464846585993655,
+              "mean_engine_decode_tps": 177.73714285226288,
+              "mean_total_s": 1.871661502654509
+            }
+          }
+        },
+        {
+          "case_id": "photography",
+          "run_record_sha256": "2c6c577b1900890bebca915bd2042bcd053e053d9c63877bddb465f5b7b856ef",
+          "results": {
+            "off": {
+              "n": 3,
+              "completion_tokens": [
+                256,
+                256,
+                256
+              ],
+              "cached_prompt_tokens": [
+                0,
+                0,
+                0
+              ],
+              "mean_ttft_s": 0.45815811133555445,
+              "mean_engine_decode_tps": 150.28986394940475,
+              "mean_total_s": 2.1283559516693153
+            },
+            "on": {
+              "n": 3,
+              "completion_tokens": [
+                256,
+                256,
+                256
+              ],
+              "cached_prompt_tokens": [
+                0,
+                0,
+                0
+              ],
+              "mean_ttft_s": 0.44456142200700316,
+              "mean_engine_decode_tps": 136.10650716019995,
+              "mean_total_s": 2.292243266342363
+            }
+          }
+        },
+        {
+          "case_id": "merge-intervals",
+          "run_record_sha256": "974e51dc003fa30200d8b401d9027e9fc66b376063786be1d1c41aae115408e8",
+          "results": {
+            "off": {
+              "n": 3,
+              "completion_tokens": [
+                230,
+                230,
+                230
+              ],
+              "cached_prompt_tokens": [
+                0,
+                0,
+                0
+              ],
+              "mean_ttft_s": 0.3989757029921748,
+              "mean_engine_decode_tps": 278.7403301853132,
+              "mean_total_s": 1.1914739503408782
+            },
+            "on": {
+              "n": 3,
+              "completion_tokens": [
+                230,
+                230,
+                230
+              ],
+              "cached_prompt_tokens": [
+                0,
+                0,
+                0
+              ],
+              "mean_ttft_s": 0.44138122868025675,
+              "mean_engine_decode_tps": 258.40367378156844,
+              "mean_total_s": 1.3216729653455939
+            }
+          }
+        }
+      ],
+      "metric": "Arithmetic mean of native engine per-request decode tokens/second. This excludes prefill and differs from total request throughput.",
+      "selection": "The two prose cases with equal 256-token outputs in final-paired, and the sole final-code case with equal 230-token outputs. Unequal-length refusal/story cases are not used for performance comparison.",
+      "complete_generation_manifest_available": false,
+      "generation_settings_note": "The retained qualification summary does not include every per-request generation setting; none has been inferred for this export."
+    },
+    "long_context": {
+      "context_tokens": 65536,
+      "pool_tokens": 131072,
+      "live_slots": 1,
+      "records_sha256": "99af462f700504fb623e9e0ba00d71475e7d81413a533abd63d0133ef7dd7016",
+      "records": [
+        {
+          "phase": "warmup",
+          "mode": "off",
+          "status": "ok",
+          "retrieval_correct": true,
+          "prompt_tokens": 63886,
+          "cached_prompt_tokens": 0,
+          "completion_tokens": 6,
+          "ttft_s": 15.584778424992692,
+          "total_s": 15.714095089002512
+        },
+        {
+          "phase": "warmup",
+          "mode": "on",
+          "status": "ok",
+          "retrieval_correct": true,
+          "prompt_tokens": 63886,
+          "cached_prompt_tokens": 0,
+          "completion_tokens": 6,
+          "ttft_s": 14.809026781003922,
+          "total_s": 14.93757770000957
+        },
+        {
+          "phase": "measured",
+          "mode": "off",
+          "status": "ok",
+          "retrieval_correct": true,
+          "prompt_tokens": 63886,
+          "cached_prompt_tokens": 63872,
+          "completion_tokens": 6,
+          "ttft_s": 0.8711025490192696,
+          "total_s": 0.9591556660016067
+        },
+        {
+          "phase": "measured",
+          "mode": "on",
+          "status": "ok",
+          "retrieval_correct": true,
+          "prompt_tokens": 63886,
+          "cached_prompt_tokens": 63872,
+          "completion_tokens": 6,
+          "ttft_s": 0.6531222379999235,
+          "total_s": 0.7408687199931592
+        },
+        {
+          "phase": "measured",
+          "mode": "on",
+          "status": "ok",
+          "retrieval_correct": true,
+          "prompt_tokens": 63886,
+          "cached_prompt_tokens": 63872,
+          "completion_tokens": 6,
+          "ttft_s": 0.6086453309981152,
+          "total_s": 0.6968732919776812
+        },
+        {
+          "phase": "measured",
+          "mode": "off",
+          "status": "ok",
+          "retrieval_correct": true,
+          "prompt_tokens": 63886,
+          "cached_prompt_tokens": 63872,
+          "completion_tokens": 6,
+          "ttft_s": 0.6645378670073114,
+          "total_s": 0.7527573049883358
+        }
+      ],
+      "interpretation": "First request in each mode reported zero cached tokens; four alternating repeats each reported 63872 cached tokens and the expected retrieval answer. Warmup labels identify the first uncached requests, not additional excluded observations."
+    },
+    "code_quality": {
+      "generated_example_checks": {
+        "off": {
+          "passed": 2,
+          "total": 3
+        },
+        "on": {
+          "passed": 2,
+          "total": 3
+        }
+      },
+      "interpretation": "Both modes generated the same code hash. A generated self-test failed in both modes. Completion and timing are not coding-accuracy scores.",
+      "output_sha256_both_modes": "6469a4941df17e2051528cf9141b77bb49823de80a5513e39c5c3da927b4c417"
+    }
+  },
+  "qwen": {
+    "model": {
+      "id": "Mia-AiLab/Qwen3.8-27B-EXL3-2.0bpw",
+      "revision": "b4925724092da59826c02d25a7201fb272bf4f34",
+      "quantization": "EXL3 2bpw, head3, MTP2, vision3"
+    },
+    "engine": {
+      "commit": "0635b884b61c1f6f3fc822d4c288cb326d53efbe",
+      "binary_sha256": "c4048913f7f01d91962d99dc2b17a850162173dafb058f287e426d7f0ade0088"
+    },
+    "hardware_scope": "One SM120 GPU, Linux x86_64",
+    "context_tokens": 4096,
+    "streams": 2,
+    "kv_cache": "FP8",
+    "speculative_decoding": {
+      "method": "DFlash2",
+      "active": true
+    },
+    "completed_fixture_requests": 16,
+    "grammar_cases_passed": 4,
+    "authorization_and_concurrent_cases_passed": 6,
+    "total_cases_passed": 26,
+    "limits": [
+      "No x86 MLX qualification.",
+      "No large-context or maximum-throughput measurement.",
+      "Concurrent requests completed; this report does not assert exact scheduler row co-batching.",
+      "Samples are benign synthetic fixtures, not aggregate refusal/capability benchmark."
+    ]
+  },
+  "limitations": [
+    "Small synthetic workload samples, with three measurements per mode for the selected DeepSeek speed cases.",
+    "Selected per-request speed measurements do not establish maximum server throughput, performance at the 64K preset, or performance on another GPU power limit.",
+    "Only the Gemma pilot separately measures an external capability task; there are no full MMLU, GSM8K, refusal-rate or over-refusal benchmark results here."
+  ]
+}

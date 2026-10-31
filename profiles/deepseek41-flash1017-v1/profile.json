@@ -1,0 +1,797 @@
+{
+  "schema": "flashalign.grouped_projection.v1",
+  "model": {
+    "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    "revision": "1bae0e1088993b9b82de08f59de5be5a34e42170"
+  },
+  "hidden_size": 5120,
+  "transform": "projection",
+  "requires": [
+    "grouped_basis",
+    "combined_moe_output",
+    "engram_value_slice",
+    "vision_pre_bias",
+    "typed_image_span",
+    "selected_tp_rows"
+  ],
+  "operators": {
+    "text": {
+      "basis": "text.Q",
+      "rank": 1,
+      "scale": 1.0180426836013794
+    },
+    "embedding": {
+      "basis": "embedding.Q",
+      "rank": 1,
+      "scale": 0.9933985471725464
+    },
+    "vision": {
+      "basis": "vision.Q",
+      "rank": 1,
+      "scale": 0.9990869164466858
+    }
+  },
+  "sites": [
+    {
+      "layer": 0,
+      "site": "embedding_out",
+      "operator": "embedding",
+      "tensor": "embed.weight"
+    },
+    {
+      "layer": 0,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.0.attn.wo_b.weight"
+    },
+    {
+      "layer": 0,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.0.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 1,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.1.attn.wo_b.weight"
+    },
+    {
+      "layer": 1,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.1.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 2,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.2.attn.wo_b.weight"
+    },
+    {
+      "layer": 2,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.2.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 3,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.3.attn.wo_b.weight"
+    },
+    {
+      "layer": 3,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.3.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 4,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.4.attn.wo_b.weight"
+    },
+    {
+      "layer": 4,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.4.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 5,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.5.attn.wo_b.weight"
+    },
+    {
+      "layer": 5,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.5.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 6,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.6.attn.wo_b.weight"
+    },
+    {
+      "layer": 6,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.6.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 7,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.7.attn.wo_b.weight"
+    },
+    {
+      "layer": 7,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.7.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 8,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.8.attn.wo_b.weight"
+    },
+    {
+      "layer": 8,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.8.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 9,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.9.attn.wo_b.weight"
+    },
+    {
+      "layer": 9,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.9.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 10,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.10.attn.wo_b.weight"
+    },
+    {
+      "layer": 10,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.10.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 11,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.11.attn.wo_b.weight"
+    },
+    {
+      "layer": 11,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.11.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 12,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.12.attn.wo_b.weight"
+    },
+    {
+      "layer": 12,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.12.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 13,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.13.attn.wo_b.weight"
+    },
+    {
+      "layer": 13,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.13.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 14,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.14.attn.wo_b.weight"
+    },
+    {
+      "layer": 14,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.14.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 15,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.15.attn.wo_b.weight"
+    },
+    {
+      "layer": 15,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.15.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 16,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.16.attn.wo_b.weight"
+    },
+    {
+      "layer": 16,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.16.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 17,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.17.attn.wo_b.weight"
+    },
+    {
+      "layer": 17,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.17.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 18,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.18.attn.wo_b.weight"
+    },
+    {
+      "layer": 18,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.18.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 19,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.19.attn.wo_b.weight"
+    },
+    {
+      "layer": 19,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.19.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 20,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.20.attn.wo_b.weight"
+    },
+    {
+      "layer": 20,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.20.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 21,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.21.attn.wo_b.weight"
+    },
+    {
+      "layer": 21,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.21.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 22,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.22.attn.wo_b.weight"
+    },
+    {
+      "layer": 22,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.22.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 23,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.23.attn.wo_b.weight"
+    },
+    {
+      "layer": 23,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.23.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 24,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.24.attn.wo_b.weight"
+    },
+    {
+      "layer": 24,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.24.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 25,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.25.attn.wo_b.weight"
+    },
+    {
+      "layer": 25,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.25.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 26,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.26.attn.wo_b.weight"
+    },
+    {
+      "layer": 26,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.26.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 27,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.27.attn.wo_b.weight"
+    },
+    {
+      "layer": 27,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.27.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 28,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.28.attn.wo_b.weight"
+    },
+    {
+      "layer": 28,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.28.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 29,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.29.attn.wo_b.weight"
+    },
+    {
+      "layer": 29,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.29.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 30,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.30.attn.wo_b.weight"
+    },
+    {
+      "layer": 30,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.30.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 31,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.31.attn.wo_b.weight"
+    },
+    {
+      "layer": 31,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.31.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 32,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.32.attn.wo_b.weight"
+    },
+    {
+      "layer": 32,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.32.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 33,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.33.attn.wo_b.weight"
+    },
+    {
+      "layer": 33,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.33.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 34,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.34.attn.wo_b.weight"
+    },
+    {
+      "layer": 34,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.34.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 35,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.35.attn.wo_b.weight"
+    },
+    {
+      "layer": 35,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.35.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 36,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.36.attn.wo_b.weight"
+    },
+    {
+      "layer": 36,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.36.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 37,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.37.attn.wo_b.weight"
+    },
+    {
+      "layer": 37,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.37.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 38,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.38.attn.wo_b.weight"
+    },
+    {
+      "layer": 38,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.38.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 39,
+      "site": "attn_out",
+      "operator": "text",
+      "tensor": "layers.39.attn.wo_b.weight"
+    },
+    {
+      "layer": 39,
+      "site": "moe_out",
+      "operator": "text",
+      "tensor_pattern": "layers.39.ffn.*.w2.weight",
+      "components": [
+        "routed_experts",
+        "shared_expert"
+      ],
+      "application": "combined_moe_output_before_mhc_residual"
+    },
+    {
+      "layer": 1,
+      "site": "engram_value_out",
+      "operator": "text",
+      "tensor": "layers.1.engram.wkv.weight",
+      "output_slice": [
+        20480,
+        25600
+      ],
+      "excluded": "four_key_blocks"
+    },
+    {
+      "layer": 14,
+      "site": "engram_value_out",
+      "operator": "text",
+      "tensor": "layers.14.engram.wkv.weight",
+      "output_slice": [
+        20480,
+        25600
+      ],
+      "excluded": "four_key_blocks"
+    },
+    {
+      "layer": 0,
+      "site": "vision_aligner_out",
+      "operator": "vision",
+      "tensor": "aligner.w2.weight",
+      "bias_tensor": "aligner.w2.bias",
+      "application": "before_unchanged_bias"
+    },
+    {
+      "layer": 0,
+      "site": "image_marker_out",
+      "operator": "vision",
+      "tensors": [
+        "image_start",
+        "image_end",
+        "image_newline"
+      ],
+      "application": "typed_image_span_delimiters_without_aligner_bias"
+    }
+  ],
+  "name": "deepseek41-flash1017-v1",
+  "status": "experimental_runtime_checked",
+  "source": {
+    "stock": {
+      "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "revision": "1bae0e1088993b9b82de08f59de5be5a34e42170",
+      "license": "MIT",
+      "license_declaration_url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/1bae0e1088993b9b82de08f59de5be5a34e42170/README.md"
+    },
+    "edited": {
+      "id": "orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF",
+      "revision": "349470a09c1fca35862b0796e726b9fe00a947df",
+      "url": "https://huggingface.co/orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF/tree/349470a09c1fca35862b0796e726b9fe00a947df",
+      "license": "MIT",
+      "license_declaration_url": "https://huggingface.co/orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF/blob/349470a09c1fca35862b0796e726b9fe00a947df/README.md"
+    },
+    "attribution": "Edited checkpoint by OrcaRouter. Fitting and runtime packaging by Aevonix."
+  },
+  "author": "Aevonix Inc",
+  "compatible_models": [
+    {
+      "id": "LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw",
+      "revision": "04a492fc3b4d25ddbab8f2d2f07f235ec77c9010",
+      "model_type": "deepseek_v41",
+      "config_sha256": "2cbc57cd18428f62aba490870ceda44d2b0639649c05754d6040a5be8e976cf4",
+      "index_sha256": "002568f81f402b357a92e2601e6eb664216ab8b27f02c6053d4233a9fdbc72e4"
+    }
+  ],
+  "license_notice": {
+    "license": "MIT",
+    "file": "LICENSE",
+    "sha256": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+    "scope": "retained_model_source_terms"
+  }
+}

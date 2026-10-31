@@ -1,0 +1,197 @@
+{
+  "version": 1,
+  "backend": "sglang",
+  "name": "flashalign-sglang-qwen4",
+  "upstream": "https://github.com/sgl-project/sglang.git",
+  "upstream_tag": "v0.5.20",
+  "upstream_revision": "94602c9c2b7cbdb8efd5c52802dac6a1c180089e",
+  "model_types": [
+    "qwen4_exp",
+    "qwen4_exp_text"
+  ],
+  "transforms": [
+    "residual_writer_group_projection_v1"
+  ],
+  "tensor_parallel_sizes": [
+    2
+  ],
+  "speculative_algorithms": [
+    "EAGLE",
+    "NEXTN"
+  ],
+  "status": "experimental_gpu_verified",
+  "allowed_model_metadata": [
+    {
+      "id": "Qwen/Qwen3.8-Flash-Next-FP8",
+      "revision": "236dfdf285828023ca3bcd3f37366c58a3469b13",
+      "sha256": {
+        "config.json": "c22eb0a053eed62e18f0184d3ca62d3798f208c3e00b9feee939fc3dbacdc8ca",
+        "model.safetensors.index.json": "0419e2c2dfbb925257d7409405433a793cf7ff7d96f3eba882a815ec6d9fe7a6"
+      }
+    }
+  ],
+  "variant": "qwen4_exp",
+  "required_features": [
+    "writer_groups",
+    "text_embedding_before_multimodal_merge",
+    "ple_value_projection",
+    "native_mtp_writer_groups"
+  ],
+  "profile_format": "flashalign-writer-groups-v1",
+  "profile_environment": "FLASHALIGN_PROFILES",
+  "key_environment": "FLASHALIGN_KEY_FILE",
+  "prepare": "prepare.py",
+  "launch": "launch.py",
+  "compatible_models": [
+    {
+      "id": "Qwen/Qwen3.8-Flash-Next-FP8",
+      "revision": "236dfdf285828023ca3bcd3f37366c58a3469b13",
+      "model_type": "qwen4_exp",
+      "config_sha256": "c22eb0a053eed62e18f0184d3ca62d3798f208c3e00b9feee939fc3dbacdc8ca",
+      "index_sha256": "0419e2c2dfbb925257d7409405433a793cf7ff7d96f3eba882a815ec6d9fe7a6",
+      "quantization_config_sha256": "8a8aec195d95d85c93cfb08ae4849c001f0e6525c71e619387ab098020076035"
+    }
+  ],
+  "requirements": [
+    "sglang==0.5.20",
+    "torch==2.13.0",
+    "triton==3.7.1",
+    "safetensors==0.8.0",
+    "transformers==5.12.1"
+  ],
+  "tested_modalities": [
+    "text",
+    "image"
+  ],
+  "tested_speculative_algorithm": "EAGLE/native MTP",
+  "startup_timeout_seconds": 1800,
+  "qualification": {
+    "common_fixtures_per_mode": 16,
+    "full_runs": 2,
+    "full_run_checks": 50,
+    "full_run_answers": 45,
+    "canonical_checks": 20,
+    "canonical_answers": 15,
+    "mixed_batch_stock_rows_unchanged": true,
+    "structured_tool_calls": 4,
+    "tool_choice": "auto",
+    "thinking_for_tools": [
+      false,
+      true
+    ],
+    "explicit_parser_run_checks": 24,
+    "explicit_parser_run_answers": 15,
+    "cpu_tests": 20,
+    "tested_context_length": 65536,
+    "tested_max_running_requests": 2,
+    "tested_mem_fraction_static": 0.85,
+    "full_run_context_length": 2048,
+    "wizard_qualification": {
+      "consumer_revision": "9883ac7b93ad8cea2491a8c206d9cd7b9b7f0b7f",
+      "context_length": 65536,
+      "actual_capacity_input_tokens": 65000,
+      "capacity_modes": [
+        "off",
+        "owner"
+      ],
+      "common_fixtures_per_mode": 16,
+      "common_fixture_passes": 32,
+      "native_hermes_requests": 15,
+      "native_openclaw_checks": 7,
+      "native_openclaw_requests": 11,
+      "actual_wizard_configuration_unchanged": true,
+      "native_mtp_active": true,
+      "dependency_environment": "reused pinned environment",
+      "scope": "serial requests on two 95 GiB RTX PRO 6000 Blackwell Max-Q GPUs; no new mixed-batch or lower-memory qualification"
+    }
+  },
+  "tool_call_parser": "qwen3_coder",
+  "reasoning_parser": "qwen3",
+  "default_arguments": [
+    "--tp-size",
+    "2",
+    "--ep-size",
+    "2",
+    "--ple-offload-embedding",
+    "--ple-offload-backend",
+    "pinned",
+    "--cuda-graph-backend-decode",
+    "disabled",
+    "--cuda-graph-backend-prefill",
+    "disabled",
+    "--speculative-algorithm",
+    "EAGLE",
+    "--speculative-eagle-topk",
+    "1",
+    "--speculative-num-steps",
+    "3",
+    "--speculative-num-draft-tokens",
+    "4",
+    "--tool-call-parser",
+    "qwen3_coder",
+    "--reasoning-parser",
+    "qwen3",
+    "--mem-fraction-static",
+    "0.85",
+    "--max-running-requests",
+    "2",
+    "--context-length",
+    "65536"
+  ],
+  "resources": {
+    "gpu_count": 2,
+    "observed_peak_gpu_memory_mib": [
+      85930,
+      85248
+    ],
+    "host_ple_bytes": 51200245762,
+    "measurement_interval_seconds": 1,
+    "note": "Observed during the 65,536-token current-wizard qualification on two 95 GiB RTX PRO 6000 Blackwell Max-Q cards. The peaks are not a measured minimum; host loading buffers need additional headroom. Host memory measurements were shared with other jobs."
+  },
+  "openclaw_compat_by_model_type": {
+    "qwen4_exp": {
+      "thinkingFormat": "openai",
+      "supportedReasoningEfforts": [
+        "none",
+        "low",
+        "medium",
+        "xhigh"
+      ]
+    },
+    "qwen4_exp_text": {
+      "thinkingFormat": "openai",
+      "supportedReasoningEfforts": [
+        "none",
+        "low",
+        "medium",
+        "xhigh"
+      ]
+    }
+  },
+  "request_compatibility_by_model_type": {
+    "qwen4_exp": {
+      "kind": "chat_template_reasoning_v1",
+      "efforts": [
+        "low",
+        "medium",
+        "xhigh"
+      ]
+    },
+    "qwen4_exp_text": {
+      "kind": "chat_template_reasoning_v1",
+      "efforts": [
+        "low",
+        "medium",
+        "xhigh"
+      ]
+    }
+  },
+  "openclaw_request_policy_by_model_type": {
+    "qwen4_exp": {
+      "output_budget": "remaining_context"
+    },
+    "qwen4_exp_text": {
+      "output_budget": "remaining_context"
+    }
+  }
+}
