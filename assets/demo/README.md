@@ -1,6 +1,7 @@
 # FlashAlign promo video
 
-[Watch the 40-second promo](flashalign-promo.mp4) (1080p, 60 fps, with sound).
+[Watch the 40-second promo](https://aevonix.github.io/FlashAlign/) (1080p, 60 fps, with sound).
+[Download the MP4](https://raw.githubusercontent.com/Aevonix/FlashAlign/main/assets/demo/flashalign-promo.mp4).
 The [README preview](flashalign-promo-preview.gif) is a silent excerpt of its
 first 8 seconds.
 
