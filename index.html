@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Watch FlashAlign apply alignment profiles on demand. A 40-second demo from Aevonix.">
+  <title>Watch FlashAlign · Aevonix</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100svh; display: grid; place-items: center; background: #080911; color: #f4f4ff; font: 16px/1.5 system-ui, sans-serif; }
+    main { width: min(100%, 1080px); padding: clamp(20px, 5vw, 56px); }
+    .brand { display: block; width: min(300px, 78%); height: auto; margin-bottom: 24px; }
+    h1 { margin: 0 0 24px; font-size: clamp(23px, 4vw, 38px); font-weight: 600; line-height: 1.2; letter-spacing: -.025em; }
+    video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; border: 1px solid #333448; border-radius: 12px; }
+    nav { display: flex; gap: 14px 24px; flex-wrap: wrap; margin-top: 22px; }
+    a { color: #b7bcff; text-underline-offset: 4px; }
+    a:hover { color: #fff; }
+    a:focus-visible { outline: 2px solid #e86bed; outline-offset: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="brand" src="flashalign-logo.png" alt="FlashAlign by Aevonix" width="1031" height="283">
+    <h1>ReAlign models instantly, on demand.</h1>
+    <video controls playsinline preload="metadata" poster="preview.gif" aria-label="FlashAlign demonstration, 40 seconds with sound">
+      <source src="flashalign-promo.mp4" type="video/mp4">
+      <p>Your browser cannot play this video. <a href="flashalign-promo.mp4">Download the MP4</a>.</p>
+    </video>
+    <nav aria-label="More about FlashAlign">
+      <a href="https://github.com/Aevonix/FlashAlign">Get FlashAlign</a>
+      <a href="https://github.com/Aevonix/FlashAlign/blob/main/assets/demo/README.md">Demo notes and attribution</a>
+      <a href="flashalign-promo.mp4" download>Download video</a>
+    </nav>
+  </main>
+</body>
+</html>
