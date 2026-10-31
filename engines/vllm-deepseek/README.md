@@ -18,6 +18,14 @@ the validator checks their typed sites, shared operators, Engram slices and imag
 bias handling. A valid artifact is not proof of edited-checkpoint parity or model
 quality. Profile-specific evidence belongs with the supplied profile.
 
+Grouped profiles may select a subset of the supported sites and use different
+orthonormal basis ranks from 1 through 128. Omitted sites keep their standard
+output. The direct engine loader and setup wizard use the same native-target
+contract, including combined MoE output, Engram value slices and pre-bias image
+outputs. Unknown targets, unused operators and unsupported requirements are
+rejected. This describes the accepted profile format; each supplied profile
+still needs its own runtime and quality checks.
+
 ## Checkpoint and runtime preparation
 
 Setup installs pinned vLLM 0.32.0 and the native plugin into an owned environment.

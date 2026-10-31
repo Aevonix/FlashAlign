@@ -97,5 +97,6 @@
     "qwen3_5_text": {
       "thinkingFormat": "qwen-chat-template"
     }
-  }
+  },
+  "maximum_rank": 128
 }

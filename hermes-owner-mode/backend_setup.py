@@ -46,7 +46,7 @@ def backend_catalog():
     return [{'kind': kind, 'variant': metadata.get('variant'), 'status': metadata['status'],
              'model_types': metadata.get('model_types', metadata.get('model_architectures')),
              'model_format': metadata.get('model_format', 'checkpoint'), 'kit': str(path),
-             **{key: metadata[key] for key in ('tensor_parallel_sizes', 'tested_speculative_methods', 'resource_policy', 'python_min_version', 'input_modalities', 'input_modalities_by_model_type', 'openclaw_compat_by_model_type', 'request_compatibility_by_model_type', 'openclaw_request_policy_by_model_type')
+             **{key: metadata[key] for key in ('tensor_parallel_sizes', 'maximum_rank', 'tested_speculative_methods', 'resource_policy', 'python_min_version', 'input_modalities', 'input_modalities_by_model_type', 'openclaw_compat_by_model_type', 'request_compatibility_by_model_type', 'openclaw_request_policy_by_model_type')
                 if key in metadata},
              'full_payload_verification': bool(metadata.get('model_integrity_verifier'))}
             for path, metadata, kind in _kits()]
@@ -199,6 +199,23 @@ def _check_gguf_binding(metadata, model, manifest):
                for key in ('id', 'revision')) for identity in identities):
         raise SetupError('GGUF profile model or revision does not match the selected profile')
     return {key: pin[key] for key in ('id', 'revision', 'profile_model', 'header_sha256', 'size')}
+
+
+def _check_profile_ranks(metadata, manifest):
+    """Reject unsupported ranks before installing or starting an engine."""
+    limit = metadata.get('maximum_rank')
+    if limit is None:
+        return
+    if type(limit) is not int or not 1 <= limit <= 128:
+        raise SetupError('Invalid engine profile rank declaration')
+    if manifest.get('schema') == DEEPSEEK_GROUP_SCHEMA:
+        ranks = [operator.get('rank') for operator in manifest.get('operators', {}).values()]
+    elif manifest.get('transform') == 'residual_writer_group_projection_v1':
+        ranks = [manifest.get('rank')]
+    else:
+        ranks = [site.get('rank') for site in manifest.get('sites', [])]
+    if not ranks or any(type(rank) is not int or not 1 <= rank <= limit for rank in ranks):
+        raise SetupError('This engine integration supports profile ranks from 1 to '+str(limit))
 
 
 def _check_llamacpp_strengths(metadata, sites):
@@ -697,6 +714,8 @@ def check_backend(home, spec, profile, *, model_id, proc_root=Path('/proc')):
             or not metadata.get('requires_runtime_memory_guard')):
         raise SetupError('allow_untested_memory is only a boolean option for a guarded experimental engine')
     manifest = read_json(profile['manifest'])
+    if kind != 'llamacpp':
+        _check_profile_ranks(metadata, manifest)
     if model.get('hidden_size') != manifest['hidden_size']:
         raise SetupError('Profile width does not match the model checkpoint')
     if not match_profile(profile, {'id': model_id})[0]:

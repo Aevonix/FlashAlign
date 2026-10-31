@@ -13,6 +13,7 @@ from pathlib import Path
 
 # Reuse the already-qualified protocol implementation without mutating it.
 from flashalign_vllm.core import FieldError, Selection, cache_key, load_key
+from .deepseek_grouped import validate_grouped_profile
 
 REQUIRES={'grouped_basis','combined_moe_output','shared_expert_output','engram_value_slice','vision_pre_bias','typed_image_span','selected_tp_rows'}
 SITES={'attn_out','moe_out','shared_expert_out','embedding_out','vision_aligner_out','image_marker_out','engram_value_out'}
@@ -61,6 +62,7 @@ class Profile:
             raise ValueError('Profile must identify pinned DeepSeek V4.1 Flash 1017')
         if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}',meta.get('name','')) or meta['name']=='off':
             raise ValueError('Invalid profile name')
+        validate_grouped_profile(meta, meta['hidden_size'], meta.get('sites'))
         hashes=json.loads((root/'sha256.json').read_text())
         for name,body in [('profile.json',raw),('profile.safetensors',payload)]:
             if hashes.get(name)!=hashlib.sha256(body).hexdigest():raise ValueError('Profile checksum mismatch')

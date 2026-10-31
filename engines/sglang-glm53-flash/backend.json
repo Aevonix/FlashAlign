@@ -243,5 +243,6 @@
     "glm5_next_text": {
       "supports_thinking_off": false
     }
-  }
+  },
+  "maximum_rank": 1
 }

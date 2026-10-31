@@ -225,5 +225,6 @@
     "gemma4_text": [
       "text"
     ]
-  }
+  },
+  "maximum_rank": 128
 }

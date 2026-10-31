@@ -193,5 +193,6 @@
     "qwen4_exp_text": {
       "output_budget": "remaining_context"
     }
-  }
+  },
+  "maximum_rank": 1
 }

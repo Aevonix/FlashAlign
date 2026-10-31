@@ -40,7 +40,7 @@ from owner_mode.setup_transaction import current_transaction, pending_setup, rec
 MODULES = ['__init__.py','auth.py','identity.py','hermes_ingress.py','native_authority.py',
            'content.py','hermes_observer.py',
            'contacts.py','channels.py','access_setup.py','terminal.py','native_terminal.py','policy.py','proxy.py','plugin.py','bridge.py','serve.py','manage.py','setup.py',
-           'profiles.py','setup_runtime.py','terminal_ui.py','terminal-logo.json','setup_transaction.py','automation.py','direct_gateway.py','engine_setup.py','engine_supervisor.py','engine_assets.py','native_bundle.py','native_setup.py','native_cluster.py','native_remote.py','engine_catalog.json','backend_setup.py','model_metadata.py','drafting.py','quickstart.py','client.py','harness_client.py','plugin.yaml','requirements.txt','README.md','LICENSE','NOTICE.md']
+           'profiles.py','deepseek_grouped.py','setup_runtime.py','terminal_ui.py','terminal-logo.json','setup_transaction.py','automation.py','direct_gateway.py','engine_setup.py','engine_supervisor.py','engine_assets.py','native_bundle.py','native_setup.py','native_cluster.py','native_remote.py','engine_catalog.json','backend_setup.py','model_metadata.py','drafting.py','quickstart.py','client.py','harness_client.py','plugin.yaml','requirements.txt','README.md','LICENSE','NOTICE.md']
 
 
 def load_config(path):
