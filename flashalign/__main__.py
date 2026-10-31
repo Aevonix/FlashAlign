@@ -12,6 +12,9 @@ from . import Client
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ['profile']:
+        from owner_mode.profile_inspector import main as profile_main
+        return profile_main(argv[1:])
     if argv[:1] and argv[0] in ('chat', 'terminal', 'sessions'):
         from .terminal_cli import run
         return run(argv)

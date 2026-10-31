@@ -1,0 +1,52 @@
+# Inspect a profile
+
+Inspect a local profile before setting up an engine:
+
+```sh
+flashalign-profile inspect /path/to/profile
+flashalign-profile inspect /path/to/profile --details
+flashalign-profile inspect /path/to/profile --json
+```
+
+The same command is available as `flashalign-client profile inspect`. From a
+repository checkout, it also runs with Python's standard library alone:
+
+```sh
+python3 hermes-owner-mode/profile_inspector.py inspect profiles/qwen38-27b-v1 --json
+```
+
+Inspection reads the supplied files. It does not download weights, load a model,
+contact an engine, read deployment credentials, install a profile or restart a
+service.
+
+The report includes the model and revision, operator family, required features,
+site inventory, basis ranks, file sizes and SHA-256 hashes. It checks finite
+tensor values, positive gains where required, and orthonormal basis rows. JSON
+and detailed terminal output include aggregate tensor statistics. Vector entries
+and freeform source/status metadata are omitted. Status labels in a manifest
+are not treated as independently verified evidence.
+
+Computed hashes identify the files that were inspected. The report separately
+states whether a supplied checksum record verified both files, only some files,
+or was absent. A computed hash alone does not authenticate a publisher.
+Validation and hashes use the same in-memory snapshots. If a file changes
+later, its new contents require a new inspection.
+
+An artifact can pass inspection while being unsuitable for a particular model,
+engine or task. Inspection does not establish runtime activation, cache isolation,
+model quality, refusal behavior or the absence of unwanted semantic behavior.
+Those need independent checks. A fixed linear operator can affect different
+inputs differently even though its file contains no conditional branches.
+
+The command exits with status `0` for a valid artifact, `2` for invalid or
+unsupported files, and `3` when the configured work budget stops inspection.
+In that last case, `artifact_valid` is `null`; it is not an invalid-file verdict.
+Basis checks default to at most 50 million scalar products. For a larger trusted
+profile, set an explicit higher limit with `--max-basis-work`. Profile payloads
+remain limited to 256 MiB and are held in memory while validating; inspection
+can use more memory than the file size.
+
+JSON uses schema `flashalign.profile-inspection.v1` and keeps
+the artifact result separate from unassessed runtime and behavioral properties.
+See [profile compatibility](compatibility.md#engines-and-models) and the
+[engine contract](engine-contract.md) before deployment.

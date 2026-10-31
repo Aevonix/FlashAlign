@@ -31,6 +31,8 @@ cover structure and integrity. Model quality, complete checkpoint parity and
 compatibility with other engines require separate tests.
 
 Automatic setup rejects supplied profiles whose artifact validation failed.
+The [profile inspector](../docs/profile-inspection.md) can run those file and
+numerical checks separately, with a readable summary or JSON output.
 
 See [managed engine setup](../docs/engine-setup.md) for hardware, speculation and
 context requirements. Setup preserves active speculative decoding and rejects

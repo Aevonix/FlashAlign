@@ -14,6 +14,7 @@ dependencies = ["httpx>=0.27,<1"]
 
 [project.scripts]
 flashalign-client = "flashalign.__main__:main"
+flashalign-profile = "owner_mode.profile_inspector:main"
 
 [tool.setuptools]
 packages = ["flashalign", "owner_mode"]

@@ -15,6 +15,15 @@ to prepare a supported engine, the profile and its deployment key automatically.
 
 ## 1. Discover the deployment
 
+For a supplied profile, inspect its files without contacting an engine:
+
+```sh
+python3 hermes-owner-mode/profile_inspector.py inspect /path/to/profile --json
+```
+
+Use `artifact_valid` for the file result and preserve the separate
+`not_assessed` runtime and behavioral fields. See [profile inspection](profile-inspection.md).
+
 ```sh
 bash ./install.sh --detect --profiles /path/to/private/profiles
 ```

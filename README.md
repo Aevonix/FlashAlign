@@ -46,6 +46,9 @@ setup prints its launch command.
 All five starter profiles are included. No profile download or private
 repository access is needed.
 
+Use the [profile inspector](docs/profile-inspection.md) to check a local
+profile's model pin, operators, sites, ranks and hashes before setup.
+
 Experimental test profiles based on [OrcaRouter](https://huggingface.co/orcarouter),
 [Dealign](https://huggingface.co/dealignai), and
 [MoonMath](https://huggingface.co/MoonMath-ai) abliterated checkpoints.

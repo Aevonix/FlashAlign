@@ -4,12 +4,14 @@
 """Validate bundled and operator-supplied runtime profile artifacts."""
 from array import array
 import hashlib
+import io
 import json
 import math
 import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import struct
 import sys
 import tempfile
@@ -19,6 +21,10 @@ from .deepseek_grouped import (DEEPSEEK_GROUP_SCHEMA, DEEPSEEK_MODEL,
 
 
 class ProfileError(ValueError):
+    pass
+
+
+class ProfileWorkLimit(ProfileError):
     pass
 
 
@@ -79,14 +85,36 @@ def _nonfinite(_):
     raise ProfileError('Non-finite JSON number')
 
 
-def read_json(path, limit=MAX_HEADER):
-    path = Path(path)
-    if not path.is_file() or path.stat().st_size > limit:
-        raise ProfileError('Missing or oversized profile metadata')
+def _read_bounded(path, limit):
+    """Read a bounded regular-file snapshot, without waiting on pipes/devices."""
+    flags = os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0)
     try:
-        return json.loads(path.read_text(), object_pairs_hook=_object, parse_constant=_nonfinite)
-    except (UnicodeError, json.JSONDecodeError) as error:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise ProfileError('Missing or unreadable profile file') from error
+    with os.fdopen(descriptor, 'rb') as stream:
+        before = os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode) or before.st_size > limit:
+            raise ProfileError('Missing or oversized profile file')
+        raw = stream.read(limit + 1)
+        after = os.fstat(stream.fileno())
+    identity = lambda item: (item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns, item.st_ctime_ns)
+    if len(raw) > limit:
+        raise ProfileError('Oversized profile file')
+    if identity(before) != identity(after) or len(raw) != before.st_size:
+        raise ProfileError('Profile file changed while it was read')
+    return raw
+
+
+def _json_document(raw):
+    try:
+        return json.loads(raw.decode('utf-8'), object_pairs_hook=_object, parse_constant=_nonfinite)
+    except (UnicodeError, json.JSONDecodeError, RecursionError) as error:
         raise ProfileError('Invalid profile JSON') from error
+
+
+def read_json(path, limit=MAX_HEADER):
+    return _json_document(_read_bounded(Path(path), limit))
 
 
 def _positive_int(value):
@@ -170,12 +198,13 @@ def _compatible_models(value):
     return value
 
 
-def validate_profile(path):
+def validate_profile(path, *, include_audit=False, max_basis_work=None):
     """Validate schema, float payloads and supplied hashes, not model quality."""
     path = Path(path).expanduser()
     manifest = path / 'profile.json' if path.is_dir() else path
     root = manifest.parent.resolve()
-    profile = read_json(manifest)
+    manifest_bytes = _read_bounded(manifest, MAX_HEADER)
+    profile = _json_document(manifest_bytes)
     if not isinstance(profile, dict):
         raise ProfileError('Profile metadata must be an object')
     name = profile.get('name')
@@ -239,21 +268,30 @@ def validate_profile(path):
             if not _positive_int(width):
                 raise ProfileError('Invalid input-delta width')
             expected[prefix + '.B'] = [rank, width]
+    basis_work = sum(shape[0] * (shape[0] + 1) // 2 * shape[1]
+                     for key, shape in expected.items() if key.endswith('.Q') or key in basis_keys)
+    if max_basis_work is not None:
+        if type(max_basis_work) is not int or max_basis_work < 1:
+            raise ProfileError('Basis validation work limit must be a positive integer')
+        if basis_work > max_basis_work:
+            raise ProfileWorkLimit(f'Basis validation requires {basis_work} scalar products; limit is {max_basis_work}')
     tensors = root / 'profile.safetensors'
-    size = tensors.stat().st_size if tensors.is_file() else 0
+    tensor_bytes = _read_bounded(tensors, MAX_PROFILE)
+    size = len(tensor_bytes)
     if size < 10 or size > MAX_PROFILE:
         raise ProfileError('Missing or oversized profile tensor file')
-    with tensors.open('rb') as stream:
+    with io.BytesIO(tensor_bytes) as stream:
         header_size = struct.unpack('<Q', stream.read(8))[0]
         if header_size > MAX_HEADER or header_size + 8 > size:
             raise ProfileError('Invalid tensor header length')
         try:
             header = json.loads(stream.read(header_size), object_pairs_hook=_object, parse_constant=_nonfinite)
-        except (UnicodeError, json.JSONDecodeError) as error:
+        except (UnicodeError, json.JSONDecodeError, RecursionError) as error:
             raise ProfileError('Invalid tensor header') from error
         if not isinstance(header, dict) or set(header) - {'__metadata__'} != set(expected):
             raise ProfileError('Missing or unexpected profile tensors')
         intervals = []
+        tensor_audit = []
         for key, shape in expected.items():
             info = header[key]
             if (not isinstance(info, dict) or info.get('dtype') != 'F32' or info.get('shape') != shape
@@ -274,6 +312,8 @@ def validate_profile(path):
                 values.byteswap()
             if any(not math.isfinite(value) for value in values):
                 raise ProfileError('Profile contains non-finite tensor values')
+            detail = {'name': key, 'dtype': 'F32', 'shape': shape,
+                      'bytes': end - start} if include_audit else None
             if key.endswith(('.g', '.m', '.strengths')) and any(value <= 0 for value in values):
                 raise ProfileError('Profile gain and norm values must be positive')
             if key.endswith('.Q') or key in basis_keys:
@@ -281,11 +321,26 @@ def validate_profile(path):
                 if rank > 128:
                     raise ProfileError('Profile rank exceeds the setup validator limit of 128')
                 rows = [values[i * width:(i + 1) * width] for i in range(rank)]
+                norms, cross = [], 0.
                 for i, row in enumerate(rows):
                     for j in range(i + 1):
                         dot = math.fsum(a * b for a, b in zip(row, rows[j]))
                         if abs(dot - (1 if i == j else 0)) > 2e-5:
                             raise ProfileError('Profile basis rows are not orthonormal')
+                        if include_audit:
+                            if i == j:
+                                norms.append(math.sqrt(dot))
+                            else:
+                                cross = max(cross, abs(dot))
+                if include_audit:
+                    detail['basis'] = {'rank': rank, 'row_norm_min': min(norms),
+                                       'row_norm_max': max(norms),
+                                       'max_abs_cross_dot': cross}
+            elif include_audit:
+                detail['range'] = {'minimum': min(values), 'maximum': max(values)}
+                detail['l2_norm'] = math.sqrt(math.fsum(value * value for value in values))
+            if include_audit:
+                tensor_audit.append(detail)
         end = 0
         for start, stop in sorted(intervals):
             if start != end:
@@ -293,8 +348,10 @@ def validate_profile(path):
             end = stop
         if end != size - 8 - header_size:
             raise ProfileError('Unexpected bytes in profile tensor payload')
-    hashes = {'profile.json': _digest(manifest), 'profile.safetensors': _digest(tensors)}
+    hashes = {'profile.json': hashlib.sha256(manifest_bytes).hexdigest(),
+              'profile.safetensors': hashlib.sha256(tensor_bytes).hexdigest()}
     receipt = root / 'sha256.json'
+    verified_hashes = []
     if receipt.is_file():
         recorded = read_json(receipt)
         if not isinstance(recorded, dict):
@@ -303,12 +360,48 @@ def validate_profile(path):
             supplied = recorded.get(filename)
             if supplied is not None and supplied != digest:
                 raise ProfileError('Profile checksum mismatch')
-    return {'name': name, 'model': model, 'transform': transform, 'requires': requires,
+            if supplied is not None:
+                verified_hashes.append(filename)
+    result = {'name': name, 'model': model, 'transform': transform, 'requires': requires,
             'schema': schema,
             'compatible_models': compatible,
             'manifest': str(manifest.resolve()),
             'path': str(root), 'hashes': hashes, 'artifact_valid': True,
             'status': profile.get('status', 'behavior not certified'), 'source': 'local'}
+    if include_audit:
+        inventory = []
+        for row in sites:
+            if deepseek_grouped:
+                fields = ('layer', 'site', 'operator') + {
+                    'attn_out': ('tensor',), 'shared_expert_out': ('tensor',),
+                    'moe_out': ('tensor_pattern', 'components', 'application'),
+                    'engram_value_out': ('tensor', 'output_slice'),
+                    'embedding_out': ('tensor',),
+                    'vision_aligner_out': ('tensor', 'bias_tensor', 'application'),
+                    'image_marker_out': ('tensors', 'application'),
+                }[row['site']]
+            elif grouped:
+                fields = ('layer', 'site', 'model_role', 'source_tensors')
+                if row['site'] == 'combined_mlp_out':
+                    fields += ('expert_count', 'fused_expert_tensor_axes')
+            else:
+                fields = ('layer', 'site', 'tensor', 'rank', 'scale')
+                if transform == 'input_low_rank_delta_v1':
+                    fields += ('input_size',)
+            inventory.append({field: row[field] for field in fields if field in row})
+        operators = profile.get('operators', {}) if deepseek_grouped else {}
+        if grouped:
+            operators = {'shared.Q': {'basis': 'shared.Q', 'rank': profile['rank'],
+                                      'scale': profile['scale']}}
+            inventory = [{**row, 'operator': 'shared.Q'} for row in inventory]
+        result['audit'] = {'hidden_size': hidden, 'site_count': len(sites),
+                           'sites': inventory, 'operators': operators,
+                           'metadata_bytes': len(manifest_bytes),
+                           'tensor_file_bytes': size, 'tensors': tensor_audit,
+                           'basis_validation_work': basis_work,
+                           'supplied_checksums': {'present': receipt.is_file(),
+                                                  'verified_files': verified_hashes}}
+    return result
 
 
 def discover_profiles(paths):
