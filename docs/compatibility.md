@@ -114,6 +114,17 @@ Gemma 4 26B A4B have paths on TensorFold, vLLM, SGLang and llama.cpp. Other mode
 specific paths listed in [validation](validation.md); engine support for a model
 does not by itself establish FlashAlign support.
 
+Profiles describe operations on a model. The same artifact can be reused by
+multiple adapters when each supports
+its pinned model and serving format, operator, output sites and basis rank.
+Each model/engine combination still needs its own runtime validation.
+
+Setup checks each backend's `maximum_rank` before installation. The current
+GLM Flash and Qwen Flash Next SGLang adapters accept
+rank one; the other packaged vLLM, SGLang and llama.cpp adapters accept ranks up
+to 128. Site coverage and operator support still differ by adapter. A supported
+rank does not establish that an arbitrary profile has been tested on that engine.
+
 The llama.cpp integration uses upstream version 0.8.0 at commit
 `8642541b255bfb5dc39cd351a178be09013a55d6` and the declared Q8_0 GGUF
 checkpoints. Gemma setup defaults to ngram speculation and can preserve its

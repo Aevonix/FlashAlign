@@ -138,5 +138,6 @@
     "quality_limits": [
       "The initial approved Hermes no-tool case appended an unsolicited introduction after the requested number; its strict answer check failed."
     ]
-  }
+  },
+  "maximum_rank": 128
 }

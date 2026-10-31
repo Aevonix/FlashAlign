@@ -14,6 +14,9 @@ import struct
 import sys
 import tempfile
 
+from .deepseek_grouped import (DEEPSEEK_GROUP_SCHEMA, DEEPSEEK_MODEL,
+                               validate_grouped_profile)
+
 
 class ProfileError(ValueError):
     pass
@@ -59,76 +62,8 @@ FORMS = {
 }
 MAX_HEADER = 4 * 1024 * 1024
 MAX_PROFILE = 256 * 1024 * 1024
-DEEPSEEK_GROUP_SCHEMA = 'flashalign.grouped_projection.v1'
-DEEPSEEK_MODEL = {'id': 'deepseek-ai/DeepSeek-V4.1-Flash-1017',
-                  'revision': '1bae0e1088993b9b82de08f59de5be5a34e42170'}
-
-
 def _deepseek_group_tensors(profile, hidden, sites):
-    """Validate a supplied native writer-group artifact, without deriving one."""
-    if hidden != 5120 or profile.get('model') != DEEPSEEK_MODEL:
-        raise ProfileError('Grouped DeepSeek profiles require the pinned model and width')
-    operators = profile.get('operators')
-    if not isinstance(operators, dict) or not operators or len(operators) > 4096:
-        raise ProfileError('Grouped profiles must declare their operators')
-    tensors = {}
-    for name, operator in operators.items():
-        if (not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', name)
-                or not isinstance(operator, dict) or set(operator) != {'basis', 'rank', 'scale'}):
-            raise ProfileError('Invalid grouped profile operator')
-        basis, rank = operator['basis'], operator['rank']
-        if (not isinstance(basis, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,256}', basis)
-                or not _positive_int(rank) or rank > 128 or not _number(operator['scale'])):
-            raise ProfileError('Invalid grouped profile basis, rank or scale')
-        if basis in tensors and tensors[basis] != [rank, hidden]:
-            raise ProfileError('Inconsistent shared basis shape')
-        tensors[basis] = [rank, hidden]
-    required = {'grouped_basis', 'selected_tp_rows'}
-    extensions = {'moe_out': {'combined_moe_output'}, 'shared_expert_out': {'shared_expert_output'},
-                  'engram_value_out': {'engram_value_slice'},
-                  'vision_aligner_out': {'vision_pre_bias', 'typed_image_span'},
-                  'image_marker_out': {'typed_image_span'}}
-    seen, used = set(), set()
-    for row in sites:
-        if not isinstance(row, dict):
-            raise ProfileError('Invalid grouped profile site')
-        layer, site, operator = row.get('layer'), row.get('site'), row.get('operator')
-        if (type(layer) is not int or not 0 <= layer < 40 or not isinstance(site, str)
-                or site not in {'attn_out', 'embedding_out', *extensions}
-                or not isinstance(operator, str) or operator not in operators):
-            raise ProfileError('Invalid grouped profile site or operator reference')
-        if (layer, site) in seen:
-            raise ProfileError('Duplicate grouped profile site')
-        seen.add((layer, site)); used.add(operator)
-        required.update(extensions.get(site, set()))
-        stem = f'layers.{layer}'
-        if site == 'attn_out':
-            valid = row.get('tensor') == stem+'.attn.wo_b.weight'
-        elif site == 'shared_expert_out':
-            valid = row.get('tensor') == stem+'.ffn.shared_experts.w2.weight'
-        elif site == 'moe_out':
-            valid = (row.get('tensor_pattern') == stem+'.ffn.*.w2.weight'
-                     and row.get('components') == ['routed_experts', 'shared_expert']
-                     and row.get('application') == 'combined_moe_output_before_mhc_residual')
-        elif site == 'engram_value_out':
-            valid = (layer in (1, 14) and row.get('tensor') == stem+'.engram.wkv.weight'
-                     and row.get('output_slice') == [20480, 25600])
-        elif site == 'embedding_out':
-            valid = layer == 0 and row.get('tensor') == 'embed.weight'
-        elif site == 'vision_aligner_out':
-            valid = (layer == 0 and row.get('tensor') == 'aligner.w2.weight'
-                     and row.get('bias_tensor') == 'aligner.w2.bias'
-                     and row.get('application') == 'before_unchanged_bias')
-        else:
-            valid = (layer == 0 and row.get('tensors') == ['image_start', 'image_end', 'image_newline']
-                     and row.get('application') == 'typed_image_span_delimiters_without_aligner_bias')
-        if not valid:
-            raise ProfileError('Grouped profile target does not match its declared native output')
-    if used != set(operators):
-        raise ProfileError('Grouped profile contains unused operators')
-    if set(profile.get('requires', [])) != required:
-        raise ProfileError('Grouped profile requirements do not match its sites')
-    return tensors
+    return validate_grouped_profile(profile, hidden, sites, error=ProfileError)
 
 
 def _object(pairs):

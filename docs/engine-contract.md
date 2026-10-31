@@ -108,6 +108,16 @@ An effective-profile header reports selection; it does not itself establish
 numerical correctness or cache isolation. Engine implementations must test
 those properties independently. Model profiles never grant tool permissions.
 
+Backend manifests declare `maximum_rank`, the largest projection-basis rank
+their loader and runtime accept. Setup checks all operators, including shared
+operators in grouped profiles and the global rank of writer-group profiles,
+before preparing an engine. The declaration does not extend a backend's model,
+site or transform support and is separate from its recorded GPU qualification.
+
+An adapter that supports partial profiles must leave omitted sites unchanged.
+Accepting a grouped profile must not imply support for every operator family or
+rank: unsupported requirements, targets and ranks must fail before activation.
+
 ## Optional weighted output projection
 
 A profile may declare `transform: "weighted_output_projection_v1"` and
