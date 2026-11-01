@@ -3,6 +3,8 @@
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """Stage and supervise only the native ranks recorded in a deployment receipt."""
 import concurrent.futures
+from contextlib import contextmanager
+import hashlib
 import io
 import json
 import os
@@ -13,6 +15,7 @@ import struct
 import stat
 import subprocess
 import tarfile
+import tempfile
 import time
 
 from .setup_runtime import SetupError, check_engine, model_rows
@@ -29,7 +32,7 @@ def ssh_options(ssh_config):
     return options
 
 
-def rpc(host, operation, *, payload=b'', ssh_config=None, **data):
+def rpc(host, operation, *, payload=b'', payload_file=None, ssh_config=None, **data):
     if (not isinstance(host, str) or not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.@:-]{0,253}', host)
             or host.startswith('-')):
         raise SetupError('Use a hostname, IPv4 address or SSH config alias for each native host')
@@ -40,8 +43,26 @@ def rpc(host, operation, *, payload=b'', ssh_config=None, **data):
             ['ssh', *options, '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ForwardAgent=no', host, shlex.join(command)])
     header = json.dumps({'operation': operation, **data}, separators=(',', ':')).encode()
     try:
-        result = subprocess.run(argv, input=struct.pack('>I', len(header))+header+payload,
-                                capture_output=True, timeout=180 if operation == 'stage' else 45)
+        if payload_file is not None:
+            if payload:
+                raise SetupError('Use one native rank payload source')
+            # A file-backed request keeps large profile payloads out of Python's
+            # input= buffer and avoids pipe/stdout deadlocks over SSH.
+            with tempfile.TemporaryFile() as request:
+                request.write(struct.pack('>I', len(header))+header)
+                with Path(payload_file).open('rb') as source:
+                    total = 0
+                    for chunk in iter(lambda: source.read(8*1024*1024), b''):
+                        total += len(chunk)
+                        if total > 4*1024**3:
+                            raise SetupError('Native rank payload exceeds its size limit')
+                        request.write(chunk)
+                request.seek(0)
+                result = subprocess.run(argv, stdin=request, capture_output=True,
+                                        timeout=1800 if operation == 'stage' else 45)
+        else:
+            result = subprocess.run(argv, input=struct.pack('>I', len(header))+header+payload,
+                                    capture_output=True, timeout=180 if operation == 'stage' else 45)
         response = json.loads(result.stdout)
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         raise SetupError(f'Native host {host}: {operation} did not return a valid receipt') from error
@@ -59,6 +80,55 @@ def archive(files):
             entry.mode = 0o700 if executable else 0o600
             tar.addfile(entry, io.BytesIO(data))
     return output.getvalue()
+
+
+@contextmanager
+def source_file(value):
+    """Open a bounded immutable source, allowing small in-memory metadata."""
+    if isinstance(value, bytes):
+        yield io.BytesIO(value), len(value)
+        return
+    path = Path(value)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, 'rb') as stream:
+        before = os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode) or before.st_size > 4*1024**3:
+            raise SetupError('Native staging source must be a bounded regular file')
+        yield stream, before.st_size
+        after = os.fstat(stream.fileno())
+        if any(getattr(before, field) != getattr(after, field)
+               for field in ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns', 'st_ctime_ns')):
+            raise SetupError('Native staging source changed while reading')
+
+
+def file_records(files):
+    records = {}
+    for name, (value, executable) in files.items():
+        with source_file(value) as (stream, size):
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: stream.read(8*1024*1024), b''):
+                digest.update(chunk)
+        records[name] = {'sha256': digest.hexdigest(), 'bytes': size, 'executable': executable}
+    return records
+
+
+def stage_files(host, files, *, parent, id, ssh_config=None, **data):
+    """Stage a file-backed tar stream without buffering its payload in RAM."""
+    records = file_records(files)
+    if sum(row['bytes'] for row in records.values()) > 4*1024**3 - 16*1024**2:
+        raise SetupError('Native rank files exceed the archive size limit')
+    with tempfile.TemporaryDirectory(prefix='flashalign-rank-') as temporary:
+        payload = Path(temporary)/'rank.tar'
+        with payload.open('wb') as output:
+            with tarfile.open(fileobj=output, mode='w|', format=tarfile.USTAR_FORMAT) as tar:
+                for name, (value, executable) in sorted(files.items()):
+                    with source_file(value) as (source, size):
+                        entry = tarfile.TarInfo(name)
+                        entry.size = size
+                        entry.mode = 0o700 if executable else 0o600
+                        tar.addfile(entry, source)
+        return rpc(host, 'stage', payload_file=payload, parent=parent, id=id, files=records,
+                   ssh_config=ssh_config, **data)
 
 
 def stop(deployment):

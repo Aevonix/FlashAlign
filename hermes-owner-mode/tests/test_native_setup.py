@@ -12,7 +12,7 @@ from unittest import mock
 
 from test_setup import make_profile
 from owner_mode.native_bundle import check_bundle, host_platform, PLATFORMS
-from owner_mode.native_setup import prepare, check, command, architecture_matches
+from owner_mode.native_setup import prepare, check, command, architecture_matches, startup_timeout
 from owner_mode.native_cluster import activate
 from owner_mode.profiles import validate_profile
 from owner_mode.setup_runtime import SetupError
@@ -180,7 +180,8 @@ class NativeSetup(unittest.TestCase):
                 return {'platform': 'linux-aarch64', 'home': '/home/test', 'model_path': '/models/glm',
                         'config': self.config, 'config_sha256': 'b'*64, 'index_sha256': None,
                         'devices': ['0'], 'active_drafting': []}
-            with tarfile.open(fileobj=io.BytesIO(kwargs['payload'])) as archive:
+            with tarfile.open(name=kwargs.get('payload_file'),
+                              fileobj=io.BytesIO(kwargs['payload']) if 'payload' in kwargs else None) as archive:
                 unit = json.loads(archive.extractfile('unit.json').read())
             stages.append((host, kwargs, unit))
             return {'status': 'prepared'}
@@ -220,6 +221,29 @@ class NativeSetup(unittest.TestCase):
             if node['rank']:
                 self.assertEqual(argv[:2], ['/runtime/bin/tf-dsv41', 'follow'])
 
+    def test_deepseek_peer_deadline_matches_validated_startup_budget(self):
+        manifest = {'binary':'bin/tensorfold-dsv41', 'follower_binary':'bin/tf-dsv41',
+                    'rank_transport':'dsv41_env', 'assets_directory':'assets/runtime',
+                    'durable_owner_replay':True, 'startup_timeout':900}
+        hosts = [{'rank':i, 'host':'local', 'device':str(i), 'model_path':'/models/deepseek'} for i in range(4)]
+        checked = {'manifest':manifest, 'hosts':hosts, 'drafting':{'method':'dspark'},
+                   'arguments':['--context','65536']}
+        for selected, expected in (({}, 900), ({'startup_timeout':1200}, 1200)):
+            spec = {'engram_source':'/original', **selected}
+            for node in hosts:
+                _, env = command(Path('/runtime'), Path('/profile'), Path('/key'), node, checked,
+                                 spec, 'deepseek', 8000, '127.0.0.1', 29000,
+                                 replay_directory=Path('/persistent/replay') if node['rank']==0 else None)
+                self.assertEqual(env['TF_TP_PLAN_TIMEOUT'], str(expected))
+        self.assertEqual(startup_timeout({}, {}), 1800)
+        for bad in (None, True, 0, 59, 7201, '900', 900.0):
+            with self.subTest(bad=bad), self.assertRaisesRegex(SetupError, 'startup_timeout'):
+                startup_timeout({'startup_timeout':bad}, manifest)
+
+    def test_prepare_records_explicit_startup_budget(self):
+        result = prepare(self.home, {**self.spec, 'startup_timeout':1200}, self.profile, model_id='fixture')
+        self.assertEqual(result['startup_timeout'], 1200)
+
     def test_custom_launch_and_speculative_disable_are_rejected(self):
         for change in ({'command': ['python3', '-m', 'tensorfold']}, {'arguments': ['--no-drafts']}):
             with self.subTest(change=change), self.assertRaises(SetupError):
@@ -237,7 +261,8 @@ class NativeSetup(unittest.TestCase):
                         'config': self.config, 'config_sha256': 'b'*64, 'index_sha256': None,
                         'devices': ['0'], 'active_drafting': []}
             self.assertEqual(operation, 'stage')
-            with tarfile.open(fileobj=io.BytesIO(kwargs['payload'])) as archive:
+            with tarfile.open(name=kwargs.get('payload_file'),
+                              fileobj=io.BytesIO(kwargs['payload']) if 'payload' in kwargs else None) as archive:
                 names = ('engine.key', 'profile/profile.json', 'unit.json')
                 stages.append({name: archive.extractfile(name).read() for name in names if name in archive.getnames()})
             return {'status': 'prepared'}
@@ -293,7 +318,8 @@ class NativeSetup(unittest.TestCase):
                 return {'platform': 'linux-aarch64', 'home': '/home/test', 'model_path': '/models/glm',
                         'config': self.config, 'config_sha256': 'b'*64, 'index_sha256': None,
                         'devices': ['0'], 'active_drafting': []}
-            with tarfile.open(fileobj=io.BytesIO(kwargs['payload'])) as archive:
+            with tarfile.open(name=kwargs.get('payload_file'),
+                              fileobj=io.BytesIO(kwargs['payload']) if 'payload' in kwargs else None) as archive:
                 unit = json.loads(archive.extractfile('unit.json').read())
             stages.append((host, kwargs['parent'], unit))
             return {'status': 'prepared'}

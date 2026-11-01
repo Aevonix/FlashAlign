@@ -1,0 +1,171 @@
+{
+  "model": {
+    "id": "LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw",
+    "revision": "04a492fc3b4d25ddbab8f2d2f07f235ec77c9010"
+  },
+  "engine": {
+    "name": "TensorFold",
+    "version": "1.2.0",
+    "source_revision": "fe27a33cd70a38a0cedd9b99597933814514d307"
+  },
+  "profile": {
+    "name": "deepseek41-flash1017-v1",
+    "payload_sha256": "88324ceaa2c0754a2bdb4ef6bb388a088438e352358343e6c2c882009cdde864",
+    "strength": 1.0
+  },
+  "hardware": "4x RTX PRO 6000 Blackwell Max-Q, SM120",
+  "settings": {
+    "context": 65536,
+    "slots": 2,
+    "tensor_parallel": 4,
+    "speculative_method": "DSpark"
+  },
+  "scope": "Runtime and operator qualification; no refusal-rate, quality-benchmark, throughput or cross-engine output-equivalence claim.",
+  "operator": {
+    "cases": 60,
+    "comparisons": 780,
+    "layers": [
+      10,
+      22,
+      35
+    ],
+    "logical_tp_partitions": 4,
+    "rows": [
+      1,
+      7,
+      17,
+      33,
+      256
+    ],
+    "max_relative_l2_error_to_fp64": 0.0016800441675940171,
+    "max_rounding_bound_ratio": 0.9523746308897566,
+    "off_rows_unchanged": true,
+    "repeated_graph_masks_passed": true
+  },
+  "requests": [
+    {
+      "case": "stock",
+      "status": 200,
+      "effective": "off",
+      "drafted_tokens": 29
+    },
+    {
+      "case": "owner",
+      "status": 200,
+      "effective": "deepseek41-flash1017-v1",
+      "drafted_tokens": 29
+    },
+    {
+      "case": "owner_structured",
+      "status": 400,
+      "effective": "deepseek41-flash1017-v1",
+      "drafted_tokens": null
+    },
+    {
+      "case": "stock_structured",
+      "status": 400,
+      "effective": "off",
+      "drafted_tokens": null
+    },
+    {
+      "case": "unsigned_owner",
+      "status": 200,
+      "effective": "off",
+      "drafted_tokens": 29
+    },
+    {
+      "case": "signed_once",
+      "status": 200,
+      "effective": "deepseek41-flash1017-v1",
+      "drafted_tokens": 29
+    },
+    {
+      "case": "signed_replay",
+      "status": 200,
+      "effective": "off",
+      "drafted_tokens": 29
+    },
+    {
+      "case": "unknown_profile",
+      "status": 400,
+      "effective": "off",
+      "drafted_tokens": null
+    },
+    {
+      "case": "invalid_strength",
+      "status": 400,
+      "effective": "off",
+      "drafted_tokens": null
+    },
+    {
+      "case": "cached_stock",
+      "status": 200,
+      "effective": "off",
+      "drafted_tokens": 55
+    },
+    {
+      "case": "cached_owner",
+      "status": 200,
+      "effective": "deepseek41-flash1017-v1",
+      "drafted_tokens": 55
+    },
+    {
+      "case": "cached_stock",
+      "status": 200,
+      "effective": "off",
+      "drafted_tokens": 55
+    },
+    {
+      "case": "cached_owner",
+      "status": 200,
+      "effective": "deepseek41-flash1017-v1",
+      "drafted_tokens": 55
+    },
+    {
+      "case": "mixed_stock",
+      "status": 200,
+      "effective": "off",
+      "drafted_tokens": 52
+    },
+    {
+      "case": "mixed_owner",
+      "status": 200,
+      "effective": "deepseek41-flash1017-v1",
+      "drafted_tokens": 52
+    }
+  ],
+  "cache": {
+    "repeated_stock_and_profile_sessions_resumed_in_ram": true,
+    "resumed_prefix_tokens_each": 8720,
+    "evidence": "Family session logs in request order; the OpenAI cached-token field does not report these family cache hits."
+  },
+  "baseline": {
+    "stock_reply_unchanged_after_authorization_enabled": true
+  },
+  "known_limitations": [
+    "JSON-schema and guided output requests are rejected by this TensorFold DeepSeek backend in both modes.",
+    "The EXL3 base and arithmetic differ from the official-FP8 native vLLM path.",
+    "One native profile, strength 1.0 and four SM120 ranks are covered by this runtime."
+  ],
+  "cancellation": {
+    "stream_cases": 2,
+    "modes": [
+      "off",
+      "profile"
+    ],
+    "observed_client_left_after_tokens": [
+      1,
+      1
+    ],
+    "subsequent_requests_passed": true
+  },
+  "shutdown": {
+    "rank_exit_codes": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "gpu_claims_released": true
+  }
+}

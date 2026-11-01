@@ -33,27 +33,27 @@ def digest(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def native_fixture(root, *, missing=False):
+def native_fixture(root, *, missing=False, world=2):
     root.mkdir()
     tensors, header, data = {}, {}, bytearray()
-    for suffix, shape, dtype, byte in [('weight', [32, 64], 'F8_E4M3', 1),
-                                     ('scale', [1, 2], 'F8_E8M0', 127)]:
+    for suffix, shape, dtype, byte in [('weight', [32, 32*world], 'F8_E4M3', 1),
+                                     ('scale', [1, world], 'F8_E8M0', 127)]:
         name = 'layers.0.attn.wo_b.'+suffix
         size = shape[0]*shape[1]
         raw = bytes([byte])*size
         begin = len(data);data.extend(raw)
         header[name] = {'dtype': dtype, 'shape': shape, 'data_offsets': [begin, len(data)]}
-        partition = bytes([byte])*(size//2)
+        partition = bytes([byte])*(size//world)
         tensors[name] = {**header[name], 'stock_sha256': digest(raw), 'edited_sha256': digest(raw),
-                         'stock_partitions': [digest(partition)]*2,
-                         'edited_partitions': [digest(partition)]*2}
+                         'stock_partitions': [digest(partition)]*world,
+                         'edited_partitions': [digest(partition)]*world}
     encoded = json.dumps(header, separators=(',', ':')).encode()
     payload = struct.pack('<Q', len(encoded))+encoded+data
     filename = 'native.safetensors'
     doc = {'format': FORMAT, 'name': 'native-test',
            'model': {'id': 'fixture/model', 'revision': '1'*40},
            'source': {'id': 'fixture/edited', 'revision': '2'*40},
-           'hidden_size': 32, 'input_size': 64, 'layers': [0], 'tp_world_size': 2,
+           'hidden_size': 32, 'input_size': 32*world, 'layers': [0], 'tp_world_size': world,
            'transform': 'native_matrix_override_v1', 'requires': list(REQUIRES), 'strengths': [1.0],
            'payload': {'file': filename, 'size_bytes': len(payload), 'sha256': digest(payload),
                        'header_size_bytes': len(encoded), 'header_sha256': digest(encoded)},
@@ -154,11 +154,11 @@ class NativeProfiles(unittest.TestCase):
         self.assertEqual(profile_fingerprint(validate_profile(path)), profile_fingerprint(validate_profile(stage)))
         self.assertEqual((stage/'RESPONSIBLE_USE.md').read_bytes(), (path/'RESPONSIBLE_USE.md').read_bytes())
 
-    def test_tensorfold_rejects_native_before_inventory_or_download(self):
+    def test_tensorfold_requires_native_contract_before_inventory_or_download(self):
         path = self.root/'profile';native_fixture(path, missing=True)
         profile = validate_profile(path, allow_missing_payload=True)
         with mock.patch('owner_mode.native_setup.nodes', side_effect=AssertionError('inventory')):
-            with self.assertRaisesRegex(SetupError, 'vLLM native integration'):
+            with self.assertRaisesRegex(SetupError, 'explicit compatible TensorFold bundle'):
                 check_tensorfold(self.root, {}, profile, model_id='fixture/model')
 
 
@@ -317,15 +317,18 @@ class NativeSetup(unittest.TestCase):
         self.assertEqual(active['kind'], 'vllm')
         self.assertEqual(active['speculative_config'], config)
 
-    def test_auto_selection_never_downloads_tensorfold_as_native_fallback(self):
+    def test_auto_selection_rejects_missing_native_bundle_without_download(self):
         args = SimpleNamespace(home=self.home, model_path=self.model, profile=self.path,
             engine_bundle=None, backend='auto', profiles=[], engine_python=sys.executable,
             devices='0,1,2,3', tools_default=None, engine_only=True)
+        catalog = self.root/'empty-catalog.json'
+        catalog.write_text(json.dumps({'version':2, 'packages':[]}))
         with (self.patches(), mock.patch('owner_mode.backend_setup.active_speculation', return_value=None),
+              mock.patch('owner_mode.engine_assets.CATALOG', catalog),
               mock.patch('owner_mode.quickstart.backend_matches_checkpoint', return_value=False),
               mock.patch('owner_mode.quickstart.download_engine_bundle', side_effect=AssertionError('fallback download')),
               redirect_stdout(io.StringIO())):
-            with self.assertRaisesRegex(SetupError, 'No native vLLM integration'):
+            with self.assertRaisesRegex(SetupError, 'No compatible TensorFold native-profile bundle'):
                 make_default_plan(args, {}, wizard.Console(color=False))
 
     def test_apply_refreshes_missing_payload_metadata_after_materializing(self):

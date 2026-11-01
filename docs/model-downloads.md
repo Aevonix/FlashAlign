@@ -46,12 +46,13 @@ activation.
 MLX-format means the stored quantization format. TensorFold performs inference
 on Linux/NVIDIA; these commands do not install or require Apple's MLX runtime.
 
-### Legacy DeepSeek output-projection profiles
+### DeepSeek V4.1 Flash 1017 on TensorFold 1.2.0
 
-The `deepseek41-flash1017-v1` starter uses the [official FP8 download](#deepseek-v41-flash-1017-native-vllm)
-and native vLLM backend below. It cannot run on TensorFold or use EXL3 weights.
-The following download applies only to an operator-supplied output-projection
-profile and matching TensorFold bundle.
+The `deepseek41-flash1017-v1` starter uses the same unchanged native payload
+on TensorFold 1.2.0 and [native vLLM](#deepseek-v41-flash-1017-native-vllm).
+TensorFold requires the following explicitly supported EXL3 base; vLLM uses
+the official FP8 checkpoint. Base quantization and arithmetic differ, so the
+shared profile does not imply identical full-model outputs.
 
 Download the [EXL3 checkpoint](https://huggingface.co/LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw/tree/04a492fc3b4d25ddbab8f2d2f07f235ec77c9010):
 
@@ -79,12 +80,14 @@ Pass the EXL3 folder as `--model-path` and the original-shard folder as
 ```sh
 bash ./install.sh --auto --backend tensorfold \
   --model-path "$FLASHALIGN_MODELS/deepseek41-exl3" \
-  --profile /path/to/compatible-projection-profile \
+  --profile ./profiles/deepseek41-flash1017-v1 \
   --engram-source "$FLASHALIGN_MODELS/deepseek41-engram"
 ```
 
-These legacy files do not replace the official FP8 checkpoint or the native
-profile payload used by the current starter.
+The wizard requires a TensorFold 1.2.0 bundle declaring this native operator
+and exact EXL3 base. The native profile remains fixed at strength 1.0 and four
+ranks. Its 1.09 GB payload is fetched separately from the runtime bundle.
+Older TensorFold bundles still require a compatible output-projection profile.
 
 ### GLM 5.3 Full
 

@@ -2,7 +2,7 @@
 
 **ReAlign models instantly, on demand.**
 
-By Aevonix Research · Version 1.1.0
+By Aevonix Research · Version 1.1.1
 
 [![Stock DeepSeek V4.1 Flash refuses to help make a realistic-looking ID for a theatrical role; with FlashAlign on, the same model answers it](assets/demo/flashalign-promo-preview.gif)](https://aevonix.github.io/FlashAlign/)
 
@@ -60,7 +60,7 @@ Fitting and runtime packaging by Aevonix. See the
 
 | Model | Supported engines |
 | --- | --- |
-| DeepSeek V4.1 Flash 1017 | Pinned native vLLM, official FP8 checkpoint |
+| DeepSeek V4.1 Flash 1017 | Pinned native vLLM with official FP8, or TensorFold 1.2.0 with the declared EXL3 base |
 | GLM 5.3 Full | TensorFold |
 | GLM 5.3 Flash | TensorFold, SGLang |
 | Qwen3.8-27B | TensorFold, vLLM, SGLang, llama.cpp |

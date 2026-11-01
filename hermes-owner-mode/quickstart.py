@@ -11,13 +11,14 @@ from .engine_setup import private_json
 from .engine_assets import download_runtime_bundle
 from .drafting import draft_settings, MissingDraftModel
 from .model_metadata import inspect_model
-from .profiles import bundled_profile_for, discover_profiles, read_json
+from .profiles import bundled_profile_for, discover_profiles, read_json, ProfileError, NATIVE_FORMAT
 from .setup_runtime import SetupError, check_harness_contexts, managed_context_window
 
 
-def download_engine_bundle(home, model_type, *, platform_id=None):
+def download_engine_bundle(home, model_type, *, platform_id=None, profile=None):
     """Fetch a pinned public runtime without private repository access."""
-    return download_runtime_bundle(home, model_type, platform_id=platform_id)
+    return download_runtime_bundle(home, model_type, platform_id=platform_id,
+                                   **({'profile': profile} if profile is not None else {}))
 
 
 def backend_matches_checkpoint(metadata, model_id, model_path, quantization):
@@ -42,7 +43,7 @@ def cached_models(home):
 
 def make_default_plan(args, found, console):
     """Ask only for missing choices and write a private, reproducible setup plan."""
-    console.banner('1.1.0')
+    console.banner('1.1.1')
     console.line('Default setup: detect a local model, prepare its engine and profile, then configure access.')
     console.step(1, 'Discover model and harness')
     direct = getattr(args, 'engine_only', False)
@@ -80,7 +81,18 @@ def make_default_plan(args, found, console):
     if backend == 'auto':
         backend = 'tensorfold' if remote_hosts else 'tensorfold' if bundle_path else active['kind'] if active else 'llamacpp' if config['format'] == 'GGUF' else None
     if not profile_path:
-        starter = bundled_profile_for(config)
+        try:
+            starter = bundled_profile_for(config)
+        except ProfileError as error:
+            # A TensorFold bundle can explicitly bind a different serving base
+            # to this unchanged profile. Its hashes are checked below before a
+            # plan is written; no alias is added to the profile itself.
+            if backend not in (None, 'tensorfold') or 'revision differs' not in str(error):
+                raise
+            candidate = bundled_profile_for({key:value for key,value in config.items() if key != '_commit_hash'})
+            if not candidate or candidate.get('format') != NATIVE_FORMAT:
+                raise
+            starter = candidate
         if starter:
             profile_path = starter['path']
             console.line(f"Using included starter profile: {starter['name']} ({starter['status']}).")
@@ -95,8 +107,6 @@ def make_default_plan(args, found, console):
     if len(local) != 1:
         raise SetupError('A valid local profile is required for managed engine setup')
     profile = local[0]
-    if profile.get('format') == 'flashalign.native_wo_b.v1' and backend == 'tensorfold':
-        raise SetupError('This native profile requires its vLLM native integration; the existing TensorFold deployment is unchanged')
     if profile.get('payload_status') == 'missing':
         from .profile_assets import download_record
         asset = download_record(profile)
@@ -128,18 +138,33 @@ def make_default_plan(args, found, console):
         backend = backend or 'tensorfold'
     elif backend != 'tensorfold':
         _, backend_metadata = _select_kit(backend, config, profile)
-    if profile.get('format') == 'flashalign.native_wo_b.v1' and backend == 'tensorfold':
-        raise SetupError('No native vLLM integration matches this profile and checkpoint; TensorFold cannot load this profile')
     if backend_metadata.get('requires_private_opt_in'):
         raise SetupError('This private unqualified engine requires an explicitly supplied setup plan with allow_research=true; default setup cannot opt in')
     if backend == 'tensorfold' and not bundle_path:
+        if profile.get('format') == NATIVE_FORMAT:
+            from .engine_assets import _entry, CATALOG
+            asset = _entry(config.get('model_type'), CATALOG,
+                           remote_info['platform'] if remote_hosts else None, profile)
+            if asset is None:
+                raise SetupError('No compatible TensorFold native-profile bundle is published for this host; provide a validated local bundle')
         console.line('Looking for a compatible engine package...')
-        bundle_path = (download_engine_bundle(args.home, config.get('model_type'), platform_id=remote_info['platform'])
-                       if remote_hosts else download_engine_bundle(args.home, config.get('model_type')))
+        bundle_path = download_engine_bundle(args.home, config.get('model_type'),
+                                             platform_id=remote_info['platform'] if remote_hosts else None,
+                                             profile=profile)
     if backend == 'tensorfold' and not bundle_path:
         bundle_path = input('Aevonix TensorFold engine bundle folder: ').strip()
     if backend == 'tensorfold':
         backend_metadata = read_json(Path(bundle_path)/'manifest.json')
+        if profile.get('format') == NATIVE_FORMAT:
+            from .native_bundle import validate_manifest, check_profile_contract
+            validate_manifest(backend_metadata, platform_id=remote_info['platform'] if remote_hosts else None)
+            check_profile_contract(backend_metadata, profile)
+            bases = backend_metadata['compatible_profile_bases']
+            matched = ([row for row in bases if all(row.get(key) is None or row[key] == remote_info.get(key)
+                        for key in ('config_sha256', 'index_sha256', 'quantization_config_sha256'))]
+                       if remote_hosts else _model_matches(Path(config['path']), quantization, bases))
+            if len(matched) != 1:
+                raise SetupError('The checkpoint does not match a declared native-profile TensorFold serving base')
     python = select_backend_python({'python': args.engine_python} if args.engine_python else {}, backend_metadata) if backend != 'tensorfold' else {'executable': os.sys.executable}
     if backend != 'tensorfold':
         check_harness_contexts(selected, found, managed_context_window(backend, backend_metadata), managed=True)

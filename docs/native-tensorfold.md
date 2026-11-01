@@ -1,6 +1,7 @@
 # TensorFold setup
 
-FlashAlign manages TensorFold 1.1.9 on Linux x86_64 and Linux aarch64.
+FlashAlign manages declared TensorFold 1.1.9 and 1.2.0 bundles on Linux x86_64
+and Linux aarch64.
 A runtime bundle must match both the CPU architecture and the GPU architecture.
 A Blackwell-only bundle cannot run on an Ampere GPU. The NVIDIA driver remains
 a host prerequisite and is never included in a bundle.
@@ -14,10 +15,12 @@ checksums. When no matching bundle is listed, provide its local directory with
 `--engine-bundle`. Profiles come from the local starter pack or an explicit
 profile directory.
 
-The current DeepSeek starter uses a [separate native vLLM backend](../engines/vllm-deepseek-native/README.md),
-not TensorFold. TensorFold support for an external DeepSeek output-projection
-profile remains available through its matching bundle. It cannot load the
-`native_matrix_override_v1` operator.
+The DeepSeek starter runs on the [pinned native vLLM backend](../engines/vllm-deepseek-native/README.md)
+or a matching TensorFold 1.2.0 native-matrix bundle. TensorFold uses the pinned
+LibertAIDAI EXL3 serving base and the same unchanged native profile payload.
+Strength is fixed at 1.0 and tensor parallelism at four ranks. The bundle must
+explicitly declare this operator and compatible base; older projection bundles
+cannot load it. See [model downloads](model-downloads.md#deepseek-v41-flash-1017-on-tensorfold-120).
 
 ## One host
 
@@ -83,7 +86,7 @@ The native Flash environment interface also receives the key-file path during
 startup, as required by its checked command contract. Preparation does not
 start a model or restart a harness.
 
-Activation starts followers, then the leader and its SSH forward. Native cold starts allow 30 minutes by default; a bundle can declare a checked `startup_timeout` from 60 to 7200 seconds. Large checkpoints loaded over a shared mount can take several minutes. Each rank has an owned process
+Activation starts followers, then the leader and its SSH forward. Native cold starts allow 30 minutes by default; a bundle can declare a checked `startup_timeout` from 60 to 7200 seconds. The DeepSeek 1.2.0 bundle allows 15 minutes. An integer `engine.startup_timeout` in the setup plan overrides the bundle value; DeepSeek ranks use the same allowance to connect to their peers. Large checkpoints loaded over a shared mount can take several minutes. Each rank has an owned process
 supervisor and a private receipt. Setup verifies standard and signed owner
 requests before changing harness routing. If activation fails, it stops only
 those recorded ranks. An occupied service is never stopped to make room.
@@ -164,13 +167,21 @@ context or disable drafts.
 ## Bundle contract
 
 A bundle uses manifest version 2 with `engine: "tensorfold-native"`,
-`runtime_version: "1.1.9"`, an exact `source_revision`, `platform`, and
+`runtime_version: "1.1.9"` or `"1.2.0"`, an exact `source_revision`, `platform`, and
 `cuda_architectures`. `durable_owner_replay: true` is required; the installer
 rejects bundles without persistent replay protection before staging them.
 It includes a complete SHA-256 and size inventory of its
 `bin/`, `lib/`, `assets/`, `sources/`, and `licenses/` files plus `LICENSE` and
 `NOTICE.md`. `source_archive` identifies the matching modified engine source.
 Profiles and NVIDIA drivers cannot appear in the runtime archive.
+
+Native-matrix bundles require TensorFold 1.2.0 and explicitly declare
+`profile_schemas`, `supported_profile_requires`, `supported_profile_strengths`,
+`profile_target_model`, and `compatible_profile_bases`. The profile keeps its
+original target pin; compatible serving bases are declared by the runtime.
+For DeepSeek, TensorFold's EXL3 base and arithmetic differ from the official FP8
+vLLM path. The identical edited tensor payload does not establish full-model
+output identity across those paths.
 
 `binary` names the primary executable. `rank_transport` is `cli`, `glm_env`, or
 `dsv41_env`, according to the tested native family interface. DeepSeek additionally
@@ -184,3 +195,8 @@ complete download entry for review without uploading or publishing anything.
 Add that entry to the catalog only after its runtime gate passes. Every bundled runtime library needs its license or
 notice. Source required for the native engine is distributed with the bundle;
 the private profile-creation tools are separate.
+
+The DeepSeek 1.2.0 bundle supports chat and completion requests. Its current
+engine does not support `response_format` or guided output, in either mode.
+Auxiliary runtime kernel sources and their license notices are included in the
+bundle and listed in its manifest.
