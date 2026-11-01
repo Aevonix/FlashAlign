@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 name: owner-mode
-version: 1.1.0
+version: 1.1.1
 description: Aevonix FlashAlign for verified contacts and per-tool model access
 entry_point: __init__.py
 category: general

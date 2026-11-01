@@ -8,7 +8,7 @@ and SHA-256 before staging it. No private repository access is required.
 
 | Model | Profile | Current runtime |
 | --- | --- | --- |
-| DeepSeek V4.1 Flash 1017 | `deepseek41-flash1017-v1` | [Pinned native vLLM](../engines/vllm-deepseek-native/README.md), official FP8 checkpoint, four SM120 GPUs |
+| DeepSeek V4.1 Flash 1017 | `deepseek41-flash1017-v1` | [Pinned native vLLM](../engines/vllm-deepseek-native/README.md) with official FP8, or [TensorFold 1.2.0](../docs/native-tensorfold.md) with the declared EXL3 base; four SM120 GPUs |
 | GLM 5.3 Full | `glm53-full-v1` | TensorFold |
 | GLM 5.3 Flash | `glm53-flash-v1` | TensorFold and SGLang |
 | Qwen3.8-27B | `qwen38-27b-v1` | TensorFold, vLLM, SGLang and llama.cpp |
@@ -17,8 +17,9 @@ and SHA-256 before staging it. No private repository access is required.
 The current DeepSeek starter uses the Keys source's 26 WO-B matrices and their
 26 scale tensors. It applies them only to authorized rows and leaves normal
 rows on the stock path. It supports strength **1.0**. It requires the native
-operator backend; compact projection loaders and the existing TensorFold/EXL3
-path cannot load this artifact. See [DeepSeek details](deepseek41-flash1017-v1/README.md).
+operator backend. TensorFold 1.2.0 uses the same unchanged payload with its
+explicitly declared EXL3 serving base. Compact projection loaders cannot load
+this artifact. See [DeepSeek details](deepseek41-flash1017-v1/README.md).
 
 Use the exact checkpoint revision and serving format declared by the profile
 and backend. [Validation](../docs/validation.md) distinguishes file integrity,

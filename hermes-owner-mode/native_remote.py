@@ -245,6 +245,66 @@ def cuda_inventory():
     return devices, architectures
 
 
+def _rank_archive(payload, expected, directory):
+    """Read only bounded USTAR headers and copy file bodies in small chunks."""
+    source = io.BytesIO(payload) if isinstance(payload, bytes) else payload
+    consumed = 0
+    def read(size):
+        nonlocal consumed
+        result = source.read(size)
+        consumed += len(result)
+        if consumed > MAX_PAYLOAD:
+            raise ValueError('Rank payload exceeds size limit')
+        return result
+    def exact(size):
+        chunks = bytearray()
+        while len(chunks) < size:
+            chunk = read(size-len(chunks))
+            if not chunk:
+                raise ValueError('Truncated rank payload')
+            chunks.extend(chunk)
+        return bytes(chunks)
+    seen = set()
+    while True:
+        header = exact(512)
+        if header == b'\0'*512:
+            if exact(512) != b'\0'*512:
+                raise ValueError('Invalid rank archive terminator')
+            while True:
+                padding = read(8*1024*1024)
+                if not padding:
+                    return seen
+                if any(padding):
+                    raise ValueError('Unexpected data after rank archive')
+        try:
+            member = tarfile.TarInfo.frombuf(header, 'utf-8', 'strict')
+        except (tarfile.HeaderError, UnicodeError) as error:
+            raise ValueError('Invalid rank archive header') from error
+        if member.type not in (tarfile.REGTYPE, tarfile.AREGTYPE) or member.name not in expected or member.name in seen:
+            raise ValueError('Unexpected rank payload member')
+        row = expected[member.name]
+        if member.size != row['bytes']:
+            raise ValueError('Rank payload size differs')
+        path = member_path(directory, member.name)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        value = hashlib.sha256()
+        remaining = member.size
+        with path.open('xb') as output:
+            while remaining:
+                chunk = read(min(8*1024*1024, remaining))
+                if not chunk:
+                    raise ValueError('Truncated rank payload')
+                output.write(chunk)
+                value.update(chunk)
+                remaining -= len(chunk)
+        if member.size % 512:
+            exact(512-member.size%512)
+        path.chmod(0o700 if row.get('executable') else 0o600)
+        if value.hexdigest() != row['sha256']:
+            raise ValueError('Rank payload checksum differs')
+        seen.add(member.name)
+
+
 def stage(request, payload):
     parent = owned_directory(request['parent'], create=True)
     if request.get('owner_replay_dir') is not None:
@@ -255,8 +315,18 @@ def stage(request, payload):
     expected = request['files']
     if not isinstance(expected, dict) or not expected or len(expected) > 8192:
         raise ValueError('Invalid rank inventory')
-    for name in expected:
+    total = 0
+    for name, row in expected.items():
         safe_relative(name)
+        if (not isinstance(row, dict) or set(row) - {'sha256', 'bytes', 'executable'}
+                or not isinstance(row.get('sha256'), str)
+                or len(row['sha256']) != 64 or any(c not in '0123456789abcdef' for c in row['sha256'])
+                or type(row.get('bytes')) is not int or not 0 <= row['bytes'] <= MAX_PAYLOAD
+                or type(row.get('executable', False)) is not bool):
+            raise ValueError('Invalid rank file declaration')
+        total += row['bytes']
+    if total > MAX_PAYLOAD:
+        raise ValueError('Rank files exceed payload limit')
     if destination.exists():
         owned_directory(destination)
         for name, row in expected.items():
@@ -268,23 +338,7 @@ def stage(request, payload):
     temporary = parent/('.'+request['id']+'-'+secrets.token_hex(8))
     temporary.mkdir(mode=0o700)
     try:
-        seen = set()
-        with tarfile.open(fileobj=io.BytesIO(payload), mode='r:') as archive:
-            for member in archive:
-                if not member.isfile() or member.name not in expected or member.name in seen:
-                    raise ValueError('Unexpected rank payload member')
-                row = expected[member.name]
-                if member.size != row['bytes']:
-                    raise ValueError('Rank payload size differs')
-                p = member_path(temporary, member.name)
-                p.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                source = archive.extractfile(member)
-                with p.open('xb') as out:
-                    shutil.copyfileobj(source, out)
-                p.chmod(0o700 if row.get('executable') else 0o600)
-                if digest(p) != row['sha256']:
-                    raise ValueError('Rank payload checksum differs')
-                seen.add(member.name)
+        seen = _rank_archive(payload, expected, temporary)
         if seen != set(expected):
             raise ValueError('Rank payload is incomplete')
         private_json(temporary/'stage-receipt.json', {'version': 1, 'files': expected})
@@ -377,10 +431,7 @@ def main():
     if operation == 'inventory':
         result = inventory(request)
     elif operation == 'stage':
-        payload = sys.stdin.buffer.read(MAX_PAYLOAD+1)
-        if len(payload) > MAX_PAYLOAD:
-            raise ValueError('Rank payload exceeds size limit')
-        result = stage(request, payload)
+        result = stage(request, sys.stdin.buffer)
     elif operation == 'start':
         result = start(request)
     elif operation == 'status':

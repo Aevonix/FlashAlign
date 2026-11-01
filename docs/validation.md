@@ -235,3 +235,28 @@ file contents and executable modes; a fresh SDK install verifies installed
 files, dependencies and the command-line entry point. Runtime downloads are
 pinned by size, SHA-256 digest and complete file inventory. Model behavior on a
 different deployment still requires a model run.
+
+## DeepSeek native profile on TensorFold 1.2.0
+
+The unchanged native Keys profile passed operator and runtime checks on four
+RTX PRO 6000 GPUs with the pinned LibertAIDAI EXL3 3.5-bpw base. The run used a
+65,536-token context, two slots and active DSpark.
+
+The operator checks covered 60 cases at layers 10, 22 and 35 across all four
+logical tensor-parallel partitions, including mixed rows and changing graph
+masks. All 780 comparisons passed. The largest sampled relative L2 error to
+the independent FP64 reference was about 0.168%, within the checked rounding bound.
+This is matrix-site evidence, not full-model equivalence to another engine.
+
+Fifteen HTTP checks passed their expected outcomes, including signed requests,
+unsigned and replayed requests, invalid profiles and strengths, repeated cache
+use and concurrent stock/profile requests. Both modes proposed speculative
+tokens. Cancelled streams in both modes released their slots; subsequent
+requests succeeded, and all four ranks shut down cleanly. Repeated stock and profile sessions each resumed an 8,720-token prefix
+from RAM. These family cache hits appear in the runtime log, not the OpenAI
+cached-token field. JSON-schema requests were rejected in both modes, as the
+current TensorFold DeepSeek backend does not support them.
+
+The [qualification record](../benchmarks/results/deepseek-tensorfold-native-qualification-20261101.json)
+contains exact model, profile and engine pins. These are functional checks,
+not refusal-rate, quality or throughput benchmarks.

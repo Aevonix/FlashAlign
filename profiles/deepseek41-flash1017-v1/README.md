@@ -36,12 +36,22 @@ Authorized requests select the edited WO-B matrices. Normal requests retain
 the stock matrices. Mixed batches select the correct operation per row, with
 separate cache identities. Speculative decoding stays enabled.
 
-The supported path is Linux x86_64 on four SM120 GPUs with the exact native
-engine image. The source's EXL3 sidecars are different artifacts; they are not
-substitutes for this payload. The current TensorFold, SGLang and llama.cpp
-integrations do not implement this native operator.
+Both backends use Linux x86_64 and four SM120 GPUs. The pinned vLLM image
+uses the official FP8 checkpoint. TensorFold 1.2.0 uses
+[`LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw`](https://huggingface.co/LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw/tree/04a492fc3b4d25ddbab8f2d2f07f235ec77c9010)
+at revision `04a492fc3b4d25ddbab8f2d2f07f235ec77c9010`. Its bundle explicitly
+binds that serving base to this profile's original official model pin.
+
+The profile file and native edited matrices are unchanged between engines.
+TensorFold keeps the EXL3 stock path and selects these FP8 matrices for owner
+rows. Base quantization and arithmetic differ from vLLM, so this is not a claim
+of identical full-model outputs. The source's EXL3 sidecars are not substitutes
+for this payload. SGLang and llama.cpp do not implement this native operator.
 
 The profile uses exact source tensors, but full-model output identity and a
 particular refusal rate are not guaranteed. See [validation](../../docs/validation.md).
 The software, model and profile-source terms are separate. Retain the
 [MIT notice](LICENSE) and [source agreement](RESPONSIBLE_USE.md).
+
+On this TensorFold build, JSON-schema and guided output requests are rejected
+in both modes. Chat and completion requests support stock and authorized profile modes.

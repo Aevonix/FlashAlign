@@ -101,6 +101,18 @@ class RuntimeAssets(unittest.TestCase):
         self.assertIn('engine_assets.py', wizard.MODULES)
         self.assertIn('engine_catalog.json', wizard.MODULES)
 
+    def test_profile_schema_disambiguates_native_and_projection_runtime_assets(self):
+        native={**self.entry,'id':'native-fixture','runtime_version':'1.2.0',
+                'profile_schemas':['flashalign.native_wo_b.v1'],'transforms':['native_matrix_override_v1']}
+        self.catalog.write_text(json.dumps({'version':2,'packages':[self.entry,native]}))
+        selected=assets._entry('fixture',self.catalog,profile={'schema':'flashalign.native_wo_b.v1',
+                                'transform':'native_matrix_override_v1'})
+        self.assertEqual(selected['id'],'native-fixture')
+        selected=assets._entry('fixture',self.catalog,profile={'schema':None,'transform':'projection'})
+        self.assertEqual(selected['id'],self.entry['id'])
+        with self.assertRaisesRegex(SetupError,'ambiguous'):
+            assets._entry('fixture',self.catalog)
+
     def test_corrupt_or_truncated_asset_does_not_create_cache(self):
         for data in (self.data[:-1], b'x'+self.data[1:]):
             with self.subTest(size=len(data)), mock.patch.object(assets, '_fetch', return_value=data):

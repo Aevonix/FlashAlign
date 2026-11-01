@@ -3,6 +3,642 @@
   "runtime_version": "1.1.9",
   "packages": [
     {
+      "id": "tensorfold-native-deepseek41-keys-linux-x86_64-sm120-v1.2.0-r3",
+      "model_types": [
+        "deepseek_v41"
+      ],
+      "platforms": [
+        "linux-x86_64"
+      ],
+      "runtime_version": "1.2.0",
+      "cuda_architectures": [
+        "sm_120"
+      ],
+      "url": "https://github.com/Aevonix/FlashAlign/releases/download/v1.1.1/tensorfold-native-deepseek41-keys-linux-x86_64-sm120-v1.2.0-r3.tar.gz",
+      "sha256": "67192f0afce171532a3554428f7d517a159e74edd9cf2d89941c56d4026c492a",
+      "bytes": 290240440,
+      "files": {
+        "COMMERCIAL.md": {
+          "sha256": "49c0bf9d56d32b0962313ffd20253ebf57de76ef964201eabf27f09132115a44",
+          "bytes": 702
+        },
+        "LICENSE": {
+          "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+          "bytes": 34523
+        },
+        "NOTICE.md": {
+          "sha256": "169d859cbeb1fbe75cced428415948794316242022c92da514172334e991c4a3",
+          "bytes": 1076
+        },
+        "assets/runtime/aot/aot.json": {
+          "sha256": "296adfb6f39acff433b7d471dde3bbfeba1cf594bffc1c6d86a758c378ab7a89",
+          "bytes": 215596
+        },
+        "assets/runtime/aot/cubins/045af59dd0941587a2195ed67672200d76a3cdad5171bb2131cd0533a04f5bb0.cubin": {
+          "sha256": "8f4682f6f5f546cda8b02bd57d64ca74777be6dd77267aebe7ea4db608ad383e",
+          "bytes": 15432
+        },
+        "assets/runtime/aot/cubins/058ed0014f581c27262911850b71e8cf49b4a0a5d66d20638dc2dedfb48784f6.cubin": {
+          "sha256": "0b30e0485fc7a6bd4c6ab04bbc827701190c1f0ef82592716ee4dc34b420a56c",
+          "bytes": 21728
+        },
+        "assets/runtime/aot/cubins/07f0cb9c234d2654f947d381d9dbf1102029103792f1fd3b09fc236053c7ecb0.cubin": {
+          "sha256": "74b34ab3bb7c3aa91284da34f958da1eb093c27dc5911ed9c73f4a2047336be2",
+          "bytes": 340232
+        },
+        "assets/runtime/aot/cubins/093f530203bd9e47f22a6c52490e1eb47cffb24a93722b36cee5d75b34d6f279.cubin": {
+          "sha256": "3d3c55464452abd257909cf56a906ce9d1c6ae54a676f8408e6343a0043c7fb8",
+          "bytes": 22192
+        },
+        "assets/runtime/aot/cubins/096aedda8837aadb2a4a11ca4a365e38e79a2130f703676418c709cdcae58b61.cubin": {
+          "sha256": "f6709f13978e5da75d0d9891457e5ba9dd45a4b6e2ffe02e8e87d7e2605b9592",
+          "bytes": 153976
+        },
+        "assets/runtime/aot/cubins/0c38c5e2fa324b0dc54f435bde63bf551df2209a043440ed5bc4960d633f3e4e.cubin": {
+          "sha256": "b54c7499e48dd3aa4ea41be6d67c0e32a946d89426a50b14cabbb89574125959",
+          "bytes": 19696
+        },
+        "assets/runtime/aot/cubins/10a0e82fb0b2623b53178fec2a205cb5973f3106125a6fb40ddb5b1c1c1f33a9.cubin": {
+          "sha256": "124694510ae18535c01dcc3199046fdce3376ef6c88ce2d8d36ccde2a66d3467",
+          "bytes": 48752
+        },
+        "assets/runtime/aot/cubins/10f656d3bf98038a7b9e7e53cbf571d79e0ad3a990d49c2c6ea042076c8181f5.cubin": {
+          "sha256": "ed3d12e4fe204337bd98a9eb82ee89958c4a8d0ac8691fbd9e8c834a29752e84",
+          "bytes": 340232
+        },
+        "assets/runtime/aot/cubins/1182ecfac38438b4e706967bbe72362e2ab2a378306d7cfb603329fd7caa3729.cubin": {
+          "sha256": "f971fb704cf074d4fed2bfab0ab1969697f8c86fc6d0250f24f2b41b3d15db8e",
+          "bytes": 20192
+        },
+        "assets/runtime/aot/cubins/12e1c238af67cf5a2ed16421b4eb266ae4cead94eaec5b48a8fb850b45094dcd.cubin": {
+          "sha256": "1e3c88249c585197ade02682c8b4cd74a18c77932399a7d52b706e29068f06dd",
+          "bytes": 181320
+        },
+        "assets/runtime/aot/cubins/14481cc03e939465ef50ea499bf3719fc0017c6984fdd1e16578284f2c325c2a.cubin": {
+          "sha256": "4e318897de475281d32e4cdc6f72b40161dad9150b27274ea7d0af9426289018",
+          "bytes": 27888
+        },
+        "assets/runtime/aot/cubins/16abef32e24fd93f4704c299f44bda902f5d39e06fd0501f82bfc85d0e81b3f4.cubin": {
+          "sha256": "d55f2c1e2cb1c226caba22b1161bac6f67f4e234008aee4b774cd44538bf4875",
+          "bytes": 26248
+        },
+        "assets/runtime/aot/cubins/18270c3832313309f3dbc024f6c6149edadbb58ee5400bada33ac6b75d5ed162.cubin": {
+          "sha256": "60c1226f5a8233e80bfc58358c25d95fd1b2c93f5b93e0ce39cdc7223a70b7e0",
+          "bytes": 219512
+        },
+        "assets/runtime/aot/cubins/1924671c57dfd6a4823e2e17a6a277071005b488d5aa9db97b41f3610616b0b2.cubin": {
+          "sha256": "a1b785cd944df9fceb208023e5b83a09a349e8e9b30e3d1b5ca17a4e532e7642",
+          "bytes": 57872
+        },
+        "assets/runtime/aot/cubins/19b1663cb145e0a3ad916ea14a6a89efb2a86736b9fc56f03c6850ca3e0e54f0.cubin": {
+          "sha256": "ba93c90fbfcf6dbd9f670b177d9a14b82c62a10f6ffaa81a3a551745c9f9f05f",
+          "bytes": 340232
+        },
+        "assets/runtime/aot/cubins/1b1849a3ec9dd538ba6749b90592472ae1b17cc276abb8549c330eaa91233955.cubin": {
+          "sha256": "510630c49e817249d793e6ce54dd2e72131e0c0cc7677d29d8686e5a022a2208",
+          "bytes": 58744
+        },
+        "assets/runtime/aot/cubins/1d269b52c7234ca1e0fa0c7495f7d4cd0cb6b256be9b4d03ed32b088f9d9d58c.cubin": {
+          "sha256": "7d6cf392df1171c2bf46956e22744e779b09c0a20a6c388c868605ec4a3f33cd",
+          "bytes": 22384
+        },
+        "assets/runtime/aot/cubins/1e9662616879430d93de595a4f7386be263ae9eb65f61d958f5e1e5a07f89316.cubin": {
+          "sha256": "9ad457bc4f041493ca7d5fbbc90cd277a7d2e7768066c5ff14eed27cf7dac89b",
+          "bytes": 340232
+        },
+        "assets/runtime/aot/cubins/1f30dc75b594d3f9e61fd54111c26c9b8c7cb0d6f88a085dbec1adda905b52ef.cubin": {
+          "sha256": "4fe4bd00603c8f529477f172858e03fb31b4dc789d4b4bc9aa7e205958d7742f",
+          "bytes": 59784
+        },
+        "assets/runtime/aot/cubins/21810173431ae67eb32a340e2f1ca5d6b5e6967bd3eccd7d7e81b45044bc469e.cubin": {
+          "sha256": "4fe4bd00603c8f529477f172858e03fb31b4dc789d4b4bc9aa7e205958d7742f",
+          "bytes": 59784
+        },
+        "assets/runtime/aot/cubins/24bd6fb2aeebe44b87890acece73c2c6097aff1770c4a23ccf09d019048088e4.cubin": {
+          "sha256": "b01b1f9c467a50599814478ecac804a26e0534656402efa0ff5bea30cfc430ab",
+          "bytes": 77128
+        },
+        "assets/runtime/aot/cubins/25805baf3f5df1da39867874871e9a08b66dc2ebd019033daaf14a41cf59fd9b.cubin": {
+          "sha256": "d651a68cbbb62b892366fc49ded9399fd8000daeb72511eff0b8f1ae59bfe2ed",
+          "bytes": 111568
+        },
+        "assets/runtime/aot/cubins/26bf2f8f8b74d5047a2c17971ca39895d6bc6ecf422acd2afeec099be6601cfc.cubin": {
+          "sha256": "67d5596813b74c7d60acb0071dc3ce0c3c856b019890ffab8af909c57ec4f6e0",
+          "bytes": 31456
+        },
+        "assets/runtime/aot/cubins/2b106c9c03b3ddcaed478492b41d9be6a5d2ed1bbd7d4a5509c6a0fcc9ed3b3a.cubin": {
+          "sha256": "f7330842dc6d5105d86ac00bda661f53e179fa35538e09a6a91447bf6f68f7b2",
+          "bytes": 181320
+        },
+        "assets/runtime/aot/cubins/2bb50b106ca586d6dafadbd63df226ba200ab835356ef89a37072be65c4c1c9a.cubin": {
+          "sha256": "b01b1f9c467a50599814478ecac804a26e0534656402efa0ff5bea30cfc430ab",
+          "bytes": 77128
+        },
+        "assets/runtime/aot/cubins/2dfbbb6eb35ac65612d153ce3948e92d5dfcc9b2f9f92ef3581acc8b92e1392d.cubin": {
+          "sha256": "5c5999dac9a515f8be95f15c544e8139b89ea4ec18551df0ddc0b215ca34452f",
+          "bytes": 15160
+        },
+        "assets/runtime/aot/cubins/2eb309344df4d1123e1037e76827e30509faf290bf6e6a55955d4b8a513f0552.cubin": {
+          "sha256": "101460f6c6c557e2604f0c3ff68a25fa33819dbbcd2f55f394e137dd56ca8524",
+          "bytes": 27064
+        },
+        "assets/runtime/aot/cubins/2fde9f4b0d7ce40dbbe40db35c789cc9341374642b1a2abda185ca83328dbb71.cubin": {
+          "sha256": "372c4b59060d29f455e86cda133dccafbd41f389b701e01cb0a77f08b8bee835",
+          "bytes": 29208
+        },
+        "assets/runtime/aot/cubins/320b0e0f2c63173ef87585b9ce2b99326bba644d91665fb5e7102f46d0a27dfa.cubin": {
+          "sha256": "cd303b9536594c530592b68d76ab520f0cb8d77329bbcaeb0510f6392f26ee9f",
+          "bytes": 153744
+        },
+        "assets/runtime/aot/cubins/32a9e81a9ac71e4d2b9fd32bec890832c368b75ea3fbff4a75e593b0c4ace6ac.cubin": {
+          "sha256": "8a2eaa368e5acac646176a528991d0b16565522994a2bef08f9eb7a13408f8a1",
+          "bytes": 27384
+        },
+        "assets/runtime/aot/cubins/333b266b4340eeb4e1c104bfd7c4e4e0074032b01b235c04f921efb632455144.cubin": {
+          "sha256": "52c2c37746c7f9ec8cb7ac259c73e7344ed6a88cb254761a1676157b6ec866d9",
+          "bytes": 180496
+        },
+        "assets/runtime/aot/cubins/33a14df7133861e6d0e2b38bd35c5a58f7085f8e9fe548c9e5a58a4b7d89489c.cubin": {
+          "sha256": "7bc51e4982d945ab9a1d29f2ecebdee2b6590f9117dab714bade3a49471d0c92",
+          "bytes": 28216
+        },
+        "assets/runtime/aot/cubins/34c8bda4bf91819fe7c5a473021dc6d6643a60e16554271d962d8e2cc30861cc.cubin": {
+          "sha256": "5c5999dac9a515f8be95f15c544e8139b89ea4ec18551df0ddc0b215ca34452f",
+          "bytes": 15160
+        },
+        "assets/runtime/aot/cubins/374ad088ac0cf098c9970f174ad084d478172a2fc425890da79af8ef44eababd.cubin": {
+          "sha256": "81d772cf4c60c2986ee1d25f7c5f847278e5f580230751a22288530caeb1f04c",
+          "bytes": 76024
+        },
+        "assets/runtime/aot/cubins/39f53b3aede109f2ed140ed6b9097ab8b0da37fece973fa2aa36b572a2a42bd9.cubin": {
+          "sha256": "022240bcb26f2731f070058187f9cb8f66b8a80807bd586e4bfc8c83eaa19b8d",
+          "bytes": 15400
+        },
+        "assets/runtime/aot/cubins/3b9bbc4eb689ef16e1c86e3141ed20088fc72fc28dfc7a58545db17da9b5440e.cubin": {
+          "sha256": "37e4aa4f0f9867ce4cc3b05abee6b7b14cb50bb08c2c3fe80a0549c61f5d3fa3",
+          "bytes": 158056
+        },
+        "assets/runtime/aot/cubins/3e0844b46d806dd5be388a7d6b35dbc6b9220328481f8ed289e15c8406c5b23d.cubin": {
+          "sha256": "d655522b7eedb36f07ddffd71fc9ff1223186582710fe24df13cd1de64aab84b",
+          "bytes": 48600
+        },
+        "assets/runtime/aot/cubins/3f0c853ff973283de9539e42314afc498fae092fb8c839631689653a87fd11e9.cubin": {
+          "sha256": "ecab1ee6b3e7254b1570d3fb16d9cf687a4f8e748b0d6380c4fba1feb4e61974",
+          "bytes": 41360
+        },
+        "assets/runtime/aot/cubins/3f5d3fd8d63324254c0b60f2989eaa893c17fe0b39283fe4b9e8de947518a214.cubin": {
+          "sha256": "92deb8529be539b2bd1f41906b0ef73fb89d0912e1fcaa012cb28f057fc0dfb9",
+          "bytes": 48608
+        },
+        "assets/runtime/aot/cubins/3f6999be8cdd56d18ab79daa4457314636ca80464f643654b14d2b472bf9766a.cubin": {
+          "sha256": "f7330842dc6d5105d86ac00bda661f53e179fa35538e09a6a91447bf6f68f7b2",
+          "bytes": 181320
+        },
+        "assets/runtime/aot/cubins/40a95d5b9438a8d4c078ad3e65437f9e2b8bd16ffb94e12bb937cd273e1faabe.cubin": {
+          "sha256": "bde678e6038a855d938086dd965a5a4c0cb08d0af43639a5df79725b2fe0fb30",
+          "bytes": 64568
+        },
+        "assets/runtime/aot/cubins/42e1976da00d6117eae121f33270dbece59a256fa4c5f5779599366b5ed552bc.cubin": {
+          "sha256": "67d5596813b74c7d60acb0071dc3ce0c3c856b019890ffab8af909c57ec4f6e0",
+          "bytes": 31456
+        },
+        "assets/runtime/aot/cubins/47d9d933b9de7e00ce312d1ecfcb4c960be6e29c2414de69dfe5c9b30e36ddeb.cubin": {
+          "sha256": "64569053c7c2cb93e0f5ea1c7d70568bd41d8dfa8e7a8131f57d59a57ecd8d03",
+          "bytes": 30984
+        },
+        "assets/runtime/aot/cubins/47f7f6ea9863cd47b199e7752be93a9082020a9744cd5556405ef770ccd11406.cubin": {
+          "sha256": "ed62dc8dbfcc800c545b955b2e576f6092f5f43381d446f587a6d355ae4aecaf",
+          "bytes": 66328
+        },
+        "assets/runtime/aot/cubins/49ebf4c7fabad6b5374ac06c9ef6f9ec617bd934412e7c2e542422baf54cc601.cubin": {
+          "sha256": "103ef6480008c8daaa62a34e3ae56e3130d0391acb50d68ca736b68953a6ce20",
+          "bytes": 158048
+        },
+        "assets/runtime/aot/cubins/4c7362de81f1020527b8bbd27e3368b388606630d70dd190c4a6c15bffcf9c9c.cubin": {
+          "sha256": "9335e73793a4d857b71e342b904b9802b1d40df0a608f58ed5ce7a85ee5084ab",
+          "bytes": 26896
+        },
+        "assets/runtime/aot/cubins/5167db895b5a02ea4d438cac9755c92a31ae2ae7abf3bcc5e8442d6318bd0886.cubin": {
+          "sha256": "e8ec08e0e6dacdb9446c5b5ff497418d673fd90259fefd28abcb1eadb85bb7f0",
+          "bytes": 12520
+        },
+        "assets/runtime/aot/cubins/548e18dd1e809bb90b4772247b43f899aa71a924757a628efc380c371323efb1.cubin": {
+          "sha256": "d1b74f00c6a41fc1d2758e5b9f12b2c8e92208b76b8735a65049236f98f5f2f8",
+          "bytes": 24648
+        },
+        "assets/runtime/aot/cubins/55595738317754cb9f7144e4b6a7e926d1db66508330b3a4051832e8c1b377b4.cubin": {
+          "sha256": "0dcd6a4fa74700ebd3245c6bfb60363726669e06ccdab4fc3f55a4e69efc923d",
+          "bytes": 153976
+        },
+        "assets/runtime/aot/cubins/557dcc4461dd2e1714d294909005742a8338ef243413c25b4c7f35df4e335266.cubin": {
+          "sha256": "bdb469b52c8dbfe760ae47a8a2b9bc67edfe20a7def9c6dec16ee6e05ad22770",
+          "bytes": 43440
+        },
+        "assets/runtime/aot/cubins/5d4bf0eb8fe9392e341825786f7d3496c1f7b736594e2aa361ef685ec4029a9e.cubin": {
+          "sha256": "8e822d0665def53d012b2dc0ac38aa3ac012b4eb7a8f5fc36f01c2a80e106363",
+          "bytes": 19728
+        },
+        "assets/runtime/aot/cubins/5e06c68610646f5a3c4eefc241211ef7b3efec102554f906bb10a52689dfad4b.cubin": {
+          "sha256": "ba93c90fbfcf6dbd9f670b177d9a14b82c62a10f6ffaa81a3a551745c9f9f05f",
+          "bytes": 340232
+        },
+        "assets/runtime/aot/cubins/5e53d4d28d2340ed52438915d4a942c6a4e9693974d4c0b20ca49c642c427bbe.cubin": {
+          "sha256": "101460f6c6c557e2604f0c3ff68a25fa33819dbbcd2f55f394e137dd56ca8524",
+          "bytes": 27064
+        },
+        "assets/runtime/aot/cubins/5ea6cc5e4601a4ffff59338c30752976f11d5b8236b2200937422fdf367da043.cubin": {
+          "sha256": "cbc80d458cd153284daf845adfbcd34ae7154522cfe29e7edf31629c9cc97b18",
+          "bytes": 56832
+        },
+        "assets/runtime/aot/cubins/6117407000f960b97368fd299b3d45c290f80b551f582b88d44fea085622a250.cubin": {
+          "sha256": "441434e1a1f6f729c26262010a07bbca8d2006bd3991dd537587afd9c8ce6dd9",
+          "bytes": 57808
+        },
+        "assets/runtime/aot/cubins/667a72852cc17a4affaca51c82c0a8f51afec2aab8065287fe68a9560b9c533b.cubin": {
+          "sha256": "9335e73793a4d857b71e342b904b9802b1d40df0a608f58ed5ce7a85ee5084ab",
+          "bytes": 26896
+        },
+        "assets/runtime/aot/cubins/66f9d6120ce96823ea8acd9c4aff42d73312604f44fb0a3126ae5db284ce4964.cubin": {
+          "sha256": "6205d7e74bb83def75aaf30368df8a81f6dfdcf3c5073a6384e0b988f0c72bd0",
+          "bytes": 24488
+        },
+        "assets/runtime/aot/cubins/682a41ff8d49f4f8785afc873cb55538bb1efb9b41936e1ac464ad0780c81492.cubin": {
+          "sha256": "e9bc8edf32cef31f39702e896d76bb05eedc7cd4518da38c98d0d6ed702a5ddc",
+          "bytes": 122112
+        },
+        "assets/runtime/aot/cubins/6992ca6de5cba1e56c8974fdcd85d859b8699d038dd3ead39cb8ecd24d3daa81.cubin": {
+          "sha256": "a65959a02377ddcfd1c5378f2ebc5eb48b87236fc35955266d7df26973c2638e",
+          "bytes": 43120
+        },
+        "assets/runtime/aot/cubins/6afb066ad94106af0dd177e39c5cd1121c5bb0930dd030cbe318f636129c9518.cubin": {
+          "sha256": "81d772cf4c60c2986ee1d25f7c5f847278e5f580230751a22288530caeb1f04c",
+          "bytes": 76024
+        },
+        "assets/runtime/aot/cubins/6d116e9f4555c65c65ee92640c1a20bc0f415c8576d76b3db6706dc04d7d7e2e.cubin": {
+          "sha256": "27ab26391063c518ab557e7f07869a3d6a07bc54906b7efb0c819514833100ec",
+          "bytes": 48736
+        },
+        "assets/runtime/aot/cubins/6fa7f8297409ad07dc3287ec22b93e2fe08690ed8c62fed289c0d91500533796.cubin": {
+          "sha256": "e1c9c1c16687edd9ea51ca51a0af894c9ec201d533b980df25f9e0d09d1fbe5d",
+          "bytes": 43080
+        },
+        "assets/runtime/aot/cubins/72d25736422020c48ea0da6387ef60cc31b2e2e231e7138c99450e13233e068d.cubin": {
+          "sha256": "8c0346376dfcdcfcd7006d96a4de62a3ada2b6986d0d1ff146794c81f45823ec",
+          "bytes": 111912
+        },
+        "assets/runtime/aot/cubins/733ce08d0abca506f0fadb71f0f84f98a37fd80c2525a767a9ad3e69a9b9b8ac.cubin": {
+          "sha256": "ee7c13b9d26d45d9d72376f8513810358a3049c0f3e3046f113502e68b1d174a",
+          "bytes": 64272
+        },
+        "assets/runtime/aot/cubins/73921ffa4b537ebddd9d50bf39d5215155cc4ffa43bdafb5a1253fbb272ab399.cubin": {
+          "sha256": "e915c5cbaf5c884e614b4fcad992aa42f1cb58ce583a1c8fc5c6caae2b4b7ec7",
+          "bytes": 25496
+        },
+        "assets/runtime/aot/cubins/73b20e07e7da952cf0bd713174bff909d8deb6ab2bf659ff72209f1cbfe83e2d.cubin": {
+          "sha256": "885c0ee33747d741043eebb5c9887ce27fe47f7d35b25086a2348f048c198545",
+          "bytes": 57368
+        },
+        "assets/runtime/aot/cubins/7f20fabea789ca606a438e9133f71bf52d379eed7b513abff418a3729a06f6b4.cubin": {
+          "sha256": "7d51afc442effa2c1e37436bdf7c999d50baa06781ada96fb2bf3ba056c9fe0d",
+          "bytes": 32808
+        },
+        "assets/runtime/aot/cubins/7f9855dd2c5691fb7d6b6453c50da59fb9e7d68eccca9bb95c657b413f54a214.cubin": {
+          "sha256": "19568d891829ac5d59b3c4b2b670b3e6054b1e31e15ff773053fe79ea14ad9d4",
+          "bytes": 18440
+        },
+        "assets/runtime/aot/cubins/842c67eb67d08eb4973b61283ecd0838f3db0063f994722c48c3dc5fd23290d2.cubin": {
+          "sha256": "74b34ab3bb7c3aa91284da34f958da1eb093c27dc5911ed9c73f4a2047336be2",
+          "bytes": 340232
+        },
+        "assets/runtime/aot/cubins/84f7cc4721ec87d8fef5870d95b0dbb954bdb68fd23350b34690f01afd150055.cubin": {
+          "sha256": "8e822d0665def53d012b2dc0ac38aa3ac012b4eb7a8f5fc36f01c2a80e106363",
+          "bytes": 19728
+        },
+        "assets/runtime/aot/cubins/8c2edbcddf514b0a31e3962b21872f62d3b46b1e088cfab11c86522d19bcee62.cubin": {
+          "sha256": "d1eb8efded7d183ac1ed84e54220cb636a9162be933f3448c9f0de53ab712e29",
+          "bytes": 158360
+        },
+        "assets/runtime/aot/cubins/8c31a65820b9f76bc81fe463e7e2f3317f5a88073b5771c5dd8436b5fa05a034.cubin": {
+          "sha256": "880f8dcd87b52aca22127f356b3a03c7bacc39e984e0282b30e29a73b10aa76e",
+          "bytes": 12520
+        },
+        "assets/runtime/aot/cubins/8cf72a9253526034b1b93892c28f31493890590fe1d0f48c988d22976cdabbfe.cubin": {
+          "sha256": "1c427780cbb0a7e1152a09a4f8f2dbb7d28c8946bfbb91efb38489b2d78e548d",
+          "bytes": 25696
+        },
+        "assets/runtime/aot/cubins/8e981fea68e08498ca4bd90a6ddae68365f901ec3657ac5ee2a3d9a7724ab6e9.cubin": {
+          "sha256": "70e9a3559f8cc7adaac383eb0c04586f39087a35f2ac9267922a132b266401e1",
+          "bytes": 340160
+        },
+        "assets/runtime/aot/cubins/9067c2473c9fa191330267fa164736f96648214b72a315d792125fdd60c578b8.cubin": {
+          "sha256": "896522207d32533b06b98b76d11a9d0eeaead4cacdbd181a76e9175242e2c443",
+          "bytes": 57656
+        },
+        "assets/runtime/aot/cubins/91ee1575dfdbec0a425d91ae351928f8336aeb76e7f383854687188d16af7762.cubin": {
+          "sha256": "6f0ae0b8ebecb2fcff150deaef06c9af17a6a1f03c915883b18f4cd22ad504e9",
+          "bytes": 22816
+        },
+        "assets/runtime/aot/cubins/92036de8a438151a06be4c666c36be65a6d9118b15424543bdb5eda9efdc2f72.cubin": {
+          "sha256": "fb25ca82dc9969b529c6b554a67c947a93eeaf4871b076dc1cdeea6418d75aa1",
+          "bytes": 16360
+        },
+        "assets/runtime/aot/cubins/96aa034115fce7893a9a6f23371cde83d4aa51d6b596e4573880500742d0be5f.cubin": {
+          "sha256": "f236f58f7ab6a4b6c5b8e3ffccea7fc9bfc5ff88a8fcfbb8dd0821f6d25a0c7b",
+          "bytes": 15128
+        },
+        "assets/runtime/aot/cubins/98fc68354bb12f92dd0f6c5fd33a396d4b516c272f312027a5b3b11d9de41e2f.cubin": {
+          "sha256": "93a13954ca57cfa3ac6ec46341147a870616f71658c541b019d77384e2be8dd1",
+          "bytes": 57688
+        },
+        "assets/runtime/aot/cubins/99b962017865d438a3875a20f1c987746e03b0c7cb57271b5ace3674852c869e.cubin": {
+          "sha256": "64569053c7c2cb93e0f5ea1c7d70568bd41d8dfa8e7a8131f57d59a57ecd8d03",
+          "bytes": 30984
+        },
+        "assets/runtime/aot/cubins/9a85bc5057eaa315b2ce609d9110d05107ffbf0436f35f20598da0824437a84b.cubin": {
+          "sha256": "d10d049ae9daae719b689154377488e01183d20e7bd15d2a056e3e7b9c581ff8",
+          "bytes": 35048
+        },
+        "assets/runtime/aot/cubins/a11c05f3c40be0b3ff413b6e4370de1ca25053742a6db662430257641270ba35.cubin": {
+          "sha256": "c041109c053824cad7df3a39ae79fed1aac290d252d63e0da050edd84b568eef",
+          "bytes": 26840
+        },
+        "assets/runtime/aot/cubins/a1efeaf1ada02eb54a15c605edfc94b9707a3d68940fe15fb728036934c42ca9.cubin": {
+          "sha256": "1bce3c77bf5ce83ad2fa65f16a595ffc7f151aee7552dbd42d6814f473805ed8",
+          "bytes": 29184
+        },
+        "assets/runtime/aot/cubins/a4f8429672e0ae1daf0d388f396065c5d4af39e0ab53a9414e17336649210af9.cubin": {
+          "sha256": "af743e45e720622f65516936e733be59bdaa83e751db05d909f4492dda560237",
+          "bytes": 340160
+        },
+        "assets/runtime/aot/cubins/a83c56cb43c887804f67f16a26109bb83a3b11a843eec962e695bbe030cd4ad0.cubin": {
+          "sha256": "94aaadbdb378fa8019354cde8c19307009eb43c736e3199595ab4358186a584b",
+          "bytes": 27416
+        },
+        "assets/runtime/aot/cubins/aa3b5f81129a9a8831727df020bb9441c720f498cb6e636cfd803757533b571d.cubin": {
+          "sha256": "8c0346376dfcdcfcd7006d96a4de62a3ada2b6986d0d1ff146794c81f45823ec",
+          "bytes": 111912
+        },
+        "assets/runtime/aot/cubins/b075dd9a7fc63f76bec787eb735bdf24b486ad239f006f9346d28c5a54d66638.cubin": {
+          "sha256": "6f6eddd127f60b346b0976a5d0e73a61c281d3f6a4a86daeddedda318950afa1",
+          "bytes": 61024
+        },
+        "assets/runtime/aot/cubins/b192d6dd531c24be7e1c584e5c22d9db3c9682bc63f6c8efd3d8de39c99c9028.cubin": {
+          "sha256": "32cc09a5bccaad9dce6765cff56c4fd5cd505166f67a717d8c01a97c3a751672",
+          "bytes": 65120
+        },
+        "assets/runtime/aot/cubins/b7cd42b15c5dd35e8bc79e81bd8cd09287d1905b15f93062230dd1bfdd3f7ebb.cubin": {
+          "sha256": "962aec717e0c8afcf467af0446242e8306f411fd9c43d550c56131c2e6be7787",
+          "bytes": 25496
+        },
+        "assets/runtime/aot/cubins/b8dc92881f34ce8b69a6281a625c2f4625a99e1619ebc532f14b32f43885c0ee.cubin": {
+          "sha256": "cbc80d458cd153284daf845adfbcd34ae7154522cfe29e7edf31629c9cc97b18",
+          "bytes": 56832
+        },
+        "assets/runtime/aot/cubins/ba05ee1472ca94d6d5cf07f7ba6f05120fcee2bf32ebdd8234419a945f16d77c.cubin": {
+          "sha256": "87dc14775d2f257cf42d7c7e9f2e727c3a16d470a75f92b70f5066893955b050",
+          "bytes": 26656
+        },
+        "assets/runtime/aot/cubins/bb58f64d93f725c5a1a57e6d31bb93b3bda25182ef92e9405d3563983becd230.cubin": {
+          "sha256": "ecab1ee6b3e7254b1570d3fb16d9cf687a4f8e748b0d6380c4fba1feb4e61974",
+          "bytes": 41360
+        },
+        "assets/runtime/aot/cubins/bb723a15e56fe5eecb1221a7118f241b55708eec12402c8ea3d58316e7657b06.cubin": {
+          "sha256": "6616b765d49f2d256c44a6dec13caf149d2c431417e246d29f31ea81ad8e8838",
+          "bytes": 16392
+        },
+        "assets/runtime/aot/cubins/bbdb5729a9b4447f54e01f6eb99a211beb62a0fa58332c7124e87ea1d7826ed0.cubin": {
+          "sha256": "d651a68cbbb62b892366fc49ded9399fd8000daeb72511eff0b8f1ae59bfe2ed",
+          "bytes": 111568
+        },
+        "assets/runtime/aot/cubins/be19b4f4994896ca57c7d149be146db178ff8c03f9e466a1fc8880dbb485076d.cubin": {
+          "sha256": "d1b74f00c6a41fc1d2758e5b9f12b2c8e92208b76b8735a65049236f98f5f2f8",
+          "bytes": 24648
+        },
+        "assets/runtime/aot/cubins/bfac92f123b8a7d81a6b341f808fed2f825b87e5d78a4c268196ac25c60f502c.cubin": {
+          "sha256": "741f21b11da8b6bcd6238f079bb4c5e66941ee7014bdd49f50324206ca660444",
+          "bytes": 33568
+        },
+        "assets/runtime/aot/cubins/c1b9f7c50da7f292a0244ff880c34d051a51148df8342ec82884578c1f80a331.cubin": {
+          "sha256": "a65959a02377ddcfd1c5378f2ebc5eb48b87236fc35955266d7df26973c2638e",
+          "bytes": 43120
+        },
+        "assets/runtime/aot/cubins/c492a2a271f5f33f24efdcc48e5af0271dcd4d40d4c68ea62f9bca2a8b72d71a.cubin": {
+          "sha256": "ee5ef325053fd82ff326543084c1aab41dce0321bea2ee89f839a6d47076d1ff",
+          "bytes": 153744
+        },
+        "assets/runtime/aot/cubins/c4fa25bde248be72d385e46636d01ef5ec8a4754145281289ea7c4ebd763a600.cubin": {
+          "sha256": "7d51afc442effa2c1e37436bdf7c999d50baa06781ada96fb2bf3ba056c9fe0d",
+          "bytes": 32808
+        },
+        "assets/runtime/aot/cubins/c57fb3b53da35dbc64c2f02c7c71196960ba139dad18b16316d31851f8db2df6.cubin": {
+          "sha256": "9ad457bc4f041493ca7d5fbbc90cd277a7d2e7768066c5ff14eed27cf7dac89b",
+          "bytes": 340232
+        },
+        "assets/runtime/aot/cubins/cc1e2edb672b2817833b0c05cbf5f06fed2b3bde0d0d9bf7a8a32386aff41e54.cubin": {
+          "sha256": "cfb21e07a8285be56ceaf9112e77a52e354e09c14d2aa2c7b5c100f26c1e2e47",
+          "bytes": 57632
+        },
+        "assets/runtime/aot/cubins/cc718553b3b703941416f3da755939e7db1c3ebde4b6adb0be84ae508a493873.cubin": {
+          "sha256": "9d195d458cb5561f47167345b3e027c45f4103234b6c5e15e09819ed86d720a2",
+          "bytes": 194200
+        },
+        "assets/runtime/aot/cubins/d1047cdd6f45e98f7a8e819288d744ed9def283b1c901fede0513bedc84690ac.cubin": {
+          "sha256": "be185a4d7af5a8cb60869e90e8a80b83a626ec6da03a58dd82d9b8a94370a1d9",
+          "bytes": 154096
+        },
+        "assets/runtime/aot/cubins/d68a09a780edec8e13397daa876ae60894ffbbc236e181ec1decc29ba7128190.cubin": {
+          "sha256": "fb5672c4cfde8bef341c0a9cf9e1c6754bbbeb5058e421850b444737d7548d69",
+          "bytes": 20224
+        },
+        "assets/runtime/aot/cubins/d81700b0730d1adef5720a62b6fa9fdd9ec7dceb2b74bdfc2e63cd01166415a5.cubin": {
+          "sha256": "bca982f7f4090d9b60cf8d495db6ba01e46c4bdc028ce98090101611d3223f22",
+          "bytes": 154368
+        },
+        "assets/runtime/aot/cubins/d8487f6cbf255f53a1b62a659a7dbc90fd46db765dcc102f544cc4e92ed72e9a.cubin": {
+          "sha256": "1136f3190e6fe3e069861c86a919b0b229597ee4daa5eeb0d4f580c5d94ce4bb",
+          "bytes": 85976
+        },
+        "assets/runtime/aot/cubins/d8e21e79072da28dafda5d6a81f53af070b6515d62354d3bf207fe6e85bf1530.cubin": {
+          "sha256": "1e3c88249c585197ade02682c8b4cd74a18c77932399a7d52b706e29068f06dd",
+          "bytes": 181320
+        },
+        "assets/runtime/aot/cubins/ddddf693eba1824e80ffcc6c4b82e349b2f93806ada29d40bc1007e8b9fc5949.cubin": {
+          "sha256": "26dab268333c65b3b534862d81807d3c9ddb8d102b3414dcd3fe47a1a73094ad",
+          "bytes": 158176
+        },
+        "assets/runtime/aot/cubins/de7a904c232ac78ba849f3562d3f74160cb6e55bc6680ab54c88a9638dc52485.cubin": {
+          "sha256": "ec974958e45444594b6af09d9760cb954df446adabbb11205857a7e07439e9fd",
+          "bytes": 58896
+        },
+        "assets/runtime/aot/cubins/dfe17f7718e456b64de918d910905140d6f04704834699a6f56133f37953e0d0.cubin": {
+          "sha256": "c4719c1e70b97b6c85bd4d1abd6fee62771dde97998af3cc7de7207095a2594c",
+          "bytes": 16328
+        },
+        "assets/runtime/aot/cubins/e13431d7addb896d0577f42317533655d0077d75c8f7a62635a7e0df85371bbb.cubin": {
+          "sha256": "ed62dc8dbfcc800c545b955b2e576f6092f5f43381d446f587a6d355ae4aecaf",
+          "bytes": 66328
+        },
+        "assets/runtime/aot/cubins/e4e7d1a095db67a2748396346963825efe5b6ab7bed9150b670168723b6a821c.cubin": {
+          "sha256": "82973109a60e67ce76d9d382300e4c66df909d7ec65ae5deb1437343e73b4458",
+          "bytes": 153728
+        },
+        "assets/runtime/aot/cubins/e52a624ef370db3d93973a923acbc23ec4a236d7498dcb897eb9614731910c78.cubin": {
+          "sha256": "6f0ae0b8ebecb2fcff150deaef06c9af17a6a1f03c915883b18f4cd22ad504e9",
+          "bytes": 22816
+        },
+        "assets/runtime/aot/cubins/e62468ea60c88d25eebfa6a294669362029c9a1c75294eb5283005a2d6bd9e95.cubin": {
+          "sha256": "3fad09a0ec67a0687ea545b583b1559f2ae6591488c84d91dda493cdd680bea7",
+          "bytes": 57800
+        },
+        "assets/runtime/aot/cubins/eb9b273199188a85b743a56cf349cc06d2844c401fe23db15c80bdfc4029cabb.cubin": {
+          "sha256": "2a8dd8d88dc6aed344ca9e3adf4f84f0a7ae0b6c01d108a783d01d476612adcd",
+          "bytes": 18200
+        },
+        "assets/runtime/aot/cubins/ede24dfef9c878ed91ff9ce2da06a1482a7eb312699f8e8a84a98c298d310ba3.cubin": {
+          "sha256": "6616b765d49f2d256c44a6dec13caf149d2c431417e246d29f31ea81ad8e8838",
+          "bytes": 16392
+        },
+        "assets/runtime/aot/cubins/edfc8fe32c629c7fd902554c8904f922e893f4d2de60d1ad80e05b58c40d0cac.cubin": {
+          "sha256": "fb5672c4cfde8bef341c0a9cf9e1c6754bbbeb5058e421850b444737d7548d69",
+          "bytes": 20224
+        },
+        "assets/runtime/aot/cubins/eea9db468cb9d1f4409f382e8eb4415cf2965b8b5bb2957af4fcd239099c5df3.cubin": {
+          "sha256": "ed556cb57e6e1078afd36a72fad9389d1456589950d7356891b0d045dbdbcdae",
+          "bytes": 57416
+        },
+        "assets/runtime/aot/cubins/f1f1824bc1a6863f90806397073d3cf2027de60b8567fcc9872b75577e4e5603.cubin": {
+          "sha256": "da369358b8be43d2a42a9b64fa4e542742149f49f81dbde6f1bbcd7837a8c0f8",
+          "bytes": 153976
+        },
+        "assets/runtime/aot/cubins/f4a7ecebb0d9c8ff72ea318cfb2942783127ac0db6ce351c4361f6c8be6a5b8b.cubin": {
+          "sha256": "8f4682f6f5f546cda8b02bd57d64ca74777be6dd77267aebe7ea4db608ad383e",
+          "bytes": 15432
+        },
+        "assets/runtime/aot/cubins/f60ba3c55d9fd7ec7556b0e153e1f19e82ffcc7852bc245dab77eb2037fe6f21.cubin": {
+          "sha256": "ed3d12e4fe204337bd98a9eb82ee89958c4a8d0ac8691fbd9e8c834a29752e84",
+          "bytes": 340232
+        },
+        "assets/runtime/aot/cubins/fb549dd00d9f5d37debb8e5ff2bd7abe51c966e0ee7e7138c1f75a3908302ecd.cubin": {
+          "sha256": "a65d2281af1e076842998262c9e0cb91a4d49dd30d51de2cb246fbe9c092db0d",
+          "bytes": 58080
+        },
+        "assets/runtime/aot/cubins/ff1dc4bdea18a28ae783d394cb3f825df8c410e3e57e6fc7a93e5f0345303835.cubin": {
+          "sha256": "38d7deb86732f136c0dd085bff6d4187ce4322c733523111c3ae9add8c5b8ce1",
+          "bytes": 22800
+        },
+        "assets/runtime/aot/cubins/ffc054a1d2ee2eaea4714e7b5279bdb6f86e08e038f12078982b8b96e90a0cc4.cubin": {
+          "sha256": "9a74617f8e2ae28a2a47a17ec6ec718e88274cb8b39771cdb9e3590e62f4524b",
+          "bytes": 153976
+        },
+        "assets/runtime/engram-token-map.bin": {
+          "sha256": "b9a7cf9d341f5daf8fc435dbc36153bf4b28c1b8075be20de30d0556fb910511",
+          "bytes": 517680
+        },
+        "assets/runtime/rope.bin": {
+          "sha256": "33098c8ed37b5715839f65f3af7b3a37b5cb0ab462377cd0bd07a49d7e4d4c7e",
+          "bytes": 34603024
+        },
+        "bin/tensorfold-dsv41": {
+          "sha256": "81ac485b61bced36c3c7153909704f7cc7a631dece65e68ffb558bbb831da552",
+          "bytes": 53360008
+        },
+        "bin/tf-dsv41": {
+          "sha256": "d077648614b3ddb6bf7c8df32fa4187de993d5540670b6b1c8db13584843b542",
+          "bytes": 49030296
+        },
+        "lib/libnccl.so.2": {
+          "sha256": "1c8618b866734cbdd5401715d6178be763ece283b7f808ecf86dedab211162c1",
+          "bytes": 217995896
+        },
+        "lib/libtfgrammar.so": {
+          "sha256": "64a30d23b890d4bfce2854cbb6659fc636cd36dacf0eb1696e2a5b2d732e2e8b",
+          "bytes": 3123360
+        },
+        "licenses/FlashAlign/AGPL-3.0-only.txt": {
+          "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+          "bytes": 34523
+        },
+        "licenses/TensorFold/LICENSE": {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "bytes": 11358
+        },
+        "licenses/TensorFold/LICENSES/Apache-2.0.txt": {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "bytes": 11358
+        },
+        "licenses/TensorFold/LICENSES/MIT.txt": {
+          "sha256": "be6a9ee4462784a762b21790954b8e76c4dcacc9fb6da2a40d03a8a9bddec93e",
+          "bytes": 1080
+        },
+        "licenses/TensorFold/LICENSES/Mia-FlashNext-MIT.txt": {
+          "sha256": "ed01c9ef861bcb1c20f028739d8c7102c6f04364ffe9903e5088c6d6449a4aff",
+          "bytes": 2265
+        },
+        "licenses/TensorFold/LICENSES/MiaAI-Lab-MIT.txt": {
+          "sha256": "ed01c9ef861bcb1c20f028739d8c7102c6f04364ffe9903e5088c6d6449a4aff",
+          "bytes": 2265
+        },
+        "licenses/TensorFold/LICENSES/Pillow-MIT-CMU.txt": {
+          "sha256": "15181e7363dca9aed78b79bebebc7fde7f1814b8bd311ea3b87ae8ccadfc185b",
+          "bytes": 1457
+        },
+        "licenses/TensorFold/LICENSES/PyTorch-BSD-3.txt": {
+          "sha256": "bd018feef8825e88181c84eb7e3aa4eafb8f08a20d9fd6ef948569610c4a3e43",
+          "bytes": 3464
+        },
+        "licenses/TensorFold/LICENSES/avx_mathfun-zlib.txt": {
+          "sha256": "836cbf8808e61f15cc6712ffb449406c194ed8ef573961d0f3bcac9f41a963a4",
+          "bytes": 1162
+        },
+        "licenses/TensorFold/LICENSES/mlx-omarchy-MIT.txt": {
+          "sha256": "a74138dc7f24477a0bdb283cfa7651db16d31e82b17a0c79dd7fcc9bd275431f",
+          "bytes": 1098
+        },
+        "licenses/TensorFold/NOTICE": {
+          "sha256": "74b59811a5ebc3c28e7fc89f8f189854b6ca6d44392a98394950b24ba3c1b8e7",
+          "bytes": 356
+        },
+        "licenses/TensorFold/THIRD_PARTY_NOTICES.md": {
+          "sha256": "90c2ba372e01900ffbda851b03d8c37314f625faf67938cefde720320cb5932b",
+          "bytes": 29079
+        },
+        "licenses/libnccl.so.2.txt": {
+          "sha256": "0f0174a6b4e0b33ac26375bf729533075b32f4c51a5b6802a3d742d7dcdc9a76",
+          "bytes": 1895
+        },
+        "licenses/libtfgrammar.so.txt": {
+          "sha256": "6f8343eb517e5a31d12a37f85fcf0320bbdb91f960b456533af647ddfe00eb91",
+          "bytes": 11412
+        },
+        "manifest.json": {
+          "sha256": "e0341921d125dd7fcde1ebd90714bcd993615e2550ad8f86b3ff365eb5c6de65",
+          "bytes": 34252
+        },
+        "sources/FLASHALIGN-LICENSE.md": {
+          "sha256": "a47108c036aac05d3f5320de6340bfa65f9189effe2f379ae6615b4abd83515b",
+          "bytes": 1508
+        },
+        "sources/auxiliary/deepseek-runtime-aot-source-v1.tar.gz": {
+          "sha256": "080ed74d07016a546cd03f9e85b137767f00bc96d1f24fb1c8fb831e2506fcd7",
+          "bytes": 147628
+        },
+        "sources/auxiliary/deepseek-runtime-aot-source-v1.tar.gz.LICENSE.txt": {
+          "sha256": "0ad6c764b7affef25ef1d4ff1e95a3b498555de7f2ef8cd5687f844b775e29d1",
+          "bytes": 1162
+        },
+        "sources/tensorfold-source.tar.gz": {
+          "sha256": "c475b8a77cda207cf546e9808e0fca3d1f8739b6623cc58b39e8ea751e357118",
+          "bytes": 30779376
+        }
+      },
+      "profile_schemas": [
+        "flashalign.native_wo_b.v1"
+      ],
+      "transforms": [
+        "native_matrix_override_v1"
+      ]
+    },
+    {
       "id": "tensorfold-native-qwen38-linux-aarch64-sm121-v1.1.9-r4",
       "model_types": [
         "qwen3_5",

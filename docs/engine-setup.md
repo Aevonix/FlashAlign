@@ -48,7 +48,7 @@ a backend. GGUF files select llama.cpp. Choose another engine explicitly with
 | SGLang Gemma 4 | [Pinned 0.5.20 projection integration](../engines/sglang-gemma4/README.md) | Same pinned 26B A4B FP8 checkpoint and 50-site profile, one GPU, NGRAM with three draft tokens; native protocol checks passed, exact-answer limit remains |
 | vLLM DeepSeek V4.1 Flash | [Pinned native container and tensor operator](../engines/vllm-deepseek-native/README.md) | Official 1017 FP8 checkpoint, four SM120 GPUs, adaptive DSpark7, FULL decode graphs and eager prefill; public-package GPU and wizard qualification pending |
 | llama.cpp | Upstream 0.8.0, commit `8642541`, source patch and profile converter | Qwen3.8-27B and Gemma 4 26B A4B Q8_0, one GPU; Qwen `draft-simple`, Gemma ngram or its official MTP draft |
-| TensorFold | Compiled 1.1.9 bundles for Linux x86_64 and aarch64 | Exact model, GPU, operator and draft capabilities come from each qualified bundle; see [TensorFold setup](native-tensorfold.md) |
+| TensorFold | Compiled 1.1.9 and 1.2.0 bundles for Linux x86_64 and aarch64 | Exact model, GPU, operator and draft capabilities come from each qualified bundle; see [TensorFold setup](native-tensorfold.md) |
 
 The included integrations can be built from public engine dependencies; they
 do not require access to a private engine repository. Each variant declares its
@@ -125,7 +125,9 @@ Each engine package declares the model families and profile transforms it suppor
 TensorFold setup checks declared configuration, weight-index and quantization
 fingerprints before creating deployment state. A match must come from one
 complete declared checkpoint variant.
-The installer accepts compiled TensorFold 1.1.9 bundles. Python handles setup
+The installer accepts declared compiled TensorFold 1.1.9 and 1.2.0 bundles.
+DeepSeek native-matrix profiles require a matching 1.2.0 bundle with an explicit
+compatible EXL3 base; the profile's original official model pin is retained. Python handles setup
 and process supervision, not inference. CPU architecture, CUDA targets and exact
 source revision are checked independently of model and profile compatibility.
 

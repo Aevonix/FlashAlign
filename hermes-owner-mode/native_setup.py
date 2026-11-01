@@ -16,16 +16,18 @@ from urllib.parse import urlsplit
 from .auth import ensure_key, read_key
 from .drafting import active_drafting, draft_settings
 from .model_metadata import declared_openclaw_compat, declared_openclaw_request_policy, declared_request_compatibility
-from .native_bundle import check_bundle, host_platform, sha256
+from .native_bundle import check_bundle, check_profile_contract, validate_manifest, host_platform, sha256
 from . import native_cluster
 from .native_remote import member_path, owned_directory, cuda_inventory, prepare_replay_directory
 from .profiles import read_json, validate_profile, stage_profile, _compatible_models, ProfileError, NATIVE_FORMAT, profile_fingerprint
 from .setup_runtime import SetupError
 
 
-def checkpoint_matches(info, profile):
+def checkpoint_matches(info, profile, manifest=None):
     try:
-        candidates = [profile['model'], *_compatible_models(profile.get('compatible_models', []))]
+        candidates = (_compatible_models((manifest or {}).get('compatible_profile_bases'))
+                      if profile.get('format') == NATIVE_FORMAT else
+                      [profile['model'], *_compatible_models(profile.get('compatible_models', []))])
     except ProfileError as error:
         raise SetupError('Invalid compatible checkpoint metadata') from error
     pinned = [{k: row[k] for k in ('config_sha256', 'index_sha256', 'quantization_config_sha256') if row.get(k)}
@@ -34,6 +36,8 @@ def checkpoint_matches(info, profile):
     if any(not isinstance(value, str) or not re.fullmatch('[0-9a-f]{64}', value)
            for row in pinned for value in row.values()):
         raise SetupError('Invalid checkpoint fingerprint in the selected profile')
+    if profile.get('format') == NATIVE_FORMAT and not pinned:
+        raise SetupError('Native matrix setup requires an explicit compatible serving base')
     if pinned and not any(all(info.get(k) == value for k, value in row.items()) for row in pinned):
         raise SetupError('Checkpoint metadata differs from the selected profile')
 
@@ -132,10 +136,15 @@ def speculation(home, spec, manifest, model_id, inventory):
 
 def check(home, spec, profile, *, model_id):
     from .engine_setup import tensorfold_arguments, declared_input_modalities
-    if profile.get('format') == NATIVE_FORMAT:
-        raise SetupError('This native matrix profile requires its vLLM native integration; TensorFold cannot load it')
     if spec.get('source') or spec.get('command'):
         raise SetupError('TensorFold setup accepts a verified binary bundle, not a Python source or custom command')
+    if profile.get('format') == NATIVE_FORMAT:
+        try:
+            manifest = validate_manifest(read_json(Path(spec.get('bundle', ''))/'manifest.json'))
+            check_profile_contract(manifest, profile)
+        except (OSError, ValueError) as error:
+            if isinstance(error, SetupError):raise
+            raise SetupError('Native matrix profiles require an explicit compatible TensorFold bundle') from error
     if spec.get('api_transport', 'ssh') not in ('ssh', 'direct'):
         raise SetupError('Native api_transport must be ssh or direct')
     hosts = nodes(spec)
@@ -144,6 +153,7 @@ def check(home, spec, profile, *, model_id):
         raise SetupError('All ranks in one native deployment must use the same bundle architecture')
     root, manifest = check_bundle(spec.get('bundle', ''), first['config'], profile, platform_id=first['platform'])
     environment = checked_environment(spec, manifest)
+    startup = startup_timeout(spec, manifest)
     hardware_verified = True
     for node in hosts:
         if spec.get('network_interface') and spec['network_interface'] not in node.get('network_interfaces', []):
@@ -171,7 +181,7 @@ def check(home, spec, profile, *, model_id):
     if context is None or context < 1:
         raise SetupError('Native bundles must declare their tested context size')
     for row in hosts:
-        checkpoint_matches(row, profile)
+        checkpoint_matches(row, profile, manifest)
         if (row['config'].get('model_type') != first['config'].get('model_type')
                 or row['config_sha256'] != first['config_sha256'] or row['index_sha256'] != first['index_sha256']):
             raise SetupError('Native ranks must use matching checkpoint metadata')
@@ -207,6 +217,7 @@ def check(home, spec, profile, *, model_id):
               'source_revision': manifest['source_revision'], 'platform': first['platform'], 'hosts': hosts,
               'hardware_verified': hardware_verified,
               'bundle': str(root), 'manifest': manifest, 'arguments': arguments, 'drafting': drafting,
+              'startup_timeout': startup,
               'context_window': {'tokens': context, 'source': 'TensorFold --context'},
               'openclaw_compat': declared_openclaw_compat(manifest, kind),
               'request_compatibility': declared_request_compatibility(manifest, kind),
@@ -235,6 +246,13 @@ def checked_environment(spec, manifest):
     return env
 
 
+def startup_timeout(spec, manifest):
+    value = spec.get('startup_timeout', manifest.get('startup_timeout', 1800))
+    if type(value) is not int or not 60 <= value <= 7200:
+        raise SetupError('Native startup_timeout must be an integer from 60 to 7200 seconds')
+    return value
+
+
 def command(runtime, profile, key, node, checked, spec, model_id, port, master, master_port, *, replay_directory=None):
     manifest, draft = checked['manifest'], checked['drafting']
     world, rank = len(checked['hosts']), node['rank']
@@ -256,7 +274,8 @@ def command(runtime, profile, key, node, checked, spec, model_id, port, master, 
     else:
         assets = runtime/manifest['assets_directory']
         env.update(TF_TP_RANK=str(rank), TF_TP_WORLD=str(world), TF_TP_DEVICE='0',
-                   TF_TP_MASTER=master, TF_TP_PORT=str(master_port), TF_DSV41_ASSETS=str(assets))
+                   TF_TP_MASTER=master, TF_TP_PORT=str(master_port), TF_DSV41_ASSETS=str(assets),
+                   TF_TP_PLAN_TIMEOUT=str(startup_timeout(spec, manifest)))
         source = node.get('engram_source', spec.get('engram_source'))
         directory = node.get('engram_dir', spec.get('engram_dir'))
         if bool(source) == bool(directory):
@@ -332,6 +351,11 @@ def prepare(home, spec, profile_path, *, model_id, key_file=None):
     from .engine_setup import private_json, unused_port
     profile = validate_profile(profile_path, allow_missing_payload=True)
     checked = check(home, spec, profile, model_id=model_id)
+    from .profile_assets import materialize_profile
+    ready = materialize_profile(profile_path, cache_root=Path(home)/'.cache/flashalign/profiles')
+    if ready['hashes'] != profile['hashes']:
+        raise SetupError('Profile changed between compatibility validation and preparation')
+    profile = ready
     bundle, manifest = Path(checked['bundle']), checked['manifest']
     if key_file is not None and manifest.get('durable_owner_replay', False):
         supplied = Path(key_file).expanduser()
@@ -383,23 +407,23 @@ def prepare(home, spec, profile_path, *, model_id, key_file=None):
                   if node['rank'] == 0 and manifest.get('durable_owner_replay', False) else None)
         if replay is not None:
             replay_directory = replay
-        argv, environment = command(runtime, remote_state/'profile', remote_state/'engine.key', node, checked, spec,
+        shared_profile = profile.get('format') == NATIVE_FORMAT and node['host'] == 'local'
+        argv, environment = command(runtime, staged_profile if shared_profile else remote_state/'profile', remote_state/'engine.key', node, checked, spec,
                                     model_id, port, master, master_port, replay_directory=replay)
-        files = {'runtime/manifest.json': ((bundle/'manifest.json').read_bytes(), False),
+        files = {'runtime/manifest.json': (bundle/'manifest.json', False),
                  'engine_supervisor.py': (supervisor, False)}
         if '--owner-key-file' in argv:
             files['engine.key'] = (key_material, False)
         for name, info in manifest['files'].items():
-            files['runtime/'+name] = ((bundle/name).read_bytes(), info.get('executable', False))
-        for path in staged_profile.iterdir():
-            if path.is_file():
-                files['profile/'+path.name] = (path.read_bytes(), False)
+            files['runtime/'+name] = (bundle/name, info.get('executable', False))
+        if not shared_profile:
+            for path in staged_profile.iterdir():
+                if path.is_file():
+                    files['profile/'+path.name] = (path, False)
         files['unit.json'] = ((json.dumps({'argv': argv, 'env': environment})+'\n').encode(), False)
         if remote:
-            records = {name: {'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data), 'executable': exe}
-                       for name, (data, exe) in files.items()}
-            native_cluster.rpc(node['host'], 'stage', payload=native_cluster.archive(files),
-                               parent=str(parent), id=rank_id, files=records,
+            native_cluster.stage_files(node['host'], files,
+                               parent=str(parent), id=rank_id,
                                **({'owner_replay_dir': str(replay)} if replay is not None else {}),
                                ssh_config=spec.get('ssh_config'))
             units.append({'host': node['host'], 'state': str(remote_state), 'rank': node['rank'], 'ssh_config': spec.get('ssh_config')})
@@ -418,10 +442,16 @@ def prepare(home, spec, profile_path, *, model_id, key_file=None):
                 path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 if path.is_symlink():
                     raise SetupError('Prepared native rank contains a symbolic link')
-                if path.exists() and path.read_bytes() != data:
-                    raise SetupError('Prepared native rank files changed; preserve the deployment and use a new plan')
-                if not path.exists():
-                    path.write_bytes(data)
+                with native_cluster.source_file(data) as (source, size):
+                    if path.exists():
+                        expected = hashlib.sha256()
+                        for chunk in iter(lambda: source.read(8*1024*1024), b''):
+                            expected.update(chunk)
+                        if path.stat().st_size != size or sha256(path) != expected.hexdigest():
+                            raise SetupError('Prepared native rank files changed; preserve the deployment and use a new plan')
+                    else:
+                        with path.open('xb') as output:
+                            shutil.copyfileobj(source, output, length=8*1024*1024)
                 path.chmod(0o700 if executable else 0o600)
             commands.append({'argv': argv, 'env': environment})
     leader = '127.0.0.1' if hosts[0]['host'] == 'local' else master
@@ -446,7 +476,7 @@ def prepare(home, spec, profile_path, *, model_id, key_file=None):
               'runtime_version': manifest['runtime_version'], 'source_revision': manifest['source_revision'],
               'master_port': master_port,
               'bundle_sha256': sha256(bundle/'manifest.json'), 'drafting': checked['drafting'],
-              'hardware_verified': checked['hardware_verified'], 'startup_timeout': manifest.get('startup_timeout', 1800),
+              'hardware_verified': checked['hardware_verified'], 'startup_timeout': checked['startup_timeout'],
               'status': 'prepared', 'install_dependencies': False, 'requirements': [], 'python': os.sys.executable}
     if replay_directory is not None:
         result['owner_replay'] = {'directory': str(replay_directory), 'durable': True}

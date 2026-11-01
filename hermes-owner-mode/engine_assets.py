@@ -69,7 +69,7 @@ def _fetch(entry):
     return data
 
 
-def _entry(model_type, catalog_path, platform_id=None):
+def _entry(model_type, catalog_path, platform_id=None, profile=None):
     path = Path(catalog_path)
     try:
         raw = path.read_bytes()
@@ -92,6 +92,18 @@ def _entry(model_type, catalog_path, platform_id=None):
             raise SetupError('Runtime asset compatibility must be declared')
         if model_type not in models or system not in platforms:
             continue
+        schemas, transforms = row.get('profile_schemas'), row.get('transforms')
+        for value in (schemas, transforms):
+            if value is not None and (not isinstance(value, list) or not value
+                    or any(not isinstance(item, str) or not item for item in value)
+                    or len(set(value)) != len(value)):
+                raise SetupError('Runtime asset profile compatibility must be an explicit unique list')
+        if profile is not None:
+            schema = profile.get('schema') or 'standard'
+            if (schemas is not None and schema not in schemas
+                    or schema == 'flashalign.native_wo_b.v1' and schemas is None
+                    or transforms is not None and profile.get('transform') not in transforms):
+                continue
         if (not isinstance(row.get('id'), str) or re.fullmatch(r'[A-Za-z0-9._-]{1,128}', row['id']) is None
                 or not isinstance(row.get('sha256'), str) or re.fullmatch(r'[0-9a-f]{64}', row['sha256']) is None
                 or type(row.get('bytes')) is not int or not 0 < row['bytes'] <= MAX_ARCHIVE
@@ -126,7 +138,7 @@ def _runtime_path(name):
     if (normalized not in {'manifest.json'} | RUNTIME_DOCUMENTS
             and not (len(path.parts) > 1 and path.parts[0] in ('bin', 'lib', 'assets', 'licenses', 'sources'))):
         raise SetupError('Runtime archive contains files outside its package')
-    if path.name in ('profile.json', 'profile.safetensors') or 'libcuda.so' in path.name:
+    if path.name == 'profile.json' or path.suffix == '.safetensors' or 'libcuda.so' in path.name:
         raise SetupError('Runtime assets cannot contain profiles or GPU drivers')
     return normalized
 
@@ -189,11 +201,13 @@ def _extract_archive(data, destination, entry):
     except ValueError as error:
         raise SetupError('Invalid runtime package manifest') from error
     models = manifest.get('model_types') if isinstance(manifest, dict) else None
-    if (not isinstance(manifest, dict) or manifest.get('engine') != 'tensorfold-native' or manifest.get('version') != 2 or manifest.get('runtime_version') != '1.1.9'
+    from .native_bundle import validate_manifest, VERSIONS
+    if (not isinstance(manifest, dict) or manifest.get('engine') != 'tensorfold-native' or manifest.get('version') != 2 or manifest.get('runtime_version') not in VERSIONS
             or not isinstance(models, list) or not all(isinstance(value, str) for value in models)
-            or set(models) != set(entry['model_types'])):
+            or set(models) != set(entry['model_types'])
+            or any(field in entry and manifest.get(field) != entry[field]
+                   for field in ('runtime_version', 'profile_schemas', 'transforms'))):
         raise SetupError('Runtime package does not match its catalog entry')
-    from .native_bundle import validate_manifest
     validate_manifest(manifest)
     if files != entry['files']:
         raise SetupError('Runtime package files do not match the pinned catalog')
@@ -277,8 +291,8 @@ def _locked(parent, digest):
         os.close(descriptor)
 
 
-def download_runtime_bundle(home, model_type, *, catalog_path=None, platform_id=None):
-    entry = _entry(model_type, catalog_path or CATALOG, platform_id)
+def download_runtime_bundle(home, model_type, *, catalog_path=None, platform_id=None, profile=None):
+    entry = _entry(model_type, catalog_path or CATALOG, platform_id, profile)
     if entry is None:
         return None
     base = Path(home).expanduser().resolve()/'.local/share/flashalign/engine-bundles'

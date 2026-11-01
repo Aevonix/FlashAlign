@@ -134,14 +134,15 @@ official MTP draft. Other GGUF files require a matching compatibility
 declaration and separate validation. See the [llama.cpp guide](../engines/llamacpp/README.md).
 
 The four compact starters have TensorFold 1.1.9 paths, with model-specific
-builds and presets. The DeepSeek native starter uses its separate pinned vLLM
-backend. Python handles setup and process supervision, not model inference. The engine names in the support table identify
+builds and presets. The DeepSeek native starter has pinned vLLM and TensorFold
+1.2.0 paths. Python handles setup and process supervision, not model inference. The engine names in the support table identify
 available integrations. Each supplied bundle still requires its declared GPU
 architecture and rank count; setup checks those requirements separately.
 The bundles cover these tested checkpoint and hardware pairs:
 
 | Model | Checkpoint format | Qualified hardware |
 | --- | --- | --- |
+| DeepSeek V4.1 Flash 1017, TensorFold 1.2.0 | Declared LibertAIDAI EXL3 3.5-bpw base | Four RTX PRO 6000 GPUs, Linux x86_64, SM120 |
 | Qwen3.8-27B | MLX-format 4-bit | One DGX Spark, Linux aarch64, SM121 |
 | Qwen3.8-27B | EXL3 2.0-bpw | One RTX PRO 6000, Linux x86_64, SM120 |
 | Gemma 4 26B A4B | MLX-format 4-bit | One DGX Spark, Linux aarch64, SM121 |
@@ -154,8 +155,8 @@ not use Apple's MLX runtime or establish macOS support. Use the
 [model download guide](model-downloads.md) to select the pinned files for your
 model and backend.
 
-DeepSeek's `deepseek41-flash1017-v1` starter now uses the
-[pinned native vLLM backend](../engines/vllm-deepseek-native/README.md). It requires
+The [pinned native vLLM backend](../engines/vllm-deepseek-native/README.md)
+for DeepSeek's `deepseek41-flash1017-v1` starter requires
 the official FP8 checkpoint at revision
 `1bae0e1088993b9b82de08f59de5be5a34e42170`, Linux x86_64 and four SM120 GPUs.
 The backend pins its container image, preserves adaptive DSpark with seven draft
@@ -163,14 +164,21 @@ tokens, and uses FULL decode graphs with eager prefill. The native operator
 selects 26 WO-B matrices and 26 scale tensors at strength 1.0. It does not use
 a low-rank basis. Setup retrieves the 1.09 GB payload from a public release
 asset and verifies its size and hashes; no private repository access is needed.
-Fresh public-package GPU and wizard qualification is pending. See
+Fresh public-package GPU and wizard qualification for this vLLM backend is pending. See
 [validation](validation.md) for the earlier native-operator evidence and its limits.
+
+TensorFold 1.2.0 uses the same native profile payload with the declared
+LibertAIDAI EXL3 base at revision
+`04a492fc3b4d25ddbab8f2d2f07f235ec77c9010`, strength 1.0 and four ranks. Its
+base quantization and arithmetic differ from vLLM; identical edited matrices
+do not imply identical full-model outputs.
 
 Legacy DeepSeek output-projection profiles can still use their separately
 qualified TensorFold or vLLM integration. The TensorFold EXL3 text preset has a
 65,536-token context, a 131,072-token pool and automatic DSML tool calls; forced
 tool selection, JSON Schema and image input are unsupported. Those integrations
-cannot load the new native starter. Model support alone does not add support
+cannot load the native starter; its TensorFold path requires the new 1.2.0
+native-matrix bundle. Model support alone does not add support
 for a different profile operator.
 
 GLM Full on TensorFold was qualified with an 8,192-token context, two concurrent

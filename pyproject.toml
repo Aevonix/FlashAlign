@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 classifiers = ["License :: OSI Approved :: GNU Affero General Public License v3"]
 name = "aevonix-flashalign"
-version = "1.1.0"
+version = "1.1.1"
 description = "FlashAlign engine client and verified harness integration"
 authors = [{name = "Aevonix Inc", email = "contact@aevonix.com"}]
 requires-python = ">=3.10"

@@ -136,8 +136,12 @@ The current native profile accepts strength **1.0 only**. A loader must reject
 other strengths or unsupported requirements rather than interpolate, convert
 the artifact to a projection, or silently serve a different operator. Its
 cache identity includes the profile content digest. See the
-[native backend](../engines/vllm-deepseek-native/README.md) for the exact
-checkpoint and runtime limits.
+[native vLLM backend](../engines/vllm-deepseek-native/README.md) and
+[TensorFold setup](native-tensorfold.md) for the exact checkpoint and runtime
+limits. A TensorFold 1.2.0 bundle declares its compatible EXL3 serving base
+separately from the profile's original target model. It selects the same edited
+FP8 tensors without converting the profile. Base quantization and arithmetic
+differ between engines; full-model output identity is not implied.
 
 ## Optional weighted output projection
 
