@@ -8,7 +8,7 @@ not establish full edited-checkpoint equivalence.
 
 | Starter | Tested runtime | Evidence and current limits |
 | --- | --- | --- |
-| DeepSeek V4.1 Flash 1017 | Native operator, pinned vLLM container, official FP8, four SM120 GPUs | Exact source-byte and prepared-matrix checks are described below. Fresh GPU execution and wizard qualification of the 1.1.0 public package is pending. |
+| DeepSeek V4.1 Flash 1017 | Native vLLM, pinned image libraries, official FP8, four SM120 GPUs | Eight public-package protocol/cache checks passed. All 104 layer/rank bindings matched, and mixed owner/off FULL graph execution was verified on all four workers. Docker CPU checks passed separately; full Docker GPU/wizard activation was not tested. |
 | GLM 5.3 Full | TensorFold 1.1.9, EXL3 2.75-bpw, four DGX Sparks | Four-host wizard activation and 18 model cases passed, including deterministic arithmetic, concurrent requests, cache reuse and automatic tool calls. Invalid and replayed signatures were rejected. Configured context 8,192, two concurrent sequences, native MTP depth 4. A 2,423-token prompt reused 2,304 tokens independently in stock and owner mode; returning to stock retained its own cache and output hash. Forced tools, JSON Schema and images are unsupported. |
 | GLM 5.3 Flash | SGLang 0.5.20, four SM120 GPUs | All 60 target/MTP sites checked. Both modes completed 59,042-token inputs. Eight Verified/Always On Hermes and OpenClaw protocol phases passed; image-answer limits remain. |
 | GLM 5.3 Flash | TensorFold 1.1.9, NVIDIA NVFP4, four DGX Sparks | Four-host wizard activation, 23 runtime/auth/cache/concurrency/harness-hook cases, and four JSON Schema/required-tool cases passed. Context 8,192, two concurrent sequences, fixed native MTP active. |
@@ -70,12 +70,34 @@ The native operator was checked on the pinned engine before public packaging:
   completion, with maximum reasoning. Profile and control final-content hashes
   matched in six cases; reasoning hashes matched in one.
 
-These are prior native-operator results, not a completed fresh installation or
-GPU qualification of the repackaged public adapter. They do not establish
-all-layer reduced-output or full-logit identity, a refusal rate, broad quality
-parity or million-token workload capacity. Retaining exact source tensors
-avoids a low-rank fitting approximation; it does not guarantee identical
-full-model answers.
+Those are prior native-operator results. A separate public-package check on
+1 November 2026 passed all eight protocol/cache requests using the pinned
+image's libraries on four SM120 GPUs:
+
+- Signed requests selected the native profile; unsigned and replayed requests
+  used stock mode.
+- A repeated owner prefix reused 2,816 tokens. Its first owner request and the
+  same-prefix stock request each reused zero.
+- All four workers recorded mixed FULL graph execution with eight owner rows,
+  eight off rows and no invalid row flags.
+- Owner requests recorded 59 drafted tokens and 30 accepted tokens with
+  adaptive DSpark7 active.
+
+The public runtime reported a configured 1,048,576-token context and 7,809,386
+KV-token capacity. This was not a million-token input test or a throughput
+benchmark. See the [aggregate record](../benchmarks/results/deepseek-native-qualification-20261101.json).
+
+The GPU run used a host process with the pinned image's libraries. Separate
+checks in the actual Docker image validated the full profile, signing-key
+ownership, plugin discovery and read-only Hugging Face snapshot mounts.
+Full GPU activation through Docker and the wizard, a fresh GPU dependency
+installation, and image requests were not tested in this run. No behavioral
+benchmark was repeated.
+
+These checks do not establish all-layer reduced-output or full-logit identity,
+a refusal rate or broad quality parity. Retaining exact source tensors avoids
+a low-rank fitting approximation; it does not guarantee identical full-model
+answers.
 
 The pinned runtime uses adaptive DSpark with seven draft tokens. Its requested
 `FULL_AND_PIECEWISE` setting resolves to FULL decode graphs with eager prefill
@@ -187,6 +209,10 @@ registration, terminal sessions, tool inheritance, Always On, setup and process
 supervision. Engine packages have separate operator and runtime checks. Test
 counts change as the release tree is updated; model results above remain tied
 to their recorded runtime configurations.
+
+The 1.1.0 update passed 768 core tests, 19 shared engine tests, 88 native
+DeepSeek engine tests and eight legacy projection tests. These software checks
+are separate from the GPU request checks above.
 
 Fresh dependency installations and wizard activation were checked for Qwen on
 vLLM and SGLang with BF16 weights. A fresh llama.cpp build passed wizard

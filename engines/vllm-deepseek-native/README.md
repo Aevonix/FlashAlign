@@ -45,4 +45,4 @@ Run the CPU contract and lifecycle tests with:
 python -m pytest -q engines/vllm-deepseek-native/tests
 ```
 
-These test artifact parsing, corruption rejection, owner/off row mapping, separate graph identities, authentication, cache namespaces, immutable bindings and container ownership. CPU tests do not establish GPU behavior, throughput or a refusal rate. GPU qualification is recorded separately in the release evidence and backend metadata.
+These test artifact parsing, corruption rejection, owner/off row mapping, separate graph identities, authentication, cache namespaces, immutable bindings and container ownership. CPU tests do not establish GPU behavior, throughput or a refusal rate. The [public GPU qualification](../../docs/validation.md#deepseek-native-profile) passed eight protocol/cache requests using the pinned image's libraries on four SM120 GPUs. Actual Docker image checks covered artifact loading, key ownership, plugin discovery and snapshot mounts on CPU; full Docker GPU/wizard activation remains untested.

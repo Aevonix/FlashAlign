@@ -145,11 +145,16 @@
   "qualification": {
     "tested_profile": "deepseek41-flash1017-v1",
     "profile_coverage": "26 native WO-B matrix/scale pairs; exact source bytes and TP partition hashes",
-    "public_runtime_gpu_qualification": "pending",
+    "public_runtime_gpu_qualification": "passed: eight protocol/cache requests; complete bindings and mixed FULL graph rows on four SM120 GPUs",
     "tested_speculative_method": "DSpark7",
     "graph_mode": "FULL_AND_PIECEWISE requested; FULL decode with eager prefill on this pinned model",
     "managed_activation_gpu_tested": false,
-    "fresh_dependency_install_gpu_tested": false
+    "fresh_dependency_install_gpu_tested": false,
+    "executed_core_tree_sha256": "c7eee72ffa6430f62910dfd5a21a8a49ffb8293d0d41f1c12f9981316ce361b7",
+    "evidence": "benchmarks/results/deepseek-native-qualification-20261101.json",
+    "docker_cpu_qualification": "passed: owned key, full artifact, plugin discovery and read-only HF snapshot mount",
+    "gpu_environment": "host process using pinned image libraries; Docker GPU activation not tested",
+    "image_requests_tested": false
   },
   "startup_timeout": 3600
 }
