@@ -53,6 +53,8 @@ jobs:
         env:
           PYTHONPATH: engines/common
         run: python -m unittest discover -s engines/tests
+      - name: Native DeepSeek contract and lifecycle tests
+        run: python -m pytest -q engines/vllm-deepseek-native/tests
       - name: Shell and JavaScript syntax
         run: |
           bash -n install.sh

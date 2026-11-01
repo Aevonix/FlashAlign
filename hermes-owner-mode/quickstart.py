@@ -16,7 +16,7 @@ from .setup_runtime import SetupError, check_harness_contexts, managed_context_w
 
 
 def download_engine_bundle(home, model_type, *, platform_id=None):
-    """Fetch a pinned public runtime; profiles stay in the local starter pack."""
+    """Fetch a pinned public runtime without private repository access."""
     return download_runtime_bundle(home, model_type, platform_id=platform_id)
 
 
@@ -42,7 +42,7 @@ def cached_models(home):
 
 def make_default_plan(args, found, console):
     """Ask only for missing choices and write a private, reproducible setup plan."""
-    console.banner('1.0.0')
+    console.banner('1.1.0')
     console.line('Default setup: detect a local model, prepare its engine and profile, then configure access.')
     console.step(1, 'Discover model and harness')
     direct = getattr(args, 'engine_only', False)
@@ -95,6 +95,13 @@ def make_default_plan(args, found, console):
     if len(local) != 1:
         raise SetupError('A valid local profile is required for managed engine setup')
     profile = local[0]
+    if profile.get('format') == 'flashalign.native_wo_b.v1' and backend == 'tensorfold':
+        raise SetupError('This native profile requires its vLLM native integration; the existing TensorFold deployment is unchanged')
+    if profile.get('payload_status') == 'missing':
+        from .profile_assets import download_record
+        asset = download_record(profile)
+        console.line(f"Setup will fetch the public profile payload ({asset['bytes'] / 1024**3:.2f} GiB) during apply.")
+        console.line('Source terms: '+asset['terms_path'])
     model_id = profile['model']['id']
     quantization = config.get('quantization_config') or (config.get('text_config') or {}).get('quantization_config')
     if config['format'] == 'checkpoint' and profile.get('compatible_models'):
@@ -121,6 +128,8 @@ def make_default_plan(args, found, console):
         backend = backend or 'tensorfold'
     elif backend != 'tensorfold':
         _, backend_metadata = _select_kit(backend, config, profile)
+    if profile.get('format') == 'flashalign.native_wo_b.v1' and backend == 'tensorfold':
+        raise SetupError('No native vLLM integration matches this profile and checkpoint; TensorFold cannot load this profile')
     if backend_metadata.get('requires_private_opt_in'):
         raise SetupError('This private unqualified engine requires an explicitly supplied setup plan with allow_research=true; default setup cannot opt in')
     if backend == 'tensorfold' and not bundle_path:
@@ -184,6 +193,8 @@ def make_default_plan(args, found, console):
             'engine': {'kind': backend, 'model_path': str(Path(model_path).resolve()),
                        'python': python['executable'],
                        'install_dependencies': True}}
+    if backend_metadata.get('variant') and backend != 'tensorfold':
+        plan['engine']['variant'] = backend_metadata['variant']
     if backend == 'tensorfold':
         plan['engine']['bundle'] = str(Path(bundle_path).expanduser().resolve())
         plan['engine']['install_dependencies'] = False
@@ -220,9 +231,11 @@ def make_default_plan(args, found, console):
         if getattr(args, 'drafter', None):
             raise SetupError('This model uses its native DSpark drafter; an external draft model is not qualified')
         default = dict(backend_metadata['default_speculative_config'])
-        default['model'] = plan['engine']['model_path']
+        if not backend_metadata.get('native_draft_uses_target_model'):
+            default['model'] = plan['engine']['model_path']
         plan['engine'].setdefault('speculative_config', default)
-        console.line('Preserving native DSpark5. The first apply verifies local checkpoint bytes into private deployment state.')
+        drafts = backend_metadata['default_speculative_config'].get('num_speculative_tokens')
+        console.line(f'Preserving native DSpark with {drafts} draft tokens. The first apply verifies local checkpoint bytes into private deployment state.')
         console.line('This experimental engine checks its GPU and host/cgroup memory policy before activation.')
     if getattr(args, 'drafter', None):
         plan['engine']['draft_model'] = str(args.drafter.expanduser().resolve())

@@ -9,7 +9,7 @@ import stat
 from .auth import read_api_key
 from .contacts import pair
 from .access_setup import terminal_harnesses
-from .profiles import bundled_profile_root, discover_profiles, read_json, resolve_profile
+from .profiles import bundled_profile_root, discover_profiles, read_json, resolve_profile, validate_profile
 from .setup_runtime import SetupError, check_engine, engine_profiles, model_rows, register_openclaw, check_harness_contexts
 from .engine_setup import check_engine_setup, prepare_engine, activate_engine, private_json
 from .setup_transaction import pending_setup, recover_setup
@@ -152,12 +152,15 @@ def run_plan(path, home, found, provision, *, apply=False, activate=False, profi
                 model['maxTokens'] = max(outputs)
                 model['maxTokensSource'] = 'harness_output'
         result = {'status': 'engine_setup_verified', 'applied': False, 'harnesses': plan['harnesses'],
-                  'model': model['id'], 'profile': details['name'], 'mode': plan['mode'], 'artifact_validated': True,
+                  'model': model['id'], 'profile': details['name'], 'mode': plan['mode'], 'artifact_validated': details.get('artifact_valid') is True,
                   'backend': compatibility['kind'],
                   'activation': 'engine preparation and restart required', 'context_compatibility': context_check,
                   'input_modalities': compatibility.get('input_modalities'),
                   'native_image_setup': 'validated serving lane' if compatibility.get('input_modalities') is not None
                                         else 'unverified: serving lane has no input modality declaration'}
+        if details.get('payload_status') == 'missing':
+            from .profile_assets import download_record
+            result['profile_payload_download'] = download_record(details)
         requirements = compatibility.get('metadata', {})
         if compatibility.get('python'):
             result['engine_python'] = compatibility['python']
@@ -172,7 +175,8 @@ def run_plan(path, home, found, provision, *, apply=False, activate=False, profi
             return result
         deployment = prepare_engine(home, plan['engine'], details['manifest'], model_id=model['id'],
                                     key_file=plan.get('engine_key_file'))
-        result.update(engine=deployment, status='engine_prepared', applied=True,
+        details = validate_profile(deployment['profile_path'])
+        result.update(engine=deployment, artifact_validated=True, status='engine_prepared', applied=True,
                       activation='engine launch pending' if plan.get('engine_only') else 'engine launch and gateway restart pending')
         result['next_command'] = ['bash', str(Path(__file__).resolve().parents[1]/'install.sh'),
                                   '--home', str(home), '--config', str(Path(path).absolute()), '--activate']
@@ -184,7 +188,7 @@ def run_plan(path, home, found, provision, *, apply=False, activate=False, profi
                 result.update(gateway=gateway, base_url=gateway['base_url'],
                               activation='engine and Always On gateway launch pending')
             return result
-        deployment = activate_engine(deployment, timeout=plan['engine'].get('startup_timeout', 900))
+        deployment = activate_engine(deployment, timeout=plan['engine'].get('startup_timeout', deployment.get('startup_timeout', 900)))
         plan['base_url'], plan['engine_key_file'] = deployment['base_url'], deployment['key_file']
         result['engine'] = deployment
     else:

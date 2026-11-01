@@ -115,12 +115,14 @@ specific paths listed in [validation](validation.md); engine support for a model
 does not by itself establish FlashAlign support.
 
 Profiles describe operations on a model. The same artifact can be reused by
-multiple adapters when each supports
-its pinned model and serving format, operator, output sites and basis rank.
+multiple adapters when each supports its pinned model and serving format,
+operator and output sites. Compact
+profiles also require a supported basis rank; native tensor profiles require
+their declared storage format and parallel layout.
 Each model/engine combination still needs its own runtime validation.
 
-Setup checks each backend's `maximum_rank` before installation. The current
-GLM Flash and Qwen Flash Next SGLang adapters accept
+For compact profiles, setup checks each backend's `maximum_rank` before
+installation. The current GLM Flash and Qwen Flash Next SGLang adapters accept
 rank one; the other packaged vLLM, SGLang and llama.cpp adapters accept ranks up
 to 128. Site coverage and operator support still differ by adapter. A supported
 rank does not establish that an arbitrary profile has been tested on that engine.
@@ -131,9 +133,9 @@ checkpoints. Gemma setup defaults to ngram speculation and can preserve its
 official MTP draft. Other GGUF files require a matching compatibility
 declaration and separate validation. See the [llama.cpp guide](../engines/llamacpp/README.md).
 
-All five models use TensorFold 1.1.9's compiled inference engine, with
-model-specific builds and presets. Python handles setup and process
-supervision, not model inference. The engine names in the support table identify
+The four compact starters have TensorFold 1.1.9 paths, with model-specific
+builds and presets. The DeepSeek native starter uses its separate pinned vLLM
+backend. Python handles setup and process supervision, not model inference. The engine names in the support table identify
 available integrations. Each supplied bundle still requires its declared GPU
 architecture and rank count; setup checks those requirements separately.
 The bundles cover these tested checkpoint and hardware pairs:
@@ -144,7 +146,6 @@ The bundles cover these tested checkpoint and hardware pairs:
 | Qwen3.8-27B | EXL3 2.0-bpw | One RTX PRO 6000, Linux x86_64, SM120 |
 | Gemma 4 26B A4B | MLX-format 4-bit | One DGX Spark, Linux aarch64, SM121 |
 | GLM 5.3 Flash | NVIDIA NVFP4 | Four DGX Sparks, Linux aarch64, SM121 |
-| DeepSeek V4.1 Flash 1017 | EXL3 3.5-bpw plus original Engram tables | Four RTX PRO 6000 GPUs, Linux x86_64, SM120; text preset |
 | GLM 5.3 Full | EXL3 2.75-bpw | Four DGX Sparks, Linux aarch64, SM121 |
 
 MLX-format here describes the quantized checkpoint files. TensorFold reads
@@ -153,10 +154,24 @@ not use Apple's MLX runtime or establish macOS support. Use the
 [model download guide](model-downloads.md) to select the pinned files for your
 model and backend.
 
-DeepSeek on TensorFold has a 65,536-token context and 131,072-token pool preset.
-Its automatic DSML tool calls passed in both modes. Forced tool selection and
-JSON Schema return an unsupported-feature error. Image input is not supported
-by that TensorFold preset. These limits do not describe the separate vLLM path.
+DeepSeek's `deepseek41-flash1017-v1` starter now uses the
+[pinned native vLLM backend](../engines/vllm-deepseek-native/README.md). It requires
+the official FP8 checkpoint at revision
+`1bae0e1088993b9b82de08f59de5be5a34e42170`, Linux x86_64 and four SM120 GPUs.
+The backend pins its container image, preserves adaptive DSpark with seven draft
+tokens, and uses FULL decode graphs with eager prefill. The native operator
+selects 26 WO-B matrices and 26 scale tensors at strength 1.0. It does not use
+a low-rank basis. Setup retrieves the 1.09 GB payload from a public release
+asset and verifies its size and hashes; no private repository access is needed.
+Fresh public-package GPU and wizard qualification is pending. See
+[validation](validation.md) for the earlier native-operator evidence and its limits.
+
+Legacy DeepSeek output-projection profiles can still use their separately
+qualified TensorFold or vLLM integration. The TensorFold EXL3 text preset has a
+65,536-token context, a 131,072-token pool and automatic DSML tool calls; forced
+tool selection, JSON Schema and image input are unsupported. Those integrations
+cannot load the new native starter. Model support alone does not add support
+for a different profile operator.
 
 GLM Full on TensorFold was qualified with an 8,192-token context, two concurrent
 sequences and native MTP depth 4. It supports automatic tool calls. Forced tool
@@ -166,7 +181,7 @@ Setup matches explicit model IDs and pinned checkpoint metadata. A profile's
 presence in the starter pack does not qualify every engine or quantization.
 Before changing harness routing, the wizard verifies both signed profile
 activation and standard-mode requests. See [TensorFold setup](native-tensorfold.md)
-for remote ranks, SSH forwarding, Engram prerequisites and architecture checks.
+for remote ranks, SSH forwarding, legacy Engram prerequisites and architecture checks.
 
 Transcription, file decoding and vision depend on the configured model and
 harness capabilities. Advertise image input only for a model that supports it.

@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "backend": "vllm",
+  "variant": "deepseek-v41-native",
+  "name": "flashalign-vllm-deepseek-native",
+  "package": "flashalign-native",
+  "python_min_version": [
+    3,
+    10
+  ],
+  "input_modalities": [
+    "text"
+  ],
+  "module": "flashalign_native",
+  "plugin_name": "flashalign_native",
+  "plugin_entrypoint": "flashalign_native.plugin:register",
+  "runtime": "docker",
+  "prepare": "prepare.py",
+  "launch": "launch.py",
+  "model_types": [
+    "deepseek_v41",
+    "deepseek_v41_text"
+  ],
+  "transforms": [
+    "native_matrix_override_v1"
+  ],
+  "profile_schemas": [
+    "flashalign.native_wo_b.v1"
+  ],
+  "sites": [
+    "attn_out"
+  ],
+  "tensor_parallel_sizes": [
+    4
+  ],
+  "pipeline_parallel_sizes": [
+    1
+  ],
+  "data_parallel_sizes": [
+    1
+  ],
+  "requires_eager": false,
+  "preserves_speculation": true,
+  "tested_speculative_methods": [
+    "dspark"
+  ],
+  "requires_native_draft": true,
+  "native_draft_uses_target_model": true,
+  "default_speculative_config": {
+    "method": "dspark",
+    "attention_backend": "B12X",
+    "draft_sample_method": "probabilistic",
+    "rejection_sample_method": "standard",
+    "num_speculative_tokens": 7,
+    "draft_tensor_parallel_size": 4,
+    "enable_adaptive_verification": true,
+    "adaptive_verification_cost_scale": 1.0
+  },
+  "container_image": "ghcr.io/local-inference-lab/vllm@sha256:f5f9efe1b10ec7b853a495e66b7dbf15ff54f62741e444dea0b44e16736a10a9",
+  "runtime_source_pin": {
+    "version": "0.1.dev21836+g6d66eed35.cu134",
+    "commit": "6d66eed35",
+    "source": "https://github.com/local-inference-lab/vllm",
+    "files": {
+      "v1/worker/gpu/model_runner.py": "aeadc5177c80789112c8e4836639b97e6fbb056711a4e6c81748c7ab9ad805d0",
+      "v1/worker/gpu/input_batch.py": "2034bbe57fbd8708439602754a7b2f51cda5ec3f8ae90ea1195e47b4ba3f18cf",
+      "v1/worker/gpu/mm/encoder_runner.py": "0981e352d70301b7154a217a48665ffe35f215d053ec5740c2515a3e1e11b4e6",
+      "v1/worker/gpu/mm/encoder_cache.py": "89c500338fddbeee7c4fca978a3a7c4c566a03e848e399d303fbee3c80631cd2",
+      "v1/worker/gpu/spec_decode/adaptive_verification.py": "e8301a3f5898ddfb710806975166d62735649533e04043c67ca5b452ec277955",
+      "v1/worker/gpu/spec_decode/dspark/speculator.py": "92396373cc43226681d5b31158d3db380a0f7a8b7f75d0b23afecc64014c96f1",
+      "v1/worker/gpu/cudagraph_utils.py": "d43c261320ab63558b0975d9265e6ffe4871512bf7f4a448cfa81a8e6821f971",
+      "v1/core/kv_cache_utils.py": "77d6ae740c7679f600fab3caf61c3de370a4303beef76673ef3538b38b4c2ed8",
+      "models/deepseek_v4_1/nvidia/model.py": "dafb69b36e68c36ba8878c6033e1bc94439526c3d1d9c83edd7c153ad2ba88c8",
+      "models/deepseek_v4_1/common/engram.py": "efda07bdd54d947852cdf75095905033038cf2a4425d7b234d092a9253c7c811",
+      "models/deepseek_v4_1/ced.py": "fe956af8afeb3c708b0d677d437d985974b556f4edf7f90b54a2dfa344568781",
+      "models/deepseek_v4_1/nvidia/vl_model.py": "f386922b345001c2cef47e46ec5b80a2312508a217205402cc9135317d54fa6a",
+      "models/deepseek_v4_1/attention.py": "a28bce174d1428bea450878d61f9036f96197a680284e276bf2f194ee0de854d",
+      "models/deepseek_v4_1/b12x_layers.py": "d6e3352070bc69329ef0c09a20639c7f1165b02fd1f75e8a07133ef2fdd04503",
+      "utils/torch_utils.py": "6dc04c5be3efb1379f80f23edae0d53f741b6d3d80e6d4d05774fbc9f4e82752",
+      "tokenizers/deepseek_v41.py": "bce7c3b2ce638affdc4f421ecd020aa611e8fef966d67aefb2459dad8d0ea207",
+      "tokenizers/deepseek_v41_encoding.py": "45ddceef6627667652055e71ab086bab0d70c4e358683cde2050847ca7adbf8c",
+      "entrypoints/openai/chat_completion/protocol.py": "0d85d431a4ccb56cbe45665aaa040578d707cc8c728408a72a68666ec085cab2",
+      "renderers/params.py": "6837717e82e4c322920de34bd6f3e26c9f7739dc49edf13e8c6a5c5050f87fc5"
+    }
+  },
+  "model_integrity_verifier": "flashalign_native/verify_checkpoint.py",
+  "persistent_replay": true,
+  "requires_runtime_memory_guard": true,
+  "site_tensor_patterns": {
+    "attn_out": "layers\\.{layer}\\.attn\\.wo_b\\.weight"
+  },
+  "default_arguments": [
+    "--max-model-len",
+    "1048576",
+    "--max-num-seqs",
+    "8",
+    "--max-num-batched-tokens",
+    "4096",
+    "--gpu-memory-utilization",
+    "0.93"
+  ],
+  "compatible_models": [
+    {
+      "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+      "revision": "1bae0e1088993b9b82de08f59de5be5a34e42170",
+      "model_type": "deepseek_v41",
+      "config_sha256": "8be45ce0476004a3f529fd896115a4a2e800a129ad2d3ec05b16050f52e21879",
+      "index_sha256": "74b0686a3d2891980d5e303251b075a3bccae2c2ff650747db2620a649b98fa8",
+      "quantization_config_sha256": "c9a8a435aea18cf1c08fcac7de2e8984c359b20d0467808c4d7dd8df642fc71e"
+    }
+  ],
+  "resource_policy": {
+    "minimum_gpu_total_gib": 94,
+    "minimum_gpu_free_gib": 90,
+    "unattended_start_headroom_gib": 221,
+    "runtime_floor_gib": 24,
+    "policy_is_measured_minimum": false,
+    "container_memory_limit_gib": 224,
+    "cgroup_cache_credit": "min(inactive_file, max(0, file-shmem-unevictable-file_dirty-file_writeback), current)"
+  },
+  "status": "experimental",
+  "direct_engine": true,
+  "openclaw_compat_by_model_type": {
+    "deepseek_v41": {
+      "thinkingFormat": "openai",
+      "supportedReasoningEfforts": [
+        "none",
+        "low",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    },
+    "deepseek_v41_text": {
+      "thinkingFormat": "openai",
+      "supportedReasoningEfforts": [
+        "none",
+        "low",
+        "high",
+        "xhigh",
+        "max"
+      ]
+    }
+  },
+  "qualification": {
+    "tested_profile": "deepseek41-flash1017-v1",
+    "profile_coverage": "26 native WO-B matrix/scale pairs; exact source bytes and TP partition hashes",
+    "public_runtime_gpu_qualification": "pending",
+    "tested_speculative_method": "DSpark7",
+    "graph_mode": "FULL_AND_PIECEWISE requested; FULL decode with eager prefill on this pinned model",
+    "managed_activation_gpu_tested": false,
+    "fresh_dependency_install_gpu_tested": false
+  },
+  "startup_timeout": 3600
+}

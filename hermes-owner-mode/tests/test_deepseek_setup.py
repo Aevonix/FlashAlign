@@ -32,7 +32,6 @@ from owner_mode.proxy import ProviderProxy
 from owner_mode.setup_runtime import SetupError
 
 KIT = KIT_ROOT/'vllm-deepseek'
-PUBLIC = KIT_ROOT.parent/'profiles/deepseek41-flash1017-v1'
 spec = importlib.util.spec_from_file_location('deepseek_launch_fixture', KIT/'launch.py')
 launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
@@ -67,6 +66,15 @@ def group_profile(path):
     (path/'profile.safetensors').write_bytes(struct.pack('<Q', len(header))+header+
                                             struct.pack('<5120f', 1., *([0.]*5119)))
     return doc
+
+
+def legacy_profile(path):
+    """An explicit operator-supplied projection, independent of the starter pack."""
+    doc = group_profile(path)
+    doc['compatible_models'] = [{'id': 'fixture/legacy-quantized', 'revision': '3'*40,
+        'model_type': 'deepseek_v41', 'config_sha256': '4'*64, 'index_sha256': '5'*64}]
+    (path/'profile.json').write_text(json.dumps(doc))
+    return path
 
 
 class GroupedProfiles(unittest.TestCase):
@@ -124,14 +132,15 @@ class GroupedProfiles(unittest.TestCase):
         payload.write_bytes(raw)
         with self.assertRaisesRegex(ProfileError, 'orthonormal'): self.changed()
 
-    def test_public_85_site_profile_remains_byte_identical(self):
-        before = {p.name: digest(p) for p in PUBLIC.iterdir() if p.is_file()}
-        checked = validate_profile(PUBLIC)
+    def test_operator_supplied_projection_remains_byte_identical(self):
+        source = self.path
+        before = {p.name: digest(p) for p in source.iterdir() if p.is_file()}
+        checked = validate_profile(source)
         staged = self.root/'standard'
-        stage_profile(PUBLIC, staged)
-        self.assertEqual(checked['name'], 'deepseek41-flash1017-v1')
-        self.assertEqual(len(json.loads((staged/'profile.json').read_text())['sites']), 85)
-        self.assertEqual(before, {p.name: digest(p) for p in PUBLIC.iterdir() if p.is_file()})
+        stage_profile(source, staged)
+        self.assertEqual(checked['name'], 'synthetic-native-test')
+        self.assertEqual(len(json.loads((staged/'profile.json').read_text())['sites']), 6)
+        self.assertEqual(before, {p.name: digest(p) for p in source.iterdir() if p.is_file()})
         self.assertEqual(digest(staged/'profile.safetensors'), before['profile.safetensors'])
         self.assertEqual(digest(staged/'profile.json'), before['profile.json'])
 
@@ -153,7 +162,8 @@ class DeepSeekPlanning(unittest.TestCase):
                      index_sha256=digest(self.model/'model.safetensors.index.json'),
                      quantization_config_sha256=hashlib.sha256(b'{"quant_method":"fp8"}').hexdigest())
         self.spec = {'kind': 'vllm', 'model_path': str(self.model), 'devices': ['0', '1', '2', '3']}
-        self.profile = validate_profile(PUBLIC)
+        self.legacy = legacy_profile(self.root/'legacy')
+        self.profile = validate_profile(self.legacy)
 
     def check(self, spec=None, profile=None):
         with mock.patch('owner_mode.backend_setup._kits', return_value=iter([(KIT, self.metadata, 'vllm')])):
@@ -239,7 +249,7 @@ class DeepSeekPlanning(unittest.TestCase):
 
     def test_default_one_command_plan_needs_no_private_download_or_draft_prompt(self):
         operator_python = '/operator/python3.12'
-        args = SimpleNamespace(home=self.home, model_path=self.model, profile=None, engine_bundle=None,
+        args = SimpleNamespace(home=self.home, model_path=self.model, profile=self.legacy, engine_bundle=None,
                                backend='auto', profiles=[], engine_python=operator_python,
                                devices='0,1,2,3', tools_default=None, engine_only=True)
         with (mock.patch('owner_mode.quickstart.download_engine_bundle', side_effect=AssertionError('network')),
@@ -252,7 +262,7 @@ class DeepSeekPlanning(unittest.TestCase):
         plan = json.loads(path.read_text())
         self.assertEqual(plan['engine']['kind'], 'vllm')
         self.assertEqual(plan['engine']['python'], operator_python)
-        self.assertEqual(plan['profile'], str(PUBLIC.resolve()))
+        self.assertEqual(plan['profile'], str(self.legacy.resolve()))
         self.assertEqual(plan['engine']['speculative_config']['method'], 'dspark')
         self.assertNotIn('draft_model', plan['engine'])
 
@@ -261,11 +271,11 @@ class DeepSeekPlanning(unittest.TestCase):
         with (mock.patch('owner_mode.backend_setup._kits', return_value=iter([(KIT, self.metadata, 'vllm')])),
               mock.patch('owner_mode.backend_setup._python_version', return_value=(3, 10, 16))):
             with self.assertRaisesRegex(SetupError, 'Python 3.12.*selected engine.python'):
-                prepare_backend(self.home, self.spec, PUBLIC, model_id=DEEPSEEK_MODEL['id'])
+                prepare_backend(self.home, self.spec, self.legacy, model_id=DEEPSEEK_MODEL['id'])
         self.assertEqual(list(self.home.iterdir()), [])
 
     def test_default_plan_rejects_old_python_before_writing_config(self):
-        args = SimpleNamespace(home=self.home, model_path=self.model, profile=None, engine_bundle=None,
+        args = SimpleNamespace(home=self.home, model_path=self.model, profile=self.legacy, engine_bundle=None,
                                backend='auto', profiles=[], engine_python='/operator/python3.10',
                                devices='0,1,2,3', tools_default=None, engine_only=True)
         with (mock.patch('owner_mode.backend_setup._python_version', return_value=(3, 10, 16)),
@@ -285,7 +295,7 @@ class DeepSeekPlanning(unittest.TestCase):
         found = wizard.discover(self.home, which=lambda _: None)
         plan = self.root/'plan.json'
         plan.write_text(json.dumps({'harnesses': ['hermes'], 'model': DEEPSEEK_MODEL['id'],
-            'profile': str(PUBLIC), 'contacts': [{'channel': 'sms', 'account': 'default', 'contact': '+15550000101'}],
+            'profile': str(self.legacy), 'contacts': [{'channel': 'sms', 'account': 'default', 'contact': '+15550000101'}],
             'tools_default': False, 'engine': self.spec}))
         plan.chmod(0o600)
         with (mock.patch.object(wizard, 'discover', return_value=found),
@@ -495,6 +505,7 @@ class TinyFilePreparation(unittest.TestCase):
         (self.kit/'flashalign_deepseek/model-pins.json').write_text(json.dumps(pins))
         for path in self.model.iterdir(): path.chmod(0o444)
         self.original = {path.name: digest(path) for path in self.model.iterdir()}
+        self.legacy = legacy_profile(self.root/'legacy')
         self.engine = {'kind': 'vllm', 'model_path': str(self.model), 'devices': ['0', '1', '2', '3']}
 
     def prepare(self, provided_pythonpath=None):
@@ -504,7 +515,7 @@ class TinyFilePreparation(unittest.TestCase):
         with (mock.patch('owner_mode.backend_setup._kits', return_value=iter([(self.kit, self.metadata, 'vllm')])),
               mock.patch('owner_mode.backend_setup.active_speculation', return_value=None),
               mock.patch('owner_mode.backend_setup._prepare_runtime', return_value=runtime)):
-            return prepare_backend(self.home, self.engine, PUBLIC, model_id=DEEPSEEK_MODEL['id'])
+            return prepare_backend(self.home, self.engine, self.legacy, model_id=DEEPSEEK_MODEL['id'])
 
     def test_real_tiny_payload_verification_prepares_without_sidecars_or_model_writes(self):
         result = self.prepare()

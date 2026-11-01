@@ -20,17 +20,22 @@ contact an engine, read deployment credentials, install a profile or restart a
 service.
 
 The report includes the model and revision, operator family, required features,
-site inventory, basis ranks, file sizes and SHA-256 hashes. It checks finite
-tensor values, positive gains where required, and orthonormal basis rows. JSON
-and detailed terminal output include aggregate tensor statistics. Vector entries
+site inventory, file sizes and SHA-256 hashes. For compact profiles it reports
+basis ranks and checks finite tensor values, positive gains where required, and
+orthonormal basis rows. For the native DeepSeek format it streams the payload
+and validates native encodings, tensor hashes and every declared tensor-parallel
+partition. Native matrices have no basis rank. JSON and detailed terminal
+output include the applicable aggregate checks. Vector entries
 and freeform source/status metadata are omitted. Status labels in a manifest
 are not treated as independently verified evidence.
 
 Computed hashes identify the files that were inspected. The report separately
 states whether a supplied checksum record verified both files, only some files,
 or was absent. A computed hash alone does not authenticate a publisher.
-Validation and hashes use the same in-memory snapshots. If a file changes
-later, its new contents require a new inspection.
+Compact-profile validation and hashes use the same in-memory snapshots. Native
+validation uses the bounded streaming reader and declared payload, tensor and
+partition hashes. If a file changes later, its new contents require a new
+inspection.
 
 An artifact can pass inspection while being unsuitable for a particular model,
 engine or task. Inspection does not establish runtime activation, cache isolation,
@@ -42,9 +47,13 @@ The command exits with status `0` for a valid artifact, `2` for invalid or
 unsupported files, and `3` when the configured work budget stops inspection.
 In that last case, `artifact_valid` is `null`; it is not an invalid-file verdict.
 Basis checks default to at most 50 million scalar products. For a larger trusted
-profile, set an explicit higher limit with `--max-basis-work`. Profile payloads
-remain limited to 256 MiB and are held in memory while validating; inspection
-can use more memory than the file size.
+compact profile, set an explicit higher limit with `--max-basis-work`. Compact
+payloads remain limited to 256 MiB and are held in memory while validating;
+inspection can use more memory than the file size. The native DeepSeek payload
+uses a separate streaming path, so its 1.09 GB file is not loaded as one matrix
+in memory. A missing native payload is an incomplete local artifact and fails
+offline inspection. Setup can retrieve its declared public asset; the inspector
+does not download it.
 
 JSON uses schema `flashalign.profile-inspection.v1` and keeps
 the artifact result separate from unassessed runtime and behavioral properties.

@@ -14,6 +14,11 @@ checksums. When no matching bundle is listed, provide its local directory with
 `--engine-bundle`. Profiles come from the local starter pack or an explicit
 profile directory.
 
+The current DeepSeek starter uses a [separate native vLLM backend](../engines/vllm-deepseek-native/README.md),
+not TensorFold. TensorFold support for an external DeepSeek output-projection
+profile remains available through its matching bundle. It cannot load the
+`native_matrix_override_v1` operator.
+
 ## One host
 
 ```sh
@@ -118,10 +123,16 @@ Full supports automatic tool calls, while forced tool selection, JSON Schema
 and image input are unsupported. Setup omits unsupported tuning flags and
 rejects a different requested fixed depth before staging. Qwen may require an
 external DFlash checkpoint. The
-DeepSeek path uses its dedicated native launcher and declared DSpark assets.
+legacy DeepSeek output-projection path uses its dedicated native launcher and
+declared DSpark assets.
 
-DeepSeek also needs its original Engram tables on every rank, separately from
-the EXL3 model. Setup detects the pinned original checkpoint in the Hugging Face
+## Legacy DeepSeek projection setup
+
+This section applies only to a matching external output-projection profile. The
+current `deepseek41-flash1017-v1` starter is not compatible with this bundle.
+
+The legacy TensorFold path needs its original Engram tables on every rank,
+separately from the EXL3 model. Setup detects the pinned original checkpoint in the Hugging Face
 cache, or accepts `--engram-source /models/deepseek-engram` (`engram_source` in a
 plan). It checks the original config and index hashes, required tensor encodings
 and shapes, and complete shard sizes before creating a key or staging files.
@@ -143,7 +154,7 @@ read-only storage; they are not copied into the runtime bundle. Header and size
 checks establish compatibility, not a new full-payload integrity check. Use the
 pinned download's integrity record for that.
 
-The released DeepSeek preset explicitly fixes context to 65536, pool size to 131072,
+The legacy DeepSeek projection preset explicitly fixes context to 65536, pool size to 131072,
 one live slot and four ranks. Its declared generated assets are checked against
 that geometry. Larger settings need a separately built and qualified asset pack. Its generated assets
 must match the bundle's context and rank geometry. Changing those settings

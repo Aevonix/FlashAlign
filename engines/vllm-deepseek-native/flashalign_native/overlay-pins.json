@@ -1,0 +1,38 @@
+{
+  "models/deepseek_v4_1/nvidia/model.py": {
+    "original_sha256": "dafb69b36e68c36ba8878c6033e1bc94439526c3d1d9c83edd7c153ad2ba88c8",
+    "overlay_sha256": "4f7bf68b84acc2ba86a2c01fee2da91d01ea4a983a67858bbaac0ba38e500356"
+  },
+  "models/deepseek_v4_1/common/engram.py": {
+    "original_sha256": "efda07bdd54d947852cdf75095905033038cf2a4425d7b234d092a9253c7c811",
+    "overlay_sha256": "d3c2144d7b828226fb987e88c340497642674edeed324276f896bcb014b3432e"
+  },
+  "models/deepseek_v4_1/nvidia/vl_model.py": {
+    "original_sha256": "f386922b345001c2cef47e46ec5b80a2312508a217205402cc9135317d54fa6a",
+    "overlay_sha256": "a917d3d94bab9ae9e1666cd713e41c3a59afb7f0b4b6525e1589cab788836c17"
+  },
+  "flashalign_native_graph.py": {
+    "original_sha256": null,
+    "overlay_sha256": "a7e3fd9378d7bc741722dd3ad79e38a9cd5883c407714f79dfda81dedd7a6db9"
+  },
+  "forward_context.py": {
+    "original_sha256": "0af788757c1c1a7f390c20f611b61f13192ef50667bd2f3ef79c903e6b29721f",
+    "overlay_sha256": "20ac28b7ec0144413d391be066a3426ff307b5dc3b8301d460738f2b0a7ab369"
+  },
+  "v1/worker/gpu/cudagraph_utils.py": {
+    "original_sha256": "d43c261320ab63558b0975d9265e6ffe4871512bf7f4a448cfa81a8e6821f971",
+    "overlay_sha256": "e11882b3276406c269dfdbf4846a3e832d3c150ee4e533d2ba70e9b0772ef24a"
+  },
+  "v1/worker/gpu/dp_utils.py": {
+    "original_sha256": "e26867bc89e6bfc933cabc5ed13e5dc7b8d2d3030118ca1ca64c8785dabc0fc1",
+    "overlay_sha256": "7b602bea7bf44980ef6abe6538205e0bc5217ff72e7aa76b0b4b4aad6c32f79f"
+  },
+  "v1/worker/gpu/model_runner.py": {
+    "original_sha256": "aeadc5177c80789112c8e4836639b97e6fbb056711a4e6c81748c7ab9ad805d0",
+    "overlay_sha256": "36a7440d2396b51da28e3d4f26fe35b0cdf3ebd1a9a56c254d27640ab7bd8a98"
+  },
+  "models/deepseek_v4_1/attention.py": {
+    "original_sha256": "a28bce174d1428bea450878d61f9036f96197a680284e276bf2f194ee0de854d",
+    "overlay_sha256": "d045d138b1fd12de260c162c5c909883d9c0fbbbe79677ddeb4251fc99fe2c5d"
+  }
+}

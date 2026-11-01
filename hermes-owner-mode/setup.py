@@ -40,7 +40,7 @@ from owner_mode.setup_transaction import current_transaction, pending_setup, rec
 MODULES = ['__init__.py','auth.py','identity.py','hermes_ingress.py','native_authority.py',
            'content.py','hermes_observer.py',
            'contacts.py','channels.py','access_setup.py','terminal.py','native_terminal.py','policy.py','proxy.py','plugin.py','bridge.py','serve.py','manage.py','setup.py',
-           'profiles.py','deepseek_grouped.py','profile_inspector.py','setup_runtime.py','terminal_ui.py','terminal-logo.json','setup_transaction.py','automation.py','direct_gateway.py','engine_setup.py','engine_supervisor.py','engine_assets.py','native_bundle.py','native_setup.py','native_cluster.py','native_remote.py','engine_catalog.json','backend_setup.py','model_metadata.py','drafting.py','quickstart.py','client.py','harness_client.py','plugin.yaml','requirements.txt','README.md','LICENSE','NOTICE.md']
+           'profiles.py','deepseek_grouped.py','native_profile.py','profile_assets.py','profile_inspector.py','setup_runtime.py','terminal_ui.py','terminal-logo.json','setup_transaction.py','automation.py','direct_gateway.py','engine_setup.py','engine_supervisor.py','engine_assets.py','native_bundle.py','native_setup.py','native_cluster.py','native_remote.py','engine_catalog.json','backend_setup.py','model_metadata.py','drafting.py','quickstart.py','client.py','harness_client.py','plugin.yaml','requirements.txt','README.md','LICENSE','NOTICE.md']
 
 
 def load_config(path):
@@ -242,7 +242,8 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
             'DeepSeek disabled reasoning uses enable_thinking=false before signing'
             if route['request_compatibility'] == 'deepseek_v41'
             else 'Declared thinking controls are preserved for the selected model')
-    if profile_details and profile_details.get('source') == 'local':
+    if (profile_details and profile_details.get('source') == 'local'
+            and profile_details.get('artifact_valid') is True):
         checked = validate_profile(profile_details['manifest'])
         if checked['hashes'] != profile_details['hashes']:
             raise ValueError('The selected profile changed during setup; run setup again')
@@ -337,12 +338,17 @@ def select_profile(console, model, candidates, default=''):
         ok, _ = match_profile(candidate, model)
         if ok and not any(item['name'] == candidate['name'] for item in matches):
             matches.append(candidate)
+    def status(candidate):
+        if candidate.get('artifact_valid'):
+            return 'file checked', 'File integrity checked'
+        if candidate.get('payload_status') == 'missing':
+            return 'metadata checked; payload missing', 'Metadata checked; public payload downloads during managed setup'
+        return 'engine reports loaded', 'Reported as loaded by the engine'
     for number, candidate in enumerate(matches, 1):
-        kind = 'file checked' if candidate.get('artifact_valid') else 'engine reports loaded'
+        kind = status(candidate)[0]
         console.line(f"  {number}. {candidate['name']} ({kind})")
     if console.interactive and matches:
-        options = [(candidate['name'], 'File integrity checked' if candidate.get('artifact_valid')
-                    else 'Reported as loaded by the engine') for candidate in matches]
+        options = [(candidate['name'], status(candidate)[1]) for candidate in matches]
         index = console.select('Choose an alignment profile',
                                [*options, ('Another profile', 'Enter a profile folder or an installed name.')], default=0)
         if index < len(matches):

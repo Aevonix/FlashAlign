@@ -5,6 +5,10 @@
 The [README preview](flashalign-promo-preview.gif) is a silent excerpt of its
 first 8 seconds.
 
+This video was recorded with the version 1.0 compact DeepSeek profile.
+Version 1.1 replaces that starter with the native Keys profile; the video
+does not demonstrate the replacement artifact.
+
 The promo is an edited video. Its model text comes from three recorded
 DeepSeek V4.1 Flash 1017 request pairs (EXL3 3.5-bpw, TensorFold 1.1.9,
 DSpark active, temperature 0, seed 20261030, thinking off), with FlashAlign

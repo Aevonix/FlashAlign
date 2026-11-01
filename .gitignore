@@ -34,9 +34,11 @@ research/
 !/profiles/deepseek41-flash1017-v1/
 /profiles/deepseek41-flash1017-v1/*
 !/profiles/deepseek41-flash1017-v1/profile.json
-!/profiles/deepseek41-flash1017-v1/profile.safetensors
 !/profiles/deepseek41-flash1017-v1/sha256.json
 !/profiles/deepseek41-flash1017-v1/LICENSE
+!/profiles/deepseek41-flash1017-v1/README.md
+!/profiles/deepseek41-flash1017-v1/RESPONSIBLE_USE.md
+!/profiles/deepseek41-flash1017-v1/payload-download.json
 !/profiles/glm53-full-v1/
 /profiles/glm53-full-v1/*
 !/profiles/glm53-full-v1/profile.json

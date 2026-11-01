@@ -1,4 +1,7 @@
 {
-  "profile.json": "15d8b330ba475657114a7a519f27daaf4a3c4ebeff490cfbc592d4753fd4c303",
-  "profile.safetensors": "db96d4e9a1f93f1a4f3ed4476ebfedc4b21f4f8f19be71c23ef19cee957f04f3"
+  "profile.json": "91990bfbc8882ffbc4ef2a6ed47810091e193744e2a5f0b8fe0e60a4aa882958",
+  "payload-download.json": "f89b90f3b99c6dab1c493d2071a6cce12e27396a136471dec9bae76e4900d3af",
+  "RESPONSIBLE_USE.md": "df90aaddeed851f5577a41dc1b7ced244a11b226bdefe79a82c52fe55e027fd1",
+  "LICENSE": "f2c6c602815669d292889e5be8c802f2ed950653b77999b1584e8e6aed25d040",
+  "wo_b_l10_35_1017.safetensors": "88324ceaa2c0754a2bdb4ef6bb388a088438e352358343e6c2c882009cdde864"
 }

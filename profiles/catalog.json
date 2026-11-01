@@ -7,8 +7,7 @@
       "profile": "deepseek41-flash1017-v1",
       "model_ids": [
         "deepseek-ai/DeepSeek-V4.1-Flash-1017",
-        "DeepSeek-V4.1-Flash-1017",
-        "LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw"
+        "DeepSeek-V4.1-Flash-1017"
       ],
       "model_types": [
         "deepseek_v41",

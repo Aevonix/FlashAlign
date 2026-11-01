@@ -3,7 +3,7 @@
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """Aevonix FlashAlign: native contact authorization and signed model requests."""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 def register(ctx):
     from .plugin import register as install

@@ -24,8 +24,10 @@ Aevonix work.
 
 ## Starter profiles and model weights
 
-The experimental starter profiles are fitted from abliterated checkpoints by
-OrcaRouter, Dealign and MoonMath. Fitting and runtime packaging are by Aevonix.
+The experimental starter profiles use abliterated checkpoints by
+Keys (published by drowzeys), OrcaRouter, Dealign and MoonMath. Profile fitting
+and runtime packaging are by Aevonix. The DeepSeek native profile preserves
+selected source matrix and scale tensors without a low-rank fit.
 The [checkpoint source record](profiles/SOURCES.md) credits each provider and
 pins the exact edited and stock revisions.
 
@@ -33,7 +35,7 @@ The starter pack contains runtime profile parameters, not complete model or
 draft-model checkpoints. Its retained source terms are available beside each
 profile:
 
-- [DeepSeek V4.1 Flash 1017](profiles/deepseek41-flash1017-v1/LICENSE): MIT.
+- [DeepSeek V4.1 Flash 1017](profiles/deepseek41-flash1017-v1/LICENSE): source MIT notice and the accompanying [responsible-use agreement](profiles/deepseek41-flash1017-v1/RESPONSIBLE_USE.md). Retain and review both.
 - [GLM 5.3 Full](profiles/glm53-full-v1/LICENSE): the custom GLM-5.3 license.
 - [GLM 5.3 Flash](profiles/glm53-flash-v1/LICENSE): MIT.
 - [Qwen3.8-27B](profiles/qwen38-27b-v1/LICENSE): Apache-2.0.

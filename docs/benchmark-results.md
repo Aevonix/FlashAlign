@@ -5,6 +5,10 @@ behavior on the listed configurations, not a score for every supported model
 or a maximum-throughput claim. [Run your own comparison](benchmarks.md) with the
 included recorder and optional evaluation tools.
 
+The DeepSeek results below used the version 1.0 compact profile. Version 1.1
+replaces that starter with the native Keys profile and a different engine path.
+These earlier measurements do not measure the replacement profile.
+
 The [aggregate results](../benchmarks/results/native-qualification-20261030.json)
 include exact model revisions, engine and profile hashes, settings recorded by
 the checks, sample counts and timing values. Prompts, response logs and private

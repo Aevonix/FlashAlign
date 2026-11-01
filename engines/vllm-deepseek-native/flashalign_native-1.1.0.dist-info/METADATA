@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: flashalign-native
+Version: 1.1.0
+Summary: FlashAlign native matrix runtime for pinned DeepSeek V4.1 Flash
+Requires-Python: >=3.10
+License-Expression: AGPL-3.0-only

@@ -1,0 +1,2 @@
+[vllm.general_plugins]
+flashalign_native = flashalign_native.plugin:register
