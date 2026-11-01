@@ -13,6 +13,7 @@ import re
 import secrets
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -46,7 +47,7 @@ def parser():
     return p
 
 
-def speculation(value, model):
+def speculation(value, model, container_model=MODEL_MOUNT):
     config = dict(DEFAULT_SPECULATION) if value is None else json.loads(value)
     if not isinstance(config, dict) or set(config) - {'model'} != set(DEFAULT_SPECULATION):
         raise ValueError('This backend requires the supported adaptive DSpark7 configuration')
@@ -57,7 +58,7 @@ def speculation(value, model):
     if 'model' in config:
         if not isinstance(config['model'], str) or Path(config['model']).expanduser().resolve() != model:
             raise ValueError('Native DSpark must use the same pinned stock model')
-        config['model'] = MODEL_MOUNT
+        config['model'] = container_model
     return config
 
 
@@ -114,7 +115,62 @@ def mount(source, target, readonly=False):
     return ['--mount', stream.getvalue()]
 
 
-def container_command(args, run_dir, *, name, labels, model, key, replay, profile, devices):
+def model_mount_plan(model):
+    """Retain standard HF snapshot/blob links without mounting the whole cache."""
+    model = Path(model).resolve(strict=True)
+    if not model.is_dir():
+        raise ValueError('Model path must be a directory')
+    repository = model.parent.parent
+    expected_repository = 'models--' + MODEL_ID.replace('/', '--')
+    snapshot = (model.parent.name == 'snapshots'
+                and repository.name == expected_repository
+                and re.fullmatch(r'[0-9a-f]{40}', model.name) is not None)
+    if snapshot:
+        if model.parent.is_symlink() or (repository / 'blobs').is_symlink():
+            raise ValueError('Hugging Face snapshot directories must not be symlinks')
+        allowed = {'blobs', 'snapshots', 'refs', '.no_exist'}
+        if any(path.name not in allowed or not path.is_dir() or path.is_symlink()
+               for path in repository.iterdir()):
+            raise ValueError('Unexpected Hugging Face repository layout; use a materialized model directory')
+    for directory, directories, filenames in os.walk(model, followlinks=False):
+        for name in directories:
+            if (Path(directory) / name).is_symlink():
+                raise ValueError('Model directory symlinks are unsupported; use a materialized model directory')
+        for name in filenames:
+            entry = Path(directory) / name
+            info = entry.lstat()
+            if stat.S_ISLNK(info.st_mode):
+                target_text = os.readlink(entry)
+                if Path(target_text).is_absolute():
+                    raise ValueError('Absolute model symlinks are unsupported; use a materialized model directory')
+                try:
+                    target = entry.resolve(strict=True)
+                except (OSError, RuntimeError) as error:
+                    raise ValueError('Model symlink target is missing or invalid') from error
+                if not target.is_file():
+                    raise ValueError('Model symlink must reference a regular file')
+                if target.is_relative_to(model):
+                    # Forbid chains through a different symlink or directory:
+                    # the original relative name must identify the same file.
+                    lexical = Path(os.path.abspath(entry.parent / target_text))
+                    if lexical != target:
+                        raise ValueError('Chained model symlinks are unsupported')
+                    continue
+                if (not snapshot or target_text != os.path.relpath(target, entry.parent)
+                        or target.parent != repository / 'blobs'
+                        or re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', target.name) is None
+                        or (repository / 'blobs' / target.name).is_symlink()):
+                    raise ValueError('Model symlink escapes its supported snapshot; use a materialized model directory')
+            elif not stat.S_ISREG(info.st_mode):
+                raise ValueError('Model directory contains a non-regular file')
+    if snapshot:
+        return {'source': repository, 'target': '/hf-model',
+                'model': '/hf-model/snapshots/' + model.name}
+    return {'source': model, 'target': MODEL_MOUNT, 'model': MODEL_MOUNT}
+
+
+def container_command(args, run_dir, *, name, labels, model, key, replay, profile, devices, model_layout=None):
+    model_layout = model_layout or {'source': model, 'target': MODEL_MOUNT, 'model': MODEL_MOUNT}
     command = ['docker', 'create', '--pull=never', '--init', '--restart=no', '--name', name,
                '--user', str(os.getuid()) + ':' + str(os.getgid()),
                '--gpus', json.dumps('device=' + ','.join(devices)),
@@ -123,7 +179,7 @@ def container_command(args, run_dir, *, name, labels, model, key, replay, profil
                '--publish', ('127.0.0.1' if args.host == 'localhost' else args.host) + ':' + str(args.port) + ':8000']
     for field, value in sorted(labels.items()):
         command += ['--label', field + '=' + value]
-    for source, target, readonly in ((model, MODEL_MOUNT, True),
+    for source, target, readonly in ((model_layout['source'], model_layout['target'], True),
             (ROOT, '/fa-package', True), (profile, '/fa-profile', True),
             (key, '/fa-private/key', True), (replay.parent, '/fa-replay', False),
             (run_dir.parent.parent / 'cache', '/cache', False),
@@ -143,9 +199,9 @@ def container_command(args, run_dir, *, name, labels, model, key, replay, profil
         '--profile', '/fa-profile', '--key-file', '/fa-private/key',
         '--replay-file', '/fa-replay/' + replay.name, '--canonical-model', MODEL_ID,
         '--native-receipts', '/fa-native-receipts', '--',
-        'serve', MODEL_MOUNT, '--host', '0.0.0.0', '--port', '8000',
+        'serve', model_layout['model'], '--host', '0.0.0.0', '--port', '8000',
         '--served-model-name', args.served_model_name,
-        '--speculative-config', json.dumps(speculation(args.speculative_config, model), separators=(',', ':')),
+        '--speculative-config', json.dumps(speculation(args.speculative_config, model, model_layout['model']), separators=(',', ':')),
         *native_arguments(args.arguments_json)]
 
 
@@ -183,6 +239,7 @@ def main(argv=None):
     profile = NativeProfile(args.profile)
     profile.validate_payload()
     model = args.model.expanduser().resolve(strict=True)
+    model_layout = model_mount_plan(model)
     pins = json.loads((ROOT / 'flashalign_native/model-pins.json').read_text())
     verify(model, args.model_receipt, pins)
     load_key(args.key_file)
@@ -206,7 +263,7 @@ def main(argv=None):
               'io.aevonix.flashalign.run': run_dir.name}
     name = 'flashalign-native-' + run_dir.name
     command = container_command(args, run_dir, name=name, labels=labels, model=model,
-        key=key, replay=replay, profile=profile.directory, devices=devices)
+        key=key, replay=replay, profile=profile.directory, devices=devices, model_layout=model_layout)
     if args.dry_run:
         print(json.dumps({'image': IMAGE, 'profile': profile.name, 'digest': profile.digest,
                           'devices': devices, 'resources': resource, 'starts_engine': False}))

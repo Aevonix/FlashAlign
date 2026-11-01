@@ -25,6 +25,8 @@ from owner_mode.native_setup import check as check_tensorfold
 from owner_mode.setup_runtime import SetupError
 from owner_mode.backend_setup import (KIT_ROOT, check_backend, prepare_backend, active_speculation)
 from owner_mode.quickstart import make_default_plan
+from owner_mode.automation import run_plan
+from owner_mode.engine_setup import private_json
 
 
 def digest(raw):
@@ -325,6 +327,23 @@ class NativeSetup(unittest.TestCase):
               redirect_stdout(io.StringIO())):
             with self.assertRaisesRegex(SetupError, 'No native vLLM integration'):
                 make_default_plan(args, {}, wizard.Console(color=False))
+
+    def test_apply_refreshes_missing_payload_metadata_after_materializing(self):
+        payload = (self.path/'native.safetensors').read_bytes()
+        (self.path/'native.safetensors').unlink()
+        plan = self.root/'setup.json'
+        private_json(plan, {'engine_only': True, 'model': 'fixture/model', 'profile': str(self.path),
+                            'engine': self.spec})
+        runtime = {'python': sys.executable, 'container_runtime': 'docker', 'image': 'fixture:image', 'image_id': 'sha256:test'}
+        with (self.patches(), mock.patch('owner_mode.backend_setup.active_speculation', return_value=None),
+              mock.patch('owner_mode.backend_setup._prepare_runtime', return_value=runtime),
+              mock.patch('owner_mode.backend_setup._run'),
+              mock.patch('owner_mode.profile_assets._download', side_effect=lambda r,p:p.write_bytes(payload))):
+            result = run_plan(plan, self.home, {}, wizard.provision, apply=True)
+        self.assertTrue(result['artifact_validated'])
+        self.assertEqual(result['status'], 'engine_prepared')
+        self.assertTrue(validate_profile(result['engine']['profile_path'])['artifact_valid'])
+        self.assertFalse((self.path/'native.safetensors').exists())
 
 
 if __name__ == '__main__':

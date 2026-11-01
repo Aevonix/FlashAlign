@@ -175,7 +175,8 @@ def run_plan(path, home, found, provision, *, apply=False, activate=False, profi
             return result
         deployment = prepare_engine(home, plan['engine'], details['manifest'], model_id=model['id'],
                                     key_file=plan.get('engine_key_file'))
-        details = validate_profile(deployment['profile_path'])
+        if details.get('payload_status') == 'missing':
+            details = validate_profile(deployment['profile_path'])
         result.update(engine=deployment, artifact_validated=True, status='engine_prepared', applied=True,
                       activation='engine launch pending' if plan.get('engine_only') else 'engine launch and gateway restart pending')
         result['next_command'] = ['bash', str(Path(__file__).resolve().parents[1]/'install.sh'),

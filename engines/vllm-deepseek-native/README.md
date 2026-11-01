@@ -2,7 +2,7 @@
 
 This backend runs the `deepseek41-flash1017-v1` starter with the pinned official DeepSeek V4.1 Flash 1017 checkpoint. Owner requests use the profile's immutable WO-B matrices at the declared layers. Off requests keep the original execution path. The profile is a separate format from compact output projections and accepts strength **1.0 only**.
 
-Use the FlashAlign wizard for installation. It downloads the profile payload into your deployment cache, verifies the model and profile, prepares the exact container image, and starts this launcher. The image is public and pinned by digest; a different image or engine revision is rejected. Existing compact DeepSeek profiles use the separate `vllm-deepseek` backend.
+Use the FlashAlign wizard for installation. It downloads the profile payload into your deployment cache, verifies the model and profile, prepares the exact container image, and starts this launcher. The image is public and pinned by digest; a different image or engine revision is rejected. Standard Hugging Face cache snapshots are supported: only the selected model repository is mounted, retaining its relative blob links. Local materialized model directories also work. Absolute links and links escaping either layout are rejected before activation. Existing compact DeepSeek profiles use the separate `vllm-deepseek` backend.
 
 ## Requirements
 

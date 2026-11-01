@@ -163,3 +163,59 @@ def test_mounted_distribution_exposes_worker_plugin():
     assert [(entry.name,entry.value) for entry in entries]==[
         ('flashalign_native','flashalign_native.plugin:register')]
     assert entries[0].load().__module__=='flashalign_native.plugin'
+
+
+def snapshot_fixture(tmp_path):
+    repository=tmp_path/('models--'+engine_config.MODEL_ID.replace('/','--'))
+    snapshot=repository/'snapshots'/engine_config.MODEL_REVISION
+    snapshot.mkdir(parents=True); (repository/'blobs').mkdir()
+    payload=repository/'blobs'/('a'*64); payload.write_bytes(b'synthetic-model-payload')
+    (snapshot/'model.safetensors').symlink_to('../../blobs/'+payload.name)
+    (snapshot/'config.json').write_text('{}')
+    return repository,snapshot,payload
+
+
+def test_hf_snapshot_preserves_links_with_only_repository_mount(tmp_path):
+    repository,snapshot,payload=snapshot_fixture(tmp_path)
+    (snapshot/'nested').mkdir()
+    (snapshot/'nested'/'tokenizer.json').symlink_to('../../../blobs/'+payload.name)
+    plan=launch.model_mount_plan(snapshot)
+    assert plan=={'source':repository,'target':'/hf-model',
+                  'model':'/hf-model/snapshots/'+engine_config.MODEL_REVISION}
+    assert (plan['source']/Path(plan['model']).relative_to(plan['target'])/'model.safetensors').read_bytes()==payload.read_bytes()
+    args=SimpleNamespace(host='127.0.0.1',port=8041,served_model_name=engine_config.MODEL_ID,
+        speculative_config=json.dumps(dict(engine_config.DEFAULT_SPECULATION,model=str(snapshot))),arguments_json='[]')
+    command=launch.container_command(args,tmp_path/'run',name='fixture',labels={},
+        model=snapshot,key=tmp_path/'key',replay=tmp_path/'replay'/'nonces',
+        profile=tmp_path/'profile',devices=['0','1','2','3'],model_layout=plan)
+    assert command[command.index('serve')+1]==plan['model']
+    assert json.loads(command[command.index('--speculative-config')+1])['model']==plan['model']
+    mounts=[command[index+1] for index,item in enumerate(command) if item=='--mount']
+    assert f'type=bind,src={repository},dst=/hf-model,readonly' in mounts
+    assert not any('src='+str(tmp_path)+',' in value for value in mounts)
+
+
+def test_materialized_and_internal_relative_link_models_keep_original_mount(tmp_path):
+    model=tmp_path/'materialized'; model.mkdir()
+    (model/'weight').write_bytes(b'fixture'); (model/'alias').symlink_to('weight')
+    assert launch.model_mount_plan(model)=={'source':model,'target':engine_config.MODEL_MOUNT,
+                                           'model':engine_config.MODEL_MOUNT}
+
+
+@pytest.mark.parametrize('kind',['absolute','escape','chain','directory','dangling','extra-repository-file'])
+def test_unsupported_model_links_fail_before_container_create(tmp_path,kind):
+    repository,snapshot,payload=snapshot_fixture(tmp_path)
+    entry=snapshot/'model.safetensors'
+    if kind=='absolute':
+        entry.unlink(); entry.symlink_to(payload)
+    elif kind=='escape':
+        outside=tmp_path/'outside'; outside.write_bytes(b'private'); entry.unlink();entry.symlink_to('../../../outside')
+    elif kind=='chain':
+        payload.unlink();other=repository/'blobs'/('b'*64);other.write_bytes(b'fixture');payload.symlink_to(other.name)
+    elif kind=='directory':
+        (snapshot/'directory').symlink_to(repository/'blobs',target_is_directory=True)
+    elif kind=='dangling':
+        payload.unlink()
+    elif kind=='extra-repository-file':
+        (repository/'credentials').write_bytes(b'do-not-mount')
+    with pytest.raises(ValueError):launch.model_mount_plan(snapshot)
