@@ -4,9 +4,8 @@ FlashAlign includes four compact starter profiles and the DeepSeek native
 profile manifest. Setup fetches the DeepSeek profile's 1.09 GB payload from a
 pinned public release asset. Base model weights and draft models are separate
 downloads. Choose the checkpoint for your engine and hardware
-before running the wizard; a profile does not make other quantizations or model
-revisions compatible. The [compatibility table](compatibility.md#engines-and-models)
-lists the qualified combinations and limits.
+before running the wizard. The [compatibility table](compatibility.md#engines-and-models)
+lists supported combinations and their requirements.
 
 The commands below use the official [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/guides/cli).
 If `hf` is not installed, install `huggingface_hub` in your Python environment:
@@ -36,23 +35,23 @@ Multi-node model files must be accessible at the configured model path on every
 rank. See [TensorFold setup](native-tensorfold.md) for rank configuration and
 activation.
 
-| Starter model | Download below | Qualified hardware |
+| Starter model | Download below | Tested hardware |
 | --- | --- | --- |
+| [DeepSeek V4.1 Flash 1017](#deepseek-v41-flash-1017-on-tensorfold-120) | EXL3 3.5-bpw plus original Engram tables | Four RTX PRO 6000 GPUs, Linux x86_64 |
 | [GLM 5.3 Full](#glm-53-full) | EXL3 2.75-bpw | Four DGX Sparks, Linux aarch64 |
 | [GLM 5.3 Flash](#glm-53-flash) | NVIDIA NVFP4 | Four DGX Sparks, Linux aarch64 |
 | [Qwen3.8-27B](#qwen38-27b) | EXL3 2.0-bpw or MLX-format 4-bit, plus DFlash2 | One RTX PRO 6000 or one DGX Spark, respectively |
 | [Gemma 4 26B A4B](#gemma-4-26b-a4b) | MLX-format 4-bit plus DFlash | One DGX Spark, Linux aarch64 |
 
-MLX-format means the stored quantization format. TensorFold performs inference
-on Linux/NVIDIA; these commands do not install or require Apple's MLX runtime.
+The selected bundle enforces its declared GPU architecture and rank count.
+MLX-format describes the checkpoint files; TensorFold runs them on NVIDIA GPUs
+under Linux.
 
 ### DeepSeek V4.1 Flash 1017 on TensorFold 1.2.0
 
 The `deepseek41-flash1017-v1` starter uses the same unchanged native payload
 on TensorFold 1.2.0 and [native vLLM](#deepseek-v41-flash-1017-native-vllm).
-TensorFold requires the following explicitly supported EXL3 base; vLLM uses
-the official FP8 checkpoint. Base quantization and arithmetic differ, so the
-shared profile does not imply identical full-model outputs.
+TensorFold requires the following EXL3 base; vLLM uses the official FP8 checkpoint.
 
 Download the [EXL3 checkpoint](https://huggingface.co/LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw/tree/04a492fc3b4d25ddbab8f2d2f07f235ec77c9010):
 
@@ -85,9 +84,8 @@ bash ./install.sh --auto --backend tensorfold \
 ```
 
 The wizard requires a TensorFold 1.2.0 bundle declaring this native operator
-and exact EXL3 base. The native profile remains fixed at strength 1.0 and four
-ranks. Its 1.09 GB payload is fetched separately from the runtime bundle.
-Older TensorFold bundles still require a compatible output-projection profile.
+and exact EXL3 base. This bundle requires four SM120 GPUs and strength 1.0.
+Its 1.09 GB profile payload is fetched separately from the runtime bundle.
 
 ### GLM 5.3 Full
 
@@ -224,7 +222,6 @@ profile payload, and stops before activation with `--no-restart`. No edited
 full checkpoint or separate draft download is needed. For offline preparation,
 place the verified profile payload beside its manifest first. See the
 [profile instructions](../profiles/deepseek41-flash1017-v1/README.md).
-Fresh public-package GPU and wizard qualification is pending.
 
 ### Other vLLM and SGLang models
 
@@ -270,7 +267,7 @@ hf download ggml-org/Qwen3.8-27B-GGUF Qwen3.8-27B-Q8_0.gguf \
   --local-dir "$FLASHALIGN_MODELS/qwen38-gguf"
 ```
 
-The qualified Qwen `draft-simple` path also uses this smaller external draft
+The Qwen `draft-simple` path also uses this smaller external draft
 model. Download the pinned [Qwen3.5-0.8B Q4_0 GGUF](https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/tree/807dfd9a6fadbf703207aac3bfb0b2b3040d077c):
 
 ```sh

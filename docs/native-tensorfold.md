@@ -1,14 +1,11 @@
 # TensorFold setup
 
-FlashAlign manages declared TensorFold 1.1.9 and 1.2.0 bundles on Linux x86_64
-and Linux aarch64.
-A runtime bundle must match both the CPU architecture and the GPU architecture.
-A Blackwell-only bundle cannot run on an Ampere GPU. The NVIDIA driver remains
-a host prerequisite and is never included in a bundle.
+FlashAlign manages TensorFold 1.1.9 and 1.2.0 bundles on Linux x86_64 and
+aarch64. A bundle must match the host's CPU and GPU architectures. Install the
+NVIDIA driver before setup.
 
 Setup stages the checked native executable, runtime libraries, matching source
-archive, local profile, and a unique deployment signing key. Other engines have
-their own installation paths.
+archive, profile and unique deployment signing key.
 
 The download catalog lists the available runtime bundles and their complete
 checksums. When no matching bundle is listed, provide its local directory with
@@ -18,9 +15,11 @@ profile directory.
 The DeepSeek starter runs on the [pinned native vLLM backend](../engines/vllm-deepseek-native/README.md)
 or a matching TensorFold 1.2.0 native-matrix bundle. TensorFold uses the pinned
 LibertAIDAI EXL3 serving base and the same unchanged native profile payload.
-Strength is fixed at 1.0 and tensor parallelism at four ranks. The bundle must
-explicitly declare this operator and compatible base; older projection bundles
-cannot load it. See [model downloads](model-downloads.md#deepseek-v41-flash-1017-on-tensorfold-120).
+Strength is fixed at 1.0 and tensor parallelism at four SM120 GPUs. The bundle
+must declare this operator and compatible base; older projection bundles
+cannot load it. It supports chat and completion requests; `response_format`
+and guided output are unsupported. See
+[model downloads](model-downloads.md#deepseek-v41-flash-1017-on-tensorfold-120).
 
 ## One host
 
@@ -82,14 +81,19 @@ stages profiles and required files through encrypted SSH input into private
 rank directories. Only commands that need a signing key receive one. Keys
 never appear in arguments or setup output. The leader authenticates API
 requests; every rank loads the same profile.
-The native Flash environment interface also receives the key-file path during
-startup, as required by its checked command contract. Preparation does not
+GLM Flash also receives the key-file path during startup. Preparation does not
 start a model or restart a harness.
 
-Activation starts followers, then the leader and its SSH forward. Native cold starts allow 30 minutes by default; a bundle can declare a checked `startup_timeout` from 60 to 7200 seconds. The DeepSeek 1.2.0 bundle allows 15 minutes. An integer `engine.startup_timeout` in the setup plan overrides the bundle value; DeepSeek ranks use the same allowance to connect to their peers. Large checkpoints loaded over a shared mount can take several minutes. Each rank has an owned process
-supervisor and a private receipt. Setup verifies standard and signed owner
-requests before changing harness routing. If activation fails, it stops only
-those recorded ranks. An occupied service is never stopped to make room.
+Activation starts followers, then the leader and its SSH forward. Startup
+allows 30 minutes by default; bundles can set `startup_timeout` from 60 to
+7,200 seconds. The DeepSeek 1.2.0 bundle allows 15 minutes. Set
+`engine.startup_timeout` to an integer in the plan to override this value.
+DeepSeek ranks use the same allowance to connect to their peers.
+
+Each rank has a process supervisor and a private receipt. Setup verifies
+standard and signed profile requests before changing harness routing. If
+activation fails, it stops only those recorded ranks. An occupied service is
+never stopped to make room.
 
 For remote hosts, setup keeps an owned SSH forward running on the controller and
 configures clients with its localhost URL. The forward uses the same verified SSH
@@ -101,10 +105,9 @@ every host; configuring drivers, SSH access and the cluster network remains an
 operator task.
 
 A host entry may set `state_root` to a writable, persistent private directory
-when its home partition has insufficient space. Setup never deletes unrelated
-files to make room. A temporary filesystem is suitable for a disposable test,
-but its staged runtime and profiles disappear after reboot and need preparation
-again. Model files may be on a shared read-only mount.
+when its home partition has insufficient space. Runtime files on a temporary
+filesystem need preparation again after reboot. Model files may be on a shared
+read-only mount.
 
 Native replay protection persists outside the versioned runtime directory.
 Setup selects a stable private directory for the deployment key and passes it
@@ -117,30 +120,23 @@ before resetting state or moving a deployment key.
 The bundle declares the supported speculative method. Setup preserves a matching
 active external drafter, MTP depth and parallel setting. An incompatible active
 configuration stops setup; the installer does not disable speculation. Native
-GLM uses its MTP weights. Each bundle declares whether its MTP depth is
-adjustable. Flash keeps its native
-maximum of three drafts; Full defaults to four. The qualified Full bundle uses
+GLM uses its MTP weights. Each bundle declares whether MTP depth is adjustable.
+Flash supports up to three drafts; Full defaults to four. The Full preset uses
 an 8,192-token context, two concurrent sequences and an 8 GiB host prompt cache.
-Its live qualification used MTP depth 4; other depths need workload validation.
-Full supports automatic tool calls, while forced tool selection, JSON Schema
-and image input are unsupported. Setup omits unsupported tuning flags and
-rejects a different requested fixed depth before staging. Qwen may require an
-external DFlash checkpoint. The
-legacy DeepSeek output-projection path uses its dedicated native launcher and
-declared DSpark assets.
+It supports automatic tool calls; forced tool selection, JSON Schema and image
+input are unsupported. Setup rejects unsupported speculative settings before
+staging. Qwen may require an external DFlash checkpoint. DeepSeek uses its
+declared DSpark assets. See [validation](validation.md) for runtime test results.
 
-## Legacy DeepSeek projection setup
+## DeepSeek Engram tables
 
-This section applies only to a matching external output-projection profile. The
-current `deepseek41-flash1017-v1` starter is not compatible with this bundle.
-
-The legacy TensorFold path needs its original Engram tables on every rank,
-separately from the EXL3 model. Setup detects the pinned original checkpoint in the Hugging Face
-cache, or accepts `--engram-source /models/deepseek-engram` (`engram_source` in a
-plan). It checks the original config and index hashes, required tensor encodings
-and shapes, and complete shard sizes before creating a key or staging files.
-A prepared per-rank table directory can instead use `--engram-dir` (`engram_dir`
-in a plan); its table headers and sizes must match the model and rank geometry.
+DeepSeek needs its original Engram tables on every rank, separately from the
+EXL3 model. Setup detects the pinned original checkpoint in the Hugging Face
+cache, or accepts `--engram-source /models/deepseek-engram` (`engram_source` in
+a plan). It checks config and index hashes, tensor encodings and shapes, and
+complete shard sizes before staging files. A prepared per-rank table directory
+can instead use `--engram-dir` (`engram_dir` in a plan); its headers and sizes
+must match the model and rank geometry.
 
 Only the original config, index, and two Engram shards are needed:
 
@@ -153,16 +149,16 @@ hf download deepseek-ai/DeepSeek-V4.1-Flash-1017 \
 ```
 
 These two shards total about 203 GB. They remain on the model host or its shared
-read-only storage; they are not copied into the runtime bundle. Header and size
-checks establish compatibility, not a new full-payload integrity check. Use the
-pinned download's integrity record for that.
+read-only storage; they are not copied into the runtime bundle. Retain the pinned
+download's payload-integrity record; setup checks headers and sizes.
 
-The legacy DeepSeek projection preset explicitly fixes context to 65536, pool size to 131072,
-one live slot and four ranks. Its declared generated assets are checked against
-that geometry. Larger settings need a separately built and qualified asset pack. Its generated assets
-must match the bundle's context and rank geometry. Changing those settings
-requires newly qualified assets; the wizard does not substitute a smaller
-context or disable drafts.
+### Legacy projection bundles
+
+Older TensorFold bundles require a matching output-projection profile and
+cannot load the current native starter. Their DeepSeek preset fixes the context
+at 65,536 tokens, pool at 131,072 tokens, one live slot and four ranks. Changing
+that geometry requires matching generated assets; the wizard preserves the
+declared context and speculative settings.
 
 ## Bundle contract
 
@@ -179,24 +175,14 @@ Native-matrix bundles require TensorFold 1.2.0 and explicitly declare
 `profile_schemas`, `supported_profile_requires`, `supported_profile_strengths`,
 `profile_target_model`, and `compatible_profile_bases`. The profile keeps its
 original target pin; compatible serving bases are declared by the runtime.
-For DeepSeek, TensorFold's EXL3 base and arithmetic differ from the official FP8
-vLLM path. The identical edited tensor payload does not establish full-model
-output identity across those paths.
 
 `binary` names the primary executable. `rank_transport` is `cli`, `glm_env`, or
-`dsv41_env`, according to the tested native family interface. DeepSeek additionally
-names its `follower_binary` and `assets_directory`. No Python compatibility path
-is accepted.
+`dsv41_env`, according to the native family interface. DeepSeek additionally
+names its `follower_binary` and `assets_directory`.
 
 Maintainers build a reproducible runtime archive with
 [build-native-bundle.py](../tools/build-native-bundle.py). Its source archive comes
 from the exact Git commit. `--release-tag` together with `--catalog-entry` writes a
-complete download entry for review without uploading or publishing anything.
-Add that entry to the catalog only after its runtime gate passes. Every bundled runtime library needs its license or
-notice. Source required for the native engine is distributed with the bundle;
-the private profile-creation tools are separate.
-
-The DeepSeek 1.2.0 bundle supports chat and completion requests. Its current
-engine does not support `response_format` or guided output, in either mode.
-Auxiliary runtime kernel sources and their license notices are included in the
-bundle and listed in its manifest.
+complete download entry. Include each bundled library's license or notice and
+any required source. Auxiliary runtime kernel sources and notices appear in
+the manifest alongside the matching engine source.

@@ -140,8 +140,7 @@ cache identity includes the profile content digest. See the
 [TensorFold setup](native-tensorfold.md) for the exact checkpoint and runtime
 limits. A TensorFold 1.2.0 bundle declares its compatible EXL3 serving base
 separately from the profile's original target model. It selects the same edited
-FP8 tensors without converting the profile. Base quantization and arithmetic
-differ between engines; full-model output identity is not implied.
+FP8 tensors without converting the profile.
 
 ## Optional weighted output projection
 

@@ -1,30 +1,22 @@
-# DeepSeek V4.1 Flash on native vLLM V2
+# DeepSeek projection profiles on vLLM
 
-This experimental integration accepts the pinned stock
-`deepseek-ai/DeepSeek-V4.1-Flash-1017` checkpoint and a locally supplied FlashAlign
-profile. It contains no model weights, profile tensors or profile-creation tools.
-The wizard selects it by model family and exact checkpoint metadata:
+This integration runs locally supplied compact or grouped projection profiles
+with the pinned stock `deepseek-ai/DeepSeek-V4.1-Flash-1017` checkpoint.
+The current DeepSeek starter uses a different operator and requires the
+[native matrix backend](../vllm-deepseek-native/README.md).
 
 ```sh
 bash ./install.sh --engine-only --backend vllm \
-  --model-path /models/DeepSeek-V4.1-Flash-1017 --devices 0,1,2,3
+  --model-path /models/DeepSeek-V4.1-Flash-1017 \
+  --profile /profiles/deepseek-projection --devices 0,1,2,3
 ```
 
-The included 85-site DeepSeek profile is accepted without rewriting its manifest,
-basis tensors, strengths or digest. It has passed bounded engine, cache,
-image-routing and direct-gateway checks; its quality status remains experimental.
-Operator-supplied `flashalign.grouped_projection.v1` profiles are also supported;
-the validator checks their typed sites, shared operators, Engram slices and image
-bias handling. A valid artifact is not proof of edited-checkpoint parity or model
-quality. Profile-specific evidence belongs with the supplied profile.
-
-Grouped profiles may select a subset of the supported sites and use different
+`flashalign.grouped_projection.v1` profiles may select supported sites with
 orthonormal basis ranks from 1 through 128. Omitted sites keep their standard
-output. The direct engine loader and setup wizard use the same native-target
-contract, including combined MoE output, Engram value slices and pre-bias image
-outputs. Unknown targets, unused operators and unsupported requirements are
-rejected. This describes the accepted profile format; each supplied profile
-still needs its own runtime and quality checks.
+output. The loader and wizard validate combined MoE output, Engram value slices
+and pre-bias image outputs. Unknown targets, unused operators and unsupported
+requirements are rejected. Validate each supplied profile against its intended
+checkpoint.
 
 ## Checkpoint and runtime preparation
 
@@ -49,48 +41,23 @@ persistent replay state at a separate `--replay-file`. Neither file belongs in a
 repository or model directory. Reusing a deployment signing key also requires
 preserving that deployment's replay state. See [REPLAY.md](REPLAY.md).
 
-## Qualified scope and experimental memory policy
+## Requirements and defaults
 
-The native engine was exercised on four SM120 GPUs with approximately 95 GiB
-VRAM each, TP4/PP1/DP1, eager execution, native DSpark5, and Engram CPU offload.
-The wizard preserves that speculative configuration. An incompatible active
-method or external draft stops setup instead of being disabled or replaced.
-This package does not extend that qualification to other hardware or parallelism.
+The launcher requires four SM120 GPUs with at least 90 GiB free on each,
+TP4/PP1/DP1 and unified Linux cgroup v2 accounting. It uses eager execution,
+native DSpark5 and Engram CPU offload. An incompatible active speculative
+method or external draft stops setup.
 
-Before activation, the wrapper requires four SM120 GPUs with at least 90 GiB
-free on each. Its conservative unattended-start policy requires 365 GiB of
-available host/cgroup headroom. That policy is **not a measured minimum**: the
-successful reference run started with 367.65 GiB host `MemAvailable`, while its
-initial cgroup headroom was not recorded. The observed steady host usage was
-approximately 202 GiB. Lower-memory machines remain unqualified. A controlled
-experiment can explicitly set `engine.allow_untested_memory` to true in its plan;
-the result continues to report that exception. It is not a support claim.
+The unattended-start policy requires 365 GiB of available host/cgroup memory.
+For a controlled lower-memory deployment, set `engine.allow_untested_memory`
+to true in the plan. This exception does not disable the 64 GiB runtime memory
+floor: the launcher stops its workers if available memory falls below it.
+Reclaimable file cache is accounted for separately from pinned and shared memory.
 
-The wrapper monitors host and cgroup headroom and stops its child workers below
-64 GiB. Unified Linux cgroup v2 accounting is required. Cgroup reports retain raw current/max, file, shmem and inactive-file
-counters. Working headroom may credit ordinary inactive file cache, bounded by
-`min(inactive_file, file - shmem - unevictable - dirty - writeback, current)`
-with negative values clamped to zero. Pinned and shared-memory allocations earn
-no credit. This prevents the preceding checkpoint hash pass from being counted
-entirely as unreclaimable memory. Host `MemAvailable` is an independent cap;
-the launcher never drops page cache. This floor cannot be disabled by the experimental override. The monitor
-is a safety measure, not a guarantee against every allocation failure. Default
-context is 65,536 tokens with two concurrent requests, matching the native
-engine context ceiling exercised separately. Other resource settings need their own check.
-Setup rejects an existing harness context or output budget above that selected
-engine limit before changing its route. It preserves the configured values and
-does not automatically enlarge this experimental preset.
-
-The wizard and this package completed full-model activation and shutdown checks
-with the 85-site profile under the explicit lower-memory test setting. That
-result does not remove the default 365 GiB startup policy or qualify every
-lower-memory host. Native harness coverage is listed in the
-[starter pack](../../profiles/README.md).
-
-Verified and Always On native Hermes checks completed with the profile active.
-All 14 isolated OpenClaw cases passed protocol and strict-answer checks,
-including image authorization, both tool-inheritance settings and same-session
-CLI behavior. Native DSpark stayed active during these checks.
+Default context is 65,536 tokens with two concurrent requests. Setup rejects a
+harness context or output budget above the selected engine limit before changing
+its route. See [validation](../../docs/validation.md) for tested configurations,
+including lower-memory runs.
 
 The standalone launcher requires Linux pidfd and child-subreaper support. It
 adopts and reaps native workers if their parent exits, including workers in a
@@ -112,7 +79,7 @@ supported choices are preserved. Explicitly disabled thinking remains disabled:
 the trusted DeepSeek route translates `reasoning_effort=none` to
 `chat_template_kwargs.enable_thinking=false` after capability validation and
 before the final request is signed. Setup reports this model compatibility rule.
-This validated serving lane also declares native image input. Setup updates the
+This backend also declares native image input. Setup updates the
 selected Hermes model's vision capability and OpenClaw's input descriptor;
 explicit text or auxiliary-image routing preferences remain unchanged.
 

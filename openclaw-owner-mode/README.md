@@ -50,14 +50,11 @@ The integration targets the OpenClaw 2026.10.8 plugin interface. See
 [compatibility](../docs/compatibility.md) for runtime requirements and activation
 checks.
 
-Serving integrations can declare model-specific request controls. For a lane
-that supports an omitted output budget, FlashAlign keeps catalog capacity
-separate from the request budget and preserves explicit task limits. A model
-that cannot disable thinking can reject that choice before dispatch, while
-leaving an omitted preference unchanged. See the policy format in
+FlashAlign preserves explicit output limits and supports omitting them when the
+engine allows it. Model-specific reasoning restrictions are checked before
+dispatch; an omitted preference stays unchanged. See the policy format in
 [engine setup](../docs/engine-setup.md). These controls require the regular
-provider stream; dedicated device worker-local inference needs a separate
-integration.
+provider stream. Device worker-local inference is unsupported.
 
 Licensed under [AGPL-3.0-only](LICENSE), with a separate commercial option.
 The extension includes the full terms and attribution notice.

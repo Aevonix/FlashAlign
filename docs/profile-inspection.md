@@ -37,11 +37,8 @@ validation uses the bounded streaming reader and declared payload, tensor and
 partition hashes. If a file changes later, its new contents require a new
 inspection.
 
-An artifact can pass inspection while being unsuitable for a particular model,
-engine or task. Inspection does not establish runtime activation, cache isolation,
-model quality, refusal behavior or the absence of unwanted semantic behavior.
-Those need independent checks. A fixed linear operator can affect different
-inputs differently even though its file contains no conditional branches.
+Inspection validates the artifact. Use engine activation checks and model
+evaluations to assess runtime behavior.
 
 The command exits with status `0` for a valid artifact, `2` for invalid or
 unsupported files, and `3` when the configured work budget stops inspection.

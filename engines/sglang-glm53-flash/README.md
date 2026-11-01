@@ -20,14 +20,8 @@ declared target and native-MTP writer inventory. The runtime accepts the
 documented normalized operator format; it does not depend on how a profile was
 created.
 
-The four-GPU SM120 configuration completed protocol, cache, native Hermes and
-OpenClaw checks at a 65,536-token context with EAGLE active. Stock, runtime profile
-and exact edited reference each passed 16/16 common fixtures. Both stock and
-profile retrieved the correct answer from 59,042 input tokens. Native Verified
-and Always On paths passed their protocol checks, including child and image
-verification behavior.
+See [validation](../../docs/validation.md) for protocol, cache, long-input and
+native harness results on four SM120 GPUs with EAGLE.
 
 Strict visual-answer checks failed in stock, runtime profile and exact edited
-reference. Those failures remain part of the qualification; image transport and
-authorization success is not a visual-quality guarantee. NEXTN and a complete
-SM121 deployment have not been GPU-qualified by this run.
+reference. NEXTN and a complete SM121 deployment remain untested on GPU.

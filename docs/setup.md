@@ -93,9 +93,9 @@ FlashAlign never retries it in stock mode.
 
 ## Find profiles
 
-The [starter profiles](../profiles/README.md) ship in `profiles/` and are discovered
-locally, without a download or private repository login. The pack records their
-validation limits.
+Setup discovers the [starter profiles](../profiles/README.md) in `profiles/`.
+Four payloads ship in the checkout; DeepSeek's native payload is fetched from
+the public release and verified before use.
 To add your own profile folders:
 
 ```sh
@@ -108,12 +108,13 @@ folders, or a `catalog.json` with `models` entries containing `path` and optiona
 `model_ids` aliases. The wizard also searches `~/.config/owner-mode/profiles/`,
 the checkout's `profiles/` folder, and paths in `FLASHALIGN_PROFILE_PATH`.
 
-Local checks cover the model revision, transform requirements, tensor names,
-FP32 shapes, finite values, positive gain/norm vectors, orthonormal bases and
-supplied file checksums. Invalid profiles are excluded. Matching uses explicit
-model IDs or catalog aliases, with revision/format conflicts rejected when the
-engine supplies that metadata. The validator accepts ranks up to 128 and tensor
-files up to 256 MiB.
+Local checks cover the model revision, transform requirements, tensor names and
+supplied checksums. Compact profiles also require valid FP32 shapes, finite
+values, positive gain/norm vectors and orthonormal bases, with ranks up to 128
+and tensor files up to 256 MiB. Native DeepSeek payloads use a separate streaming
+validator. Invalid profiles are excluded. Matching uses explicit model IDs or
+catalog aliases; revision and format conflicts are rejected when the engine
+supplies that metadata.
 
 If the engine does not provide a [profile inventory](engine-contract.md#optional-profile-discovery),
 enter an installed profile name directly. Model names are not limited to the

@@ -31,12 +31,9 @@ A profile directory contains `profile.json`, `profile.safetensors` and its
 source-model license. The signing key must be an owned private regular file of
 exactly 32 random bytes. Models and profiles must already be present.
 
-The default context is 65,536 tokens. This setting passed the managed wizard,
-65,000-input-token requests in both modes, and native Hermes and OpenClaw
-checks on two 95 GiB RTX PRO 6000 Blackwell Max-Q cards. The earlier complete
-operator test runs used 2,048 tokens. The current context qualification used
-serial requests and a reused pinned dependency environment. Larger contexts
-and lower-memory systems need separate qualification.
+The default context is 65,536 tokens, tested with serial requests on two
+95 GiB RTX PRO 6000 Blackwell Max-Q GPUs. See
+[validation](../../docs/validation.md) for setup, long-input and harness results.
 
 The launcher preserves native MTP and uses TP/EP two with PLE tables in pinned
 host memory. The qualified path uses eager execution. Unsupported speculative

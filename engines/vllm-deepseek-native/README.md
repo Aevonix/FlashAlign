@@ -9,12 +9,12 @@ Use the FlashAlign wizard for installation. It downloads the profile payload int
 - Linux x86_64, Docker Engine and NVIDIA Container Toolkit.
 - Four SM120 GPUs with at least 94 GiB total and 90 GiB free memory per GPU.
 - The exact model revision in `backend.json`, including its original quantization.
-- 221 GiB available host/cgroup memory before an unattended start. The container is limited to 224 GiB and the supervisor stops it if available host memory falls below 24 GiB. These are deployment policies, not a claim of the smallest possible machine.
+- 221 GiB available host/cgroup memory before an unattended start. The container is limited to 224 GiB and the supervisor stops it if available host memory falls below 24 GiB. These are the launcher’s current memory limits.
 - Space for the model, the container image, compilation caches and the approximately 1.02 GiB native profile payload.
 
 The default keeps adaptive DSpark7, B12X, FP8 KV cache and the engine's graph path enabled. This pinned model uses FULL decode graphs and eager prefill within its `FULL_AND_PIECEWISE` configuration. Prefix caches are separated by effective profile, payload digest and strength. Switching between already loaded off and owner modes does not restart the engine. Loading a different artifact does.
 
-The current native starter is validated for text. Image cache isolation is implemented but image requests are not yet part of this backend's published qualification. This backend does not claim compatibility with other GPU architectures, tensor-parallel sizes, expert/context parallelism, external KV transfer or LoRA.
+Text requests are validated. Image requests remain untested. Other GPU architectures, tensor-parallel sizes, expert/context parallelism, external KV transfer and LoRA are unsupported.
 
 ## Direct engine setup
 
@@ -45,4 +45,4 @@ Run the CPU contract and lifecycle tests with:
 python -m pytest -q engines/vllm-deepseek-native/tests
 ```
 
-These test artifact parsing, corruption rejection, owner/off row mapping, separate graph identities, authentication, cache namespaces, immutable bindings and container ownership. CPU tests do not establish GPU behavior, throughput or a refusal rate. The [public GPU qualification](../../docs/validation.md#deepseek-native-profile) passed eight protocol/cache requests using the pinned image's libraries on four SM120 GPUs. Actual Docker image checks covered artifact loading, key ownership, plugin discovery and snapshot mounts on CPU; full Docker GPU/wizard activation remains untested.
+Tests cover artifact validation, row selection, authentication, cache isolation and container lifecycle. See [validation results](../../docs/validation.md#deepseek-native-profile) for GPU checks and the remaining Docker GPU/wizard test gap.

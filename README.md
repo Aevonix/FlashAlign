@@ -15,8 +15,8 @@ channels, or keep a profile active across every routed request.
 
 FlashAlign works with supported base and quantized weights without permanently
 changing them. Run it directly, with Hermes or OpenClaw, or through your own
-harness. Managed inference runs on Linux with NVIDIA GPUs, including DGX Spark
-for the qualified TensorFold paths.
+harness. Managed inference runs on Linux with NVIDIA GPUs. See
+[compatibility](docs/compatibility.md) for DGX Spark support and engine requirements.
 
 The V1 starter profiles focus on refusal reduction. Future profiles could also
 increase refusals for public or higher-risk tasks.
@@ -60,17 +60,15 @@ Fitting and runtime packaging by Aevonix. See the
 
 | Model | Supported engines |
 | --- | --- |
-| DeepSeek V4.1 Flash 1017 | Pinned native vLLM with official FP8, or TensorFold 1.2.0 with the declared EXL3 base |
+| DeepSeek V4.1 Flash 1017 | vLLM, TensorFold |
 | GLM 5.3 Full | TensorFold |
 | GLM 5.3 Flash | TensorFold, SGLang |
 | Qwen3.8-27B | TensorFold, vLLM, SGLang, llama.cpp |
 | Gemma 4 26B A4B | TensorFold, vLLM, SGLang, llama.cpp |
 
 See [compatibility](docs/compatibility.md#engines-and-models) for hardware
-requirements, checkpoint formats and feature limits. The [validation results](docs/validation.md)
-record the configurations tested. The included [starter profiles](profiles/README.md)
-remain experimental; setup checks that the selected profile matches the model
-and engine.
+requirements, pinned checkpoints and feature limits, and
+[validation](docs/validation.md) for tested configurations and results.
 
 Switching happens per request among profiles already loaded by the engine.
 Loading a new model or profile happens beforehand and can require an engine

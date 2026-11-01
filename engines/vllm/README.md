@@ -29,7 +29,7 @@ methods stop startup. The launcher never adds a flag that disables speculation.
 
 ## Supported scope
 
-The first adapter supports the dense Qwen3.5/3.8 architecture and standard
+This adapter supports the dense Qwen3.5/3.8 architecture and standard
 projection profiles at embedding, attention-output and MLP-output sites. It
 requires one GPU, one API process and eager execution. Disabling CUDA graphs
 is an explicit performance limitation; speculative decoding remains available.
@@ -50,19 +50,14 @@ the actual embedding/output modules. The base weights stay unchanged; standard
 rows bypass all transform arithmetic. External draft models keep their ordinary
 weights; the target model verifies draft tokens under the selected profile.
 
-The validated configuration is Qwen3.8-27B BF16 with the bundled 129-site
-profile and ngram speculation on one RTX PRO 6000. Eighteen CPU tests and
-15 real-model protocol/cache checks passed. All 16 arithmetic/Python-output
-fixtures passed in standard mode and all 16 passed with the profile active,
-with no truncated answers. These are small retention checks; other checkpoints,
-quantizations and speculative methods need their own qualification.
+The tested configuration uses Qwen3.8-27B BF16, the bundled 129-site profile
+and ngram speculation on one RTX PRO 6000. See
+[validation](../../docs/validation.md) for protocol, answer and long-input results.
 
-The current wizard defaults use a 65,536-token context, up to four requests,
-an 8,192-token prefill batch and GPU-memory fraction 0.85. Serial checks on a
-96 GB RTX PRO 6000 processed 65,470 input tokens in both modes, passed all 32
-small arithmetic/code fixtures, and exercised native Hermes/OpenClaw tools and
-child inheritance. They do not qualify four simultaneous maximum-length requests.
-The full `qwen3_5` model declares image input; `qwen3_5_text` remains text-only.
+Wizard defaults are a 65,536-token context, up to four requests, an 8,192-token
+prefill batch and GPU-memory fraction 0.85. Four simultaneous maximum-length
+requests remain untested. The full `qwen3_5` model accepts images;
+`qwen3_5_text` is text only.
 
 Installing the package leaves plain vLLM unchanged until profiles are explicitly
 configured through this launcher. Usage telemetry is disabled by the launcher.
