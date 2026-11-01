@@ -46,7 +46,7 @@ a backend. GGUF files select llama.cpp. Choose another engine explicitly with
 | SGLang Qwen Flash Next | Pinned 0.5.20 writer-group integration | Matched FP8 checkpoint, two GPUs, native MTP, PLE tables in host RAM; experimental |
 | vLLM Gemma 4 | Pinned 0.32.0 projection integration | Matched 26B A4B FP8 checkpoint, one GPU, ngram; experimental |
 | SGLang Gemma 4 | [Pinned 0.5.20 projection integration](../engines/sglang-gemma4/README.md) | Same pinned 26B A4B FP8 checkpoint and 50-site profile, one GPU, NGRAM with three draft tokens; native protocol checks passed, exact-answer limit remains |
-| vLLM DeepSeek V4.1 Flash | Pinned 0.32.0 native V2 integration | Exact stock 1017 checkpoint, four SM120 GPUs, native DSpark5; experimental; engine, wizard and Verified/Always On native harness checks passed |
+| vLLM DeepSeek V4.1 Flash | [Pinned native container and tensor operator](../engines/vllm-deepseek-native/README.md) | Official 1017 FP8 checkpoint, four SM120 GPUs, adaptive DSpark7, FULL decode graphs and eager prefill; public-package GPU and wizard qualification pending |
 | llama.cpp | Upstream 0.8.0, commit `8642541`, source patch and profile converter | Qwen3.8-27B and Gemma 4 26B A4B Q8_0, one GPU; Qwen `draft-simple`, Gemma ngram or its official MTP draft |
 | TensorFold | Compiled 1.1.9 bundles for Linux x86_64 and aarch64 | Exact model, GPU, operator and draft capabilities come from each qualified bundle; see [TensorFold setup](native-tensorfold.md) |
 
@@ -90,16 +90,21 @@ match the integration's declared capabilities.
 
 ## Included profiles and engine packages
 
-GLM 5.3 Full and Flash, DeepSeek V4.1 Flash 1017, Qwen3.8-27B and Gemma 4 26B A4B
-starter profiles are included in the checkout.
-The wizard validates and selects them locally. It never downloads profile files
-and profile selection requires no private-repository access.
+GLM 5.3 Full and Flash, Qwen3.8-27B and Gemma 4 26B A4B compact starter
+profiles are included in the checkout. DeepSeek V4.1 Flash 1017 includes its
+native manifest and a pinned public download descriptor. Setup retrieves the
+1.09 GB native payload when needed, verifies its size and SHA-256, and caches it
+outside the checkout. No private repository access or GitHub login is needed.
+For offline setup, place the verified payload beside its manifest before
+preparation. See [the DeepSeek profile](../profiles/deepseek41-flash1017-v1/README.md)
+for the exact file and source terms.
 
 For TensorFold, managed setup can retrieve a matching runtime package from
 FlashAlign's release assets over HTTPS. No GitHub account or login is needed.
 The included catalog pins each asset's size, SHA-256 digest and complete file
 inventory. Setup verifies those checks before staging and rechecks cached files
-before reuse. This downloads engine code only; the profiles stay local.
+before reuse. These TensorFold downloads contain engine code, separately from
+the DeepSeek native profile asset.
 
 For offline setup or a separately qualified package, use `--engine-bundle`.
 If no asset matches the model and platform, setup asks for a local package.
@@ -147,7 +152,8 @@ for tested engine combinations and remaining model-quality limits.
 2. Copies the integration into private FlashAlign state and prepares a separate
    engine installation. Source patches use a checked upstream revision; model
    files remain unchanged.
-3. Creates a managed Python environment and installs pinned dependencies.
+3. Prepares the declared runtime, using a managed Python environment or the
+   pinned native container, and installs required dependencies.
 4. Creates or reuses a deployment signing key and stages the profile.
 5. Starts the model workers and checks standard and signed profile requests.
 6. Applies the harness configuration and requests the selected gateway restarts.
@@ -157,12 +163,15 @@ more GPUs, such as `--devices 0,1,2,3`. Automatic selection uses
 visible GPUs or devices with less than 5% of their memory occupied. A machine
 still needs suitable NVIDIA hardware and drivers. Integrations built from source
 also need their declared compilers and CUDA build tools; prebuilt TensorFold
-bundles do not require a CUDA build environment. No model weights are downloaded
-by this flow.
+bundles do not require a CUDA build environment. The native DeepSeek backend
+requires Docker Engine and NVIDIA Container Toolkit. Its pinned image is
+`ghcr.io/local-inference-lab/vllm@sha256:f5f9efe1b10ec7b853a495e66b7dbf15ff54f62741e444dea0b44e16736a10a9`.
+Setup can pull that image when dependency installation is enabled. It does not
+download a base model checkpoint.
 
-Setup checks backend-specific interpreter requirements before preparation. The
-DeepSeek V4.1 vLLM backend and the Gemma and GLM Flash SGLang integrations require
-Python 3.12 or newer; FlashAlign setup itself supports Python 3.10. Without an
+Setup checks backend-specific interpreter requirements before preparation.
+The Gemma and GLM Flash SGLang integrations require Python 3.12 or newer;
+FlashAlign setup itself supports Python 3.10. Without an
 explicit `--engine-python` or `engine.python`, setup can select a compatible
 interpreter already installed locally. An incompatible explicit choice stops
 setup before dependency installation.
@@ -178,7 +187,8 @@ matching development headers before activation.
 Setup preserves a matching active engine's speculative configuration. It
 rejects an unsupported method or a conflicting requested draft. New vLLM
 Qwen deployments use the qualified ngram configuration. DeepSeek V4.1 Flash on
-vLLM uses the stock model's native DSpark5. Qwen3.8-27B on SGLang needs a
+the native vLLM backend uses the stock model's adaptive DSpark with seven
+draft tokens. Qwen3.8-27B on SGLang needs a
 local DFlash2 model; Qwen Flash Next uses its own native MTP weights. llama.cpp
 uses `draft-simple` for a local Qwen GGUF draft. Gemma defaults to
 `ngram-simple`, which needs no separate draft file. Supplying the official
@@ -266,8 +276,9 @@ entries are separated by loaded profile and strength; normal-mode entries remain
 separate. Owner entries are never written to the engine's disk cache. Reloading
 the model or profiles starts a new engine with an empty in-memory cache.
 
-Prompt reuse consumes the engine's cache memory budget, independently of the
-small profile files. It does not require disabling speculative decoding.
+Prompt reuse consumes the engine's cache memory budget, independently of
+profile storage. The DeepSeek native profile also needs GPU storage for its
+alternate matrices and graph workspaces. Speculative decoding stays enabled.
 TensorFold's cache is scoped by profile and strength. Its memory budget is
 separate from profile storage.
 
@@ -329,9 +340,10 @@ see the [hardware table](compatibility.md#engines-and-models).
 For TensorFold, `engine.arguments` accepts only one positive `--context` cap,
 for example `["--context", "8192"]` or `["--context=8192"]`. The same cap is
 checked during preparation and passed to the engine where the bundle permits
-it. Fixed geometry still applies: the included DeepSeek bundle requires its
-65,536-token context, 131,072-token pool and four ranks. Other TensorFold
-overrides are rejected before setup writes files;
+it. Fixed geometry still applies to a selected bundle, including the legacy
+DeepSeek projection bundle's 65,536-token context, 131,072-token pool and four
+ranks. That bundle does not support the native DeepSeek starter. Other
+TensorFold overrides are rejected before setup writes files;
 model, profile, listener, parallelism and speculative settings remain managed.
 TensorFold setup uses a verified native runtime bundle.
 
@@ -340,28 +352,38 @@ index or single-shard header fingerprints. These checks identify the tested
 layout; they do not replace the model distributor's complete download hashes.
 The wizard preserves supplied profile license notices when staging it.
 
-DeepSeek vLLM preparation also verifies every pinned checkpoint payload and keeps a
-resumable receipt outside the read-only model folder. The first pass reads about
-510 GB; it does not download, copy or convert weights. Normal Hugging Face
-snapshot symlinks are supported. Its launcher preserves native DSpark5, checks
-the experimental GPU/memory policy and monitors a 64 GiB host/cgroup safety
-floor. Lower-memory activation requires an explicit `allow_untested_memory`
-experimental plan option. That option does not establish hardware support.
-See the [DeepSeek integration](../engines/vllm-deepseek/README.md) for the tested
-scope, the conservative 365 GiB startup policy and bounded wizard qualification.
-Its Hermes setup uses a model-specific supported reasoning default and preserves
-disabled thinking through the DeepSeek transport's `enable_thinking=false` option.
-It does not change the reasoning settings for other models.
+Native DeepSeek preparation verifies every pinned checkpoint payload and keeps
+a resumable receipt outside the read-only model folder. The first pass reads
+about 510 GB; it does not download, copy or convert the base weights. Normal
+Hugging Face snapshot symlinks are supported. The native profile is a separate
+verified public asset. Its operator keeps the stock and edited WO-B bindings
+immutable and selects between them per request or row. Strength is fixed at
+1.0; projection-only integrations cannot load it.
+
+The native launcher preserves adaptive DSpark7 and the declared graph settings.
+Its default context is the model's 1,048,576-token limit; that configuration is
+not evidence of a completed million-token workload test. See the
+[DeepSeek integration](../engines/vllm-deepseek-native/README.md) for resource
+checks, supported arguments and qualification status. Its Hermes setup uses a
+model-specific supported reasoning default and preserves disabled thinking
+through the DeepSeek transport's `enable_thinking=false` option. It does not
+change reasoning settings for other models.
+
+An operator with an existing external DeepSeek output-projection profile can
+still select the [legacy vLLM integration](../engines/vllm-deepseek/README.md)
+or a matching TensorFold bundle. Those paths and their earlier qualification
+records do not apply to the native starter.
 
 An existing prepared installation can be reused without installing packages:
 set `engine.python` to the compatible environment and leave
 `install_dependencies` false. SGLang also needs a clean pinned `source`
 checkout; llama.cpp needs the path to its prepared `installation.json` in
 `engine.installation`.
-The DeepSeek vLLM variant additionally checks the preinstalled native plugin and
-FlashInfer 0.7.1rc5. An operator-supplied overlay can be selected with
-`engine.environment.PYTHONPATH`; otherwise default installation builds the owned
-overlay automatically.
+The legacy DeepSeek vLLM projection integration additionally checks its
+preinstalled plugin and FlashInfer 0.7.1rc5. Its operator-supplied overlay can be
+selected with `engine.environment.PYTHONPATH`; otherwise installation builds
+the owned overlay. The native starter instead requires its pinned container
+and checked native overlay; an arbitrary Python environment is not a substitute.
 
 The result includes the activation command. When starting the engine and
 restarting the gateways is authorized:

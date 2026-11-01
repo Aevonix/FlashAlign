@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "date": "2026-11-01",
+  "kind": "public_native_runtime_qualification",
+  "profile": {
+    "name": "deepseek41-flash1017-v1",
+    "format": "flashalign.native_wo_b.v1",
+    "transform": "native_matrix_override_v1",
+    "strength": 1.0,
+    "manifest_sha256": "91990bfbc8882ffbc4ef2a6ed47810091e193744e2a5f0b8fe0e60a4aa882958",
+    "payload_sha256": "88324ceaa2c0754a2bdb4ef6bb388a088438e352358343e6c2c882009cdde864",
+    "payload_bytes": 1091589280,
+    "digest": "f58572af5fe03fa65dbd73e58b0dbb4cf7c151bf519e734f058572958dc6b005"
+  },
+  "model": {
+    "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    "revision": "1bae0e1088993b9b82de08f59de5be5a34e42170"
+  },
+  "source": {
+    "id": "drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated",
+    "revision": "de412d2249632903dace23399526e00a145aada5"
+  },
+  "engine": {
+    "backend": "vllm",
+    "variant": "deepseek-v41-native",
+    "image": "ghcr.io/local-inference-lab/vllm@sha256:f5f9efe1b10ec7b853a495e66b7dbf15ff54f62741e444dea0b44e16736a10a9",
+    "executed_core_tree_sha256": "c7eee72ffa6430f62910dfd5a21a8a49ffb8293d0d41f1c12f9981316ce361b7",
+    "gpu_launch": "host process using the pinned image libraries",
+    "tensor_parallel_size": 4,
+    "gpu_architecture": "SM120",
+    "configured_context_tokens": 1048576,
+    "reported_kv_capacity_tokens": 7809386,
+    "speculation": "adaptive DSpark7",
+    "graphs": "FULL decode, eager prefill"
+  },
+  "checks": {
+    "complete_worker_receipts": 4,
+    "layer_rank_bindings": 104,
+    "tensor_partitions_per_stock_or_edited_set": 208,
+    "protocol_requests": 8,
+    "protocol_passed": 8,
+    "signed_profile_effective": true,
+    "unsigned_falls_back_to_off": true,
+    "replay_falls_back_to_off": true,
+    "owner_warm_cached_tokens": 2816,
+    "owner_first_cached_tokens": 0,
+    "same_prefix_off_cached_tokens": 0,
+    "owner_draft_tokens": 59,
+    "owner_accepted_draft_tokens": 30,
+    "mixed_graph_ranks": 4,
+    "mixed_owner_rows": 8,
+    "mixed_off_rows": 8,
+    "invalid_row_flags": 0
+  },
+  "software_checks": {
+    "core_tests_passed": 768,
+    "shared_engine_tests_passed": 19,
+    "native_engine_tests_passed": 88,
+    "legacy_projection_tests_passed": 8,
+    "docker_cpu_artifact_and_key_checks_passed": true,
+    "docker_cpu_plugin_discovery_passed": true,
+    "docker_cpu_hf_snapshot_mount_passed": true,
+    "anonymous_image_manifest_http_status": 200
+  },
+  "limits": {
+    "gpu_docker_activation_tested": false,
+    "full_gpu_wizard_activation_tested": false,
+    "fresh_gpu_dependency_install_tested": false,
+    "image_requests_tested": false,
+    "behavioral_benchmark_rerun": false,
+    "million_token_input_tested": false,
+    "throughput_benchmark": false
+  }
+}

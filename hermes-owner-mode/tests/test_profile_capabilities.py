@@ -85,8 +85,13 @@ print(json.dumps(list(names)))
         expected = {'sglang-glm53-flash': 1, 'sglang-qwen4': 1}
         for path in KIT_ROOT.glob('*/backend.json'):
             with self.subTest(backend=path.parent.name):
-                self.assertEqual(json.loads(path.read_text())['maximum_rank'], expected.get(path.parent.name, 128))
-        self.assertTrue(all('maximum_rank' in row for row in backend_catalog()))
+                metadata = json.loads(path.read_text())
+                if metadata.get('profile_schemas') == ['flashalign.native_wo_b.v1']:
+                    self.assertNotIn('maximum_rank', metadata)
+                else:
+                    self.assertEqual(metadata['maximum_rank'], expected.get(path.parent.name, 128))
+        self.assertTrue(all('maximum_rank' in row or row.get('variant') == 'deepseek-v41-native'
+                            for row in backend_catalog()))
 
     def test_standard_grouped_and_writer_group_ranks(self):
         forms = [

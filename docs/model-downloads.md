@@ -1,7 +1,9 @@
 # Download a model
 
-FlashAlign includes its five starter profiles. Model weights and draft models
-are separate downloads. Choose the checkpoint for your engine and hardware
+FlashAlign includes four compact starter profiles and the DeepSeek native
+profile manifest. Setup fetches the DeepSeek profile's 1.09 GB payload from a
+pinned public release asset. Base model weights and draft models are separate
+downloads. Choose the checkpoint for your engine and hardware
 before running the wizard; a profile does not make other quantizations or model
 revisions compatible. The [compatibility table](compatibility.md#engines-and-models)
 lists the qualified combinations and limits.
@@ -36,7 +38,6 @@ activation.
 
 | Starter model | Download below | Qualified hardware |
 | --- | --- | --- |
-| [DeepSeek V4.1 Flash 1017](#deepseek-v41-flash-1017) | EXL3 3.5-bpw plus original Engram shards | Four RTX PRO 6000 GPUs, Linux x86_64 |
 | [GLM 5.3 Full](#glm-53-full) | EXL3 2.75-bpw | Four DGX Sparks, Linux aarch64 |
 | [GLM 5.3 Flash](#glm-53-flash) | NVIDIA NVFP4 | Four DGX Sparks, Linux aarch64 |
 | [Qwen3.8-27B](#qwen38-27b) | EXL3 2.0-bpw or MLX-format 4-bit, plus DFlash2 | One RTX PRO 6000 or one DGX Spark, respectively |
@@ -45,7 +46,12 @@ activation.
 MLX-format means the stored quantization format. TensorFold performs inference
 on Linux/NVIDIA; these commands do not install or require Apple's MLX runtime.
 
-### DeepSeek V4.1 Flash 1017
+### Legacy DeepSeek output-projection profiles
+
+The `deepseek41-flash1017-v1` starter uses the [official FP8 download](#deepseek-v41-flash-1017-native-vllm)
+and native vLLM backend below. It cannot run on TensorFold or use EXL3 weights.
+The following download applies only to an operator-supplied output-projection
+profile and matching TensorFold bundle.
 
 Download the [EXL3 checkpoint](https://huggingface.co/LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw/tree/04a492fc3b4d25ddbab8f2d2f07f235ec77c9010):
 
@@ -73,10 +79,12 @@ Pass the EXL3 folder as `--model-path` and the original-shard folder as
 ```sh
 bash ./install.sh --auto --backend tensorfold \
   --model-path "$FLASHALIGN_MODELS/deepseek41-exl3" \
+  --profile /path/to/compatible-projection-profile \
   --engram-source "$FLASHALIGN_MODELS/deepseek41-engram"
 ```
 
-The vLLM alternative uses the full original checkpoint, described below.
+These legacy files do not replace the official FP8 checkpoint or the native
+profile payload used by the current starter.
 
 ### GLM 5.3 Full
 
@@ -185,18 +193,37 @@ these files.
 
 | Model | Engine | Pinned format |
 | --- | --- | --- |
-| DeepSeek V4.1 Flash 1017 | vLLM | Original checkpoint |
+| DeepSeek V4.1 Flash 1017 | Pinned native vLLM | Official native FP8 checkpoint |
 | GLM 5.3 Flash | SGLang | Original FP8 checkpoint |
 | Qwen3.8-27B | vLLM or SGLang | Original BF16 checkpoint |
 | Gemma 4 26B A4B | vLLM or SGLang | RedHat FP8-dynamic checkpoint |
 
-DeepSeek V4.1 Flash 1017, vLLM:
+### DeepSeek V4.1 Flash 1017 native vLLM
+
+Download the complete official checkpoint, including its Engram and native
+DSpark tensors:
 
 ```sh
 hf download deepseek-ai/DeepSeek-V4.1-Flash-1017 \
   --revision 1bae0e1088993b9b82de08f59de5be5a34e42170 \
   --local-dir "$FLASHALIGN_MODELS/deepseek41-original"
 ```
+
+Prepare the native starter on Linux x86_64 with four SM120 GPUs:
+
+```sh
+bash ./install.sh --auto --backend vllm \
+  --model-path "$FLASHALIGN_MODELS/deepseek41-original" --no-restart
+```
+
+Setup selects the pinned native container, retrieves and verifies the public
+profile payload, and stops before activation with `--no-restart`. No edited
+full checkpoint or separate draft download is needed. For offline preparation,
+place the verified profile payload beside its manifest first. See the
+[profile instructions](../profiles/deepseek41-flash1017-v1/README.md).
+Fresh public-package GPU and wizard qualification is pending.
+
+### Other vLLM and SGLang models
 
 GLM 5.3 Flash, SGLang:
 

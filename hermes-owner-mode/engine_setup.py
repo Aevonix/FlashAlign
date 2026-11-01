@@ -393,7 +393,8 @@ def stop_engine(deployment):
     members = _capture_owned_members(records, members)
     private_json(marker, {**previous, 'owned_members': members})
     for signum in (signal.SIGTERM, signal.SIGKILL):
-        sent = set(); deadline = time.monotonic()+5
+        grace = 35 if deployment.get('container_runtime') == 'docker' and signum == signal.SIGTERM else 5
+        sent = set(); deadline = time.monotonic()+grace
         while True:
             live = capture()
             for member in live:
@@ -465,7 +466,7 @@ def activate_engine(deployment, *, timeout=None):
     if deployment.get("remote_units"):
         from .native_cluster import activate
         return activate(deployment, timeout=timeout)
-    timeout = 900 if timeout is None else timeout
+    timeout = deployment.get('startup_timeout', 900) if timeout is None else timeout
     _require_pidfds()
     deadline = time.monotonic() + timeout
     state = Path(deployment['state'])

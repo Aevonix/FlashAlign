@@ -118,6 +118,27 @@ An adapter that supports partial profiles must leave omitted sites unchanged.
 Accepting a grouped profile must not imply support for every operator family or
 rank: unsupported requirements, targets and ranks must fail before activation.
 
+## Native matrix profiles
+
+The DeepSeek starter uses `format: "flashalign.native_wo_b.v1"` and
+`transform: "native_matrix_override_v1"`. It is separate from an output
+projection. Its manifest declares the model revision, tensor encodings,
+dimensions, payload checksum, and stock and edited tensor-partition checksums.
+The runtime validates these before activation.
+
+This operator keeps stock and profile matrices in immutable bindings. An
+authenticated owner row uses the profile binding at the declared WO-B sites;
+an off row uses the stock binding. Selection happens before tensor-parallel
+reduction and residual mixing. Mixed batches must route rows independently,
+including during speculative verification and graph replay.
+
+The current native profile accepts strength **1.0 only**. A loader must reject
+other strengths or unsupported requirements rather than interpolate, convert
+the artifact to a projection, or silently serve a different operator. Its
+cache identity includes the profile content digest. See the
+[native backend](../engines/vllm-deepseek-native/README.md) for the exact
+checkpoint and runtime limits.
+
 ## Optional weighted output projection
 
 A profile may declare `transform: "weighted_output_projection_v1"` and

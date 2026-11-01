@@ -3,6 +3,7 @@
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """Stage pinned engine integrations in a deployment owned by FlashAlign."""
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -23,7 +24,8 @@ from .engine_setup import available_devices, digest, prepare_python_headers, pri
 from .model_metadata import (inspect_model, safetensors_header_fingerprint,
                              declared_openclaw_compat, declared_request_compatibility,
                              declared_openclaw_request_policy)
-from .profiles import DEEPSEEK_GROUP_SCHEMA, match_profile, read_json, validate_profile, stage_profile
+from .profiles import (DEEPSEEK_GROUP_SCHEMA, NATIVE_FORMAT, match_profile, read_json,
+                       validate_profile, stage_profile, profile_sites, profile_fingerprint)
 from .setup_runtime import (SetupError, managed_context_window, normalize_engine_arguments,
                             require_full_vllm_options)
 
@@ -356,6 +358,25 @@ def _disjoint_visible_devices(process, devices, placements):
         return False
 
 
+def _native_docker_launcher(argv, process):
+    """Recognize the installed host supervisor by its adjacent engine metadata."""
+    for argument in argv:
+        if Path(argument).name != 'launch.py':
+            continue
+        path = Path(argument)
+        try:
+            if not path.is_absolute():
+                path = (process/'cwd').resolve()/path
+            metadata = read_json(path.parent/'backend.json')
+            if (metadata.get('runtime') == 'docker'
+                    and metadata.get('variant') == 'deepseek-v41-native'
+                    and metadata.get('launch') == path.name):
+                return True
+        except (OSError, ValueError, TypeError, AttributeError):
+            continue
+    return False
+
+
 def active_speculation(model_path, model_id, proc_root=Path('/proc'), *, devices=None):
     """Inspect owned command lines only, retaining decoding settings but no secrets."""
     result = []
@@ -370,7 +391,8 @@ def active_speculation(model_path, model_id, proc_root=Path('/proc'), *, devices
             if any('sglang' in name for name in names):
                 kind = 'sglang'
             elif any(name in ('vllm', 'flashalign_vllm', 'flashalign_vllm.cli',
-                              'flashalign_deepseek', 'flashalign_deepseek.cli') for name in names):
+                              'flashalign_deepseek', 'flashalign_deepseek.cli',
+                              'flashalign_native', 'flashalign_native.cli') for name in names) or _native_docker_launcher(argv, process):
                 kind = 'vllm'
             elif any(name == 'llama-server' or name == 'llama-server.exe' for name in names):
                 kind = 'llamacpp'
@@ -382,7 +404,8 @@ def active_speculation(model_path, model_id, proc_root=Path('/proc'), *, devices
                 argv = normalize_engine_arguments(kind, argv)
             candidate = argument(argv, '--model-path') or argument(argv, '--model') or argument(argv, '-m')
             # Python's -m names the module, not the model.
-            if candidate and candidate in ('vllm', 'flashalign_vllm', 'flashalign_deepseek', 'sglang.launch_server', 'tensorfold'):
+            if candidate and candidate in ('vllm', 'flashalign_vllm', 'flashalign_deepseek', 'flashalign_native',
+                                            'sglang.launch_server', 'tensorfold'):
                 candidate = None
             if not candidate and 'serve' in argv:
                 index = argv.index('serve')
@@ -563,8 +586,21 @@ def _speculation(home, spec, kind, model_id, *, metadata=None, proc_root=Path('/
             if 'draft_model' in result:
                 raise SetupError('This vLLM integration uses the stock model native DSpark; external draft models are not qualified')
             default = dict(metadata['default_speculative_config'])
-            default['model'] = str(Path(spec['model_path']).expanduser().resolve())
+            if not metadata.get('native_draft_uses_target_model'):
+                default['model'] = str(Path(spec['model_path']).expanduser().resolve())
             config = result.get('speculative_config', default)
+            if metadata.get('native_draft_uses_target_model'):
+                comparable = dict(config) if isinstance(config, dict) else None
+                if comparable is not None and 'model' in comparable:
+                    selected_model = comparable.pop('model')
+                    if (not isinstance(selected_model, str) or
+                            Path(selected_model).expanduser().resolve() != Path(spec['model_path']).expanduser().resolve()):
+                        raise SetupError('Native speculation must use the selected stock model')
+                if (comparable != default or any(type(comparable[key]) is not type(value)
+                                                 for key, value in default.items())):
+                    raise SetupError('This native engine requires its declared speculative settings; active settings will not be replaced or disabled')
+                result['speculative_config'] = config
+                return {key: value for key, value in result.items() if key != 'kind'}
             if (not isinstance(config, dict) or set(config) != set(default)
                     or config.get('method') != default['method']
                     or type(config.get('num_speculative_tokens')) is not int
@@ -703,6 +739,10 @@ def check_backend(home, spec, profile, *, model_id, proc_root=Path('/proc')):
     model = inspect_model(spec.get('model_path', ''))
     kit, metadata = _select_kit(kind, model, profile, spec.get('variant'))
     python = select_backend_python(spec, metadata)
+    if metadata.get('runtime') == 'docker':
+        startup_timeout = spec.get('startup_timeout', metadata.get('startup_timeout', 3600))
+        if type(startup_timeout) is not int or not 60 <= startup_timeout <= 7200:
+            raise SetupError('Native Docker startup_timeout must be an integer from 60 to 7200 seconds')
     if metadata.get('requires_private_opt_in') and spec.get('allow_research') is not True:
         raise SetupError('This CPU-prepared private engine requires explicit allow_research=true; no GPU qualification is claimed')
     if 'allow_research' in spec and type(spec['allow_research']) is not bool:
@@ -714,6 +754,8 @@ def check_backend(home, spec, profile, *, model_id, proc_root=Path('/proc')):
             or not metadata.get('requires_runtime_memory_guard')):
         raise SetupError('allow_untested_memory is only a boolean option for a guarded experimental engine')
     manifest = read_json(profile['manifest'])
+    declared_sites = profile_sites(manifest)
+    native_matrix = manifest.get('format') == NATIVE_FORMAT
     if kind != 'llamacpp':
         _check_profile_ranks(metadata, manifest)
     if model.get('hidden_size') != manifest['hidden_size']:
@@ -752,10 +794,10 @@ def check_backend(home, spec, profile, *, model_id, proc_root=Path('/proc')):
         raise SetupError('This engine integration does not support the selected model family or profile transform')
     grouped = profile['transform'] == 'residual_writer_group_projection_v1'
     typed_grouped = profile.get('schema') == DEEPSEEK_GROUP_SCHEMA
-    native_layers = _native_profile_layers(kit, metadata, model, manifest['sites'])
+    native_layers = _native_profile_layers(kit, metadata, model, declared_sites)
     if grouped:
         sites = ['attn_out', 'combined_mlp_out', 'text_embedding_out', 'ple_value_out']
-    if any(site['site'] not in sites for site in manifest['sites']):
+    if any(site['site'] not in sites for site in declared_sites):
         raise SetupError('This engine integration does not support every profile site')
     if metadata.get('model_integrity_verifier'):
         pin = metadata['compatible_models'][0]
@@ -763,9 +805,9 @@ def check_backend(home, spec, profile, *, model_id, proc_root=Path('/proc')):
             raise SetupError('The native DeepSeek profile must target the exact pinned stock revision')
         if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}', profile['name']) is None:
             raise SetupError('This native DeepSeek loader requires a short ASCII profile identifier')
-        if (Path(profile['path'])/'profile.safetensors').stat().st_size > 16*1024*1024:
+        if not native_matrix and (Path(profile['path'])/'profile.safetensors').stat().st_size > 16*1024*1024:
             raise SetupError('This native DeepSeek loader accepts profile payloads up to 16 MiB')
-    for site in ([] if grouped or typed_grouped else manifest['sites']):
+    for site in ([] if grouped or typed_grouped else declared_sites):
         layer, target = site['layer'], site['tensor']
         stem = f'model.language_model.layers.{layer}'
         expected = {'embedding_out': ['model.language_model.embed_tokens.weight'],
@@ -870,6 +912,18 @@ def _prepare_runtime(kind, spec, kit, state):
     install = spec.get('install_dependencies', False)
     if type(install) is not bool:
         raise SetupError('install_dependencies must be true or false')
+    if metadata.get('runtime') == 'docker':
+        entry = kit/'prepare.py'
+        module_spec = importlib.util.spec_from_file_location('flashalign_managed_docker_prepare', entry)
+        module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+        try:
+            prepared = module.prepare_environment(state, pull=install)
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            raise SetupError('The pinned Docker engine could not be prepared') from error
+        if not isinstance(prepared, dict) or prepared.get('container_runtime') != 'docker':
+            raise SetupError('The Docker engine returned an invalid preparation receipt')
+        return {**prepared, 'python': python}
     if kind == 'llamacpp':
         installation = Path(spec['installation']).expanduser().resolve() if spec.get('installation') else state/'native/installation.json'
         if not installation.is_file():
@@ -1009,15 +1063,20 @@ def _prepare_checkpoint_receipts(spec, checked, runtime, kit, state):
 
 
 def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
-    profile = validate_profile(profile_path)
+    from .profile_assets import materialize_profile
+    profile = validate_profile(profile_path, allow_missing_payload=True)
     checked = check_backend(home, spec, profile, model_id=model_id)
+    ready = materialize_profile(profile_path, cache_root=Path(home)/'.cache/flashalign/profiles')
+    if ready['hashes'] != profile['hashes']:
+        raise SetupError('Profile changed between compatibility validation and preparation')
+    profile = ready
     # The selected interpreter is part of the immutable deployment identity.
     spec = {**spec, 'python': checked['python']['executable']}
     kind = checked['kind']
     original = Path(checked['kit'])
     kit_hash = hashlib.sha256(''.join(digest(path) for path in sorted(original.rglob('*'))
                                     if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc').encode()).hexdigest()
-    identity = hashlib.sha256((kit_hash+profile['hashes']['profile.json']+profile['hashes']['profile.safetensors']+str(Path(spec['model_path']).resolve())+
+    identity = hashlib.sha256((kit_hash+profile_fingerprint(profile)+str(Path(spec['model_path']).resolve())+
                                model_id+json.dumps(spec, sort_keys=True, default=str)).encode()).hexdigest()[:20]
     state = Path(home)/'.config/owner-mode/engines'/identity
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -1051,7 +1110,22 @@ def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
     extra = checked['arguments']
     python = runtime['python']
     common = ['--model', model, '--profile', str(staged), '--key-file', str(key), '--host', host, '--port', str(port)]
-    if kind == 'vllm':
+    if runtime.get('container_runtime') == 'docker':
+        launcher = checked['metadata'].get('launch', 'launch.py')
+        if Path(launcher).name != launcher or not (kit/launcher).is_file():
+            raise SetupError('Invalid Docker engine launcher')
+        argv = [python, str(kit/launcher), *common, '--state-dir', str(state/'native-runtime'),
+                '--devices', ','.join(map(str, checked['devices'])),
+                '--served-model-name', model_id,
+                '--startup-timeout', str(spec.get('startup_timeout', checked['metadata'].get('startup_timeout', 3600))),
+                '--speculative-config', json.dumps(drafting['speculative_config'], separators=(',', ':')),
+                '--arguments-json', json.dumps(extra, separators=(',', ':')),
+                '--replay-file', str(state/'replay/nonces.sqlite3')]
+        if verifier:
+            argv += ['--model-receipt', runtime['model_receipt']]
+        if spec.get('allow_untested_memory'):
+            argv += ['--allow-untested-memory']
+    elif kind == 'vllm':
         launcher = checked['metadata'].get('launch')
         if launcher:
             if Path(launcher).name != launcher or not (kit/launcher).is_file():
@@ -1127,7 +1201,7 @@ def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
     env = {**environment, **runtime.get('build_environment', {}), 'CUDA_VISIBLE_DEVICES': ','.join(map(str, checked['devices'])),
            'TORCH_EXTENSIONS_DIR': str(state/'torch-extensions'), 'TRITON_CACHE_DIR': str(state/'triton-cache'),
            'HF_HUB_DISABLE_TELEMETRY': '1'}
-    if kind == 'vllm':
+    if kind == 'vllm' and runtime.get('container_runtime') != 'docker':
         runtime_path = runtime.get('overlay') or runtime.get('provided_pythonpath')
         env['PYTHONPATH'] = os.pathsep.join([str(kit), runtime_path]) if runtime_path else str(kit)
     result = {'version': 1, 'kind': kind, 'state': str(state), 'source': str(kit),
@@ -1141,6 +1215,13 @@ def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
         result.update(model_receipt=runtime['model_receipt'], resource_policy=checked['metadata']['resource_policy'],
                       allow_untested_memory=spec.get('allow_untested_memory', False),
                       hardware_activation_check='pending', replay_file=str(state/'replay/nonces.sqlite3'))
+    if runtime.get('container_runtime') == 'docker':
+        result.update(container_runtime='docker', image=runtime.get('image'),
+                      image_id=runtime.get('image_id'),
+                      startup_timeout=spec.get('startup_timeout', checked['metadata'].get('startup_timeout', 3600)),
+                      replay_file=str(state/'replay/nonces.sqlite3'))
+        if (staged/'RESPONSIBLE_USE.md').is_file():
+            result['profile_source_terms'] = str(staged/'RESPONSIBLE_USE.md')
     if checkpoint_receipts:
         result.update(checkpoint_receipts=checkpoint_receipts, resource_policy=checked['metadata'].get('resource_policy'),
                       replay_file=str(state/'runtime/replay/nonces.sqlite3'), hardware_activation_check='pending')

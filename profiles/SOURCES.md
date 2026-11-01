@@ -1,28 +1,35 @@
 # Starter profile checkpoint sources
 
 Experimental test profiles based on abliterated checkpoints from
+[Keys / drowzeys](https://huggingface.co/drowzeys),
 [OrcaRouter](https://huggingface.co/orcarouter),
 [Dealign](https://huggingface.co/dealignai), and
 [MoonMath](https://huggingface.co/MoonMath-ai).
-Fitting and runtime packaging by Aevonix.
+Fitting, where applicable, and runtime packaging by Aevonix.
 
 The revisions below identify the edited fitting targets and matched stock
 references. Supported serving checkpoints and quantizations are listed in
-each profile manifest. These profiles are approximations; they do not establish
-full checkpoint equivalence. See [validation](../docs/validation.md).
+each profile manifest and backend. Compact profiles are approximations; the
+DeepSeek native profile retains its source tensors. Neither establishes full
+model-output equivalence by itself. See [validation](../docs/validation.md).
 
 ## DeepSeek V4.1 Flash 1017
 
 Profile: `deepseek41-flash1017-v1`.
 
-Edited checkpoint: [orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF](https://huggingface.co/orcarouter/DeepSeek-V4.1-Flash-1017-abliterated-GGUF/tree/349470a09c1fca35862b0796e726b9fe00a947df) by OrcaRouter.
-Revision: `349470a09c1fca35862b0796e726b9fe00a947df`.
+Source edit: [drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated](https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated/tree/de412d2249632903dace23399526e00a145aada5).
+Revision: `de412d2249632903dace23399526e00a145aada5`.
 
-Stock reference: [deepseek-ai/DeepSeek-V4.1-Flash-1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/tree/1bae0e1088993b9b82de08f59de5be5a34e42170).
+Audited serving base: [deepseek-ai/DeepSeek-V4.1-Flash-1017](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/tree/1bae0e1088993b9b82de08f59de5be5a34e42170).
 Revision: `1bae0e1088993b9b82de08f59de5be5a34e42170`.
+The source edit does not pin its original stock revision.
 
-Both pinned source cards declare MIT. The retained terms are in the
-[profile's MIT notice](deepseek41-flash1017-v1/LICENSE).
+This native profile packages the source's exact 26 WO-B matrices and 26 scale
+tensors. It replaces the earlier compact DeepSeek starter. The source card
+declares MIT and includes a separate responsible-use agreement. Retain both the
+[MIT notice](deepseek41-flash1017-v1/LICENSE) and
+[agreement](deepseek41-flash1017-v1/RESPONSIBLE_USE.md).
+The source edit is by drowzeys; runtime packaging is by Aevonix.
 
 ## GLM 5.3 Full
 
@@ -98,7 +105,7 @@ pack contains profile parameters, not complete model checkpoints.
 Keep the applicable [model notices](README.md#attribution-and-terms) with
 redistributed profiles. Checkpoint downloads may have separate access terms.
 
-Each manifest separates the source declarations from `license_notice`, which
-identifies the retained model-source license file distributed with that
-profile. FlashAlign software has its own
+Compact manifests separate source declarations from `license_notice`. The
+native DeepSeek directory retains its source declarations and terms alongside
+the manifest and download descriptor. FlashAlign software has its own
 [AGPL-3.0-only license](../LICENSE) and [commercial licensing option](../COMMERCIAL.md).

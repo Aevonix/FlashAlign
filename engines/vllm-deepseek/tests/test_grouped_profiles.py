@@ -79,13 +79,19 @@ class GroupedProfiles(unittest.TestCase):
         profile = Profile(self.root)
         self.assertEqual(tuple(profile.operators['shared'][0].shape), (128, 5120))
 
-    def test_starter_profile_loads_without_rewriting(self):
-        path = Path(__file__).resolve().parents[3]/'profiles/deepseek41-flash1017-v1'
+    def test_standard_profile_loads_without_rewriting(self):
+        # The bundled starter uses the native format. Keep legacy projection
+        # compatibility covered with a small independently constructed fixture.
+        path = self.root / 'standard'
+        meta = {'name': 'synthetic-standard', 'model': DEEPSEEK_MODEL,
+                'hidden_size': 5120, 'sites': [{'layer': 3, 'site': 'attn_out',
+                'tensor': 'layers.3.attn.wo_b.weight', 'rank': 1, 'scale': 1.0}]}
+        basis = torch.zeros(1, 5120); basis[0, 0] = 1
+        write(path, meta, {'L3.attn_out.Q': basis})
         before = {name: hashlib.sha256((path/name).read_bytes()).hexdigest()
                   for name in ('profile.json', 'profile.safetensors', 'sha256.json')}
         profile = Profile(path)
-        self.assertEqual(len(profile.sites), 85)
-        self.assertEqual({q.shape[0] for q, _ in profile.operators.values()}, {1})
+        self.assertEqual(set(profile.sites), {(3, 'attn_out')})
         self.assertEqual(before, {name: hashlib.sha256((path/name).read_bytes()).hexdigest()
                                   for name in before})
 

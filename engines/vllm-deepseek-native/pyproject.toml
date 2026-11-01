@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+classifiers = ["License :: OSI Approved :: GNU Affero General Public License v3"]
+license = {file = "LICENSE"}
+name = "flashalign-native"
+version = "1.1.0"
+description = "FlashAlign native matrix runtime for pinned DeepSeek V4.1 Flash"
+requires-python = ">=3.10"
+
+[project.entry-points."vllm.general_plugins"]
+flashalign_native = "flashalign_native.plugin:register"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["flashalign_native*", "flashalign_native_wo*"]
+
+[tool.setuptools.package-data]
+flashalign_native = ["source-pins.json", "overlay-pins.json", "model-pins.json", "overlays/**/*.py"]

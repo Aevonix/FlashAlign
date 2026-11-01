@@ -18,6 +18,7 @@ import tempfile
 
 from .deepseek_grouped import (DEEPSEEK_GROUP_SCHEMA, DEEPSEEK_MODEL,
                                validate_grouped_profile)
+from .native_profile import FORMAT as NATIVE_FORMAT, REQUIRES as NATIVE_REQUIRES, NativePayload, load_spec
 
 
 class ProfileError(ValueError):
@@ -39,7 +40,8 @@ def stage_profile(source, destination):
     destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = Path(tempfile.mkdtemp(prefix=destination.name+'.new-', dir=destination.parent))
     try:
-        for name in ('profile.json', 'profile.safetensors', 'sha256.json'):
+        for name in dict.fromkeys(('profile.json', checked.get('payload_file', 'profile.safetensors'),
+                                   'sha256.json', 'payload-download.json')):
             original = Path(checked['path'])/name
             if original.is_file():
                 shutil.copyfile(original, temporary/name)
@@ -198,7 +200,80 @@ def _compatible_models(value):
     return value
 
 
-def validate_profile(path, *, include_audit=False, max_basis_work=None):
+def _validate_native_profile(root, manifest, raw, *, include_audit, allow_missing_payload):
+    """Validate native bytes by streaming; never decode a full matrix in memory."""
+    manifest_hash = hashlib.sha256(raw).hexdigest()
+    try:
+        spec = load_spec(manifest, expected_sha256=manifest_hash)
+        if sum(item.shape[0] * spec.tp_world_size for item in spec.tensors) > 2_000_000:
+            raise ProfileWorkLimit('Native partition validation exceeds the bounded reader work limit')
+        payload_path = root / spec.payload_file
+        present = os.path.lexists(payload_path)
+        if not present and not allow_missing_payload:
+            raise ProfileError('Native profile payload is missing; run setup to fetch its pinned public asset, '
+                               'or place the declared payload beside profile.json')
+        if present:
+            with NativePayload(root, spec) as payload:
+                for tensor in spec.tensors:
+                    for rank in range(spec.tp_world_size):
+                        payload.verify_partition(tensor.name, rank)
+    except (OSError, ValueError, TypeError, OverflowError, KeyError) as error:
+        if isinstance(error, ProfileError):
+            raise
+        raise ProfileError('Invalid native profile artifact: '+str(error)) from error
+    hashes = {'profile.json': manifest_hash, spec.payload_file: spec.payload_sha256}
+    receipt = root / 'sha256.json'
+    verified = []
+    if receipt.is_file():
+        recorded = read_json(receipt)
+        if not isinstance(recorded, dict):
+            raise ProfileError('Invalid checksum record')
+        for name, digest in hashes.items():
+            supplied = recorded.get(name)
+            if supplied is not None and supplied != digest:
+                raise ProfileError('Profile checksum mismatch')
+            if supplied is not None and (name == 'profile.json' or present):
+                verified.append(name)
+    sites = [{'layer': layer, 'site': 'attn_out',
+              'tensor': f'layers.{layer}.attn.wo_b.weight'} for layer in spec.layers]
+    result = {'name': spec.name, 'model': dict(zip(('id', 'revision'), spec.model)),
+              'transform': 'native_matrix_override_v1', 'requires': list(NATIVE_REQUIRES),
+              'schema': NATIVE_FORMAT, 'format': NATIVE_FORMAT, 'compatible_models': [],
+              'manifest': str(manifest.resolve()), 'path': str(root), 'hashes': hashes,
+              'artifact_valid': True if present else None, 'metadata_valid': True,
+              'payload_status': 'verified' if present else 'missing',
+              'payload_file': spec.payload_file, 'payload_bytes': spec.payload_size,
+              'profile_digest': spec.digest, 'native_sites': sites,
+              'status': 'file_validated' if present else 'payload download required', 'source': 'local'}
+    if include_audit:
+        result['audit'] = {'hidden_size': spec.hidden_size, 'site_count': len(sites),
+                           'sites': sites, 'operators': {}, 'metadata_bytes': len(raw),
+                           'tensor_file_bytes': spec.payload_size,
+                           'tensors': [{'name': item.name, 'dtype': item.dtype,
+                                        'shape': list(item.shape),
+                                        'bytes': item.offsets[1]-item.offsets[0],
+                                        'validation': 'finite native codes and exact tensor/partition hashes'}
+                                       for item in spec.tensors],
+                           'basis_validation_work': 0,
+                           'supplied_checksums': {'present': receipt.is_file(), 'verified_files': verified}}
+    return result
+
+
+def profile_sites(manifest):
+    """Expose sites for compatibility checks without pretending native weights are bases."""
+    if manifest.get('format') == NATIVE_FORMAT:
+        return [{'layer': layer, 'site': 'attn_out', 'tensor': f'layers.{layer}.attn.wo_b.weight'}
+                for layer in manifest['layers']]
+    return manifest['sites']
+
+
+def profile_fingerprint(profile):
+    """Bind all artifact files, including nonstandard native payload filenames."""
+    return hashlib.sha256(json.dumps(profile['hashes'], sort_keys=True,
+                                     separators=(',', ':')).encode()).hexdigest()
+
+
+def validate_profile(path, *, include_audit=False, max_basis_work=None, allow_missing_payload=False):
     """Validate schema, float payloads and supplied hashes, not model quality."""
     path = Path(path).expanduser()
     manifest = path / 'profile.json' if path.is_dir() else path
@@ -207,6 +282,11 @@ def validate_profile(path, *, include_audit=False, max_basis_work=None):
     profile = _json_document(manifest_bytes)
     if not isinstance(profile, dict):
         raise ProfileError('Profile metadata must be an object')
+    if profile.get('format') == NATIVE_FORMAT:
+        return _validate_native_profile(root, manifest, manifest_bytes, include_audit=include_audit,
+                                        allow_missing_payload=allow_missing_payload)
+    if profile.get('format') is not None:
+        raise ProfileError('Unsupported profile format')
     name = profile.get('name')
     model = profile.get('model')
     if (not isinstance(name, str) or not name.strip() or name == 'off' or len(name) > 256
@@ -435,7 +515,10 @@ def discover_profiles(paths):
                 continue
             seen.add(marker)
             try:
-                item = validate_profile(candidate)
+                item = validate_profile(candidate, allow_missing_payload=True)
+                if item.get('payload_status') == 'missing':
+                    from .profile_assets import download_record
+                    download_record(item)
                 item['model_ids'] = catalog.get(item['path'], [])
                 profiles.append(item)
             except (OSError, ValueError, TypeError, OverflowError) as error:
@@ -449,7 +532,7 @@ def bundled_profile_root():
 
 def copy_profile_notices(source, destination):
     """Preserve supplied legal notices alongside installed runtime parameters."""
-    for name in ('LICENSE', 'LICENSE.txt', 'LICENSE.source', 'NOTICE.md'):
+    for name in ('LICENSE', 'LICENSE.txt', 'LICENSE.source', 'NOTICE.md', 'RESPONSIBLE_USE.md'):
         path = Path(source)/name
         if path.is_file() and not path.is_symlink() and path.stat().st_size <= MAX_HEADER:
             target = Path(destination)/name
@@ -513,7 +596,7 @@ def resolve_profile(value, model, candidates=()):
     """Resolve an operator-selected artifact or installed name without guessing IDs."""
     path = Path(value).expanduser()
     if path.exists():
-        candidate = validate_profile(path)
+        candidate = validate_profile(path, allow_missing_payload=True)
     else:
         candidate = next((item for item in candidates if item['name'] == value), None)
         if candidate is None:

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
 # SPDX-License-Identifier: AGPL-3.0-only
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
-"""The released starter pack is usable offline and keeps its stated limits."""
+"""Starter discovery is offline and preserves each artifact's stated limits."""
 from contextlib import redirect_stdout
 import io
 import hashlib
@@ -34,6 +34,15 @@ class StarterProfiles(unittest.TestCase):
                          {'glm53-full-v1', 'deepseek41-flash1017-v1',
                           'glm53-flash-v1', 'qwen38-27b-v1', 'gemma4-26b-a4b-v1'})
         for profile in profiles:
+            if profile.get('format') == 'flashalign.native_wo_b.v1':
+                self.assertEqual(profile['payload_status'], 'missing')
+                self.assertIsNone(profile['artifact_valid'])
+                self.assertTrue(profile['metadata_valid'])
+                manifest = json.loads(Path(profile['manifest']).read_text())
+                self.assertEqual(manifest['source']['id'], 'drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated')
+                self.assertRegex(manifest['source']['revision'], r'^[0-9a-f]{40}$')
+                self.assertEqual(manifest['strengths'], [1.0])
+                continue
             self.assertEqual(profile['status'], 'experimental_runtime_checked')
             manifest = json.loads(Path(profile['manifest']).read_text())
             self.assertLessEqual(set(manifest), {'name', 'model', 'hidden_size', 'sites', 'transform',
@@ -57,6 +66,12 @@ class StarterProfiles(unittest.TestCase):
         for name, license_id in expected.items():
             with self.subTest(profile=name):
                 manifest = json.loads((root/name/'profile.json').read_text())
+                if manifest.get('format') == 'flashalign.native_wo_b.v1':
+                    self.assertEqual(hashlib.sha256((root/name/'LICENSE').read_bytes()).hexdigest(),
+                                     json.loads((root/name/'sha256.json').read_text())['LICENSE'])
+                    self.assertTrue((root/name/'RESPONSIBLE_USE.md').is_file())
+                    self.assertEqual(manifest['source']['revision'], 'de412d2249632903dace23399526e00a145aada5')
+                    continue
                 self.assertNotIn('license', manifest['source'])
                 notice = manifest['license_notice']
                 self.assertEqual(notice['license'], license_id)
@@ -82,7 +97,6 @@ class StarterProfiles(unittest.TestCase):
 
     def test_starter_tensors_keep_their_frozen_payloads(self):
         expected = {
-            'deepseek41-flash1017-v1': (61672, 'db96d4e9a1f93f1a4f3ed4476ebfedc4b21f4f8f19be71c23ef19cee957f04f3'),
             'glm53-full-v1': (33559576, '997a245d0f824648afb9a10b4270f5698538e26dafcc79622ea1432e5b1135d5'),
             'glm53-flash-v1': (2964392, '797e47c0c0d7d19f151b64a5ac514eefab73b370ecbe911bd6da2644955be40a'),
             'qwen38-27b-v1': (2652448, 'd7a9b49364c51e313e74b58ea7ac244d470c38609550bf0bd96129da0c222a87'),
@@ -93,6 +107,12 @@ class StarterProfiles(unittest.TestCase):
                 payload = (bundled_profile_root()/name/'profile.safetensors').read_bytes()
                 self.assertEqual(len(payload), size)
                 self.assertEqual(hashlib.sha256(payload).hexdigest(), digest)
+        native = bundled_profile_root()/'deepseek41-flash1017-v1'
+        descriptor = json.loads((native/'payload-download.json').read_text())
+        self.assertEqual(descriptor['bytes'], 1091589280)
+        self.assertEqual(descriptor['sha256'], '88324ceaa2c0754a2bdb4ef6bb388a088438e352358343e6c2c882009cdde864')
+        self.assertEqual(descriptor['url'], 'https://github.com/Aevonix/FlashAlign/releases/download/v1.1.0/wo_b_l10_35_1017.safetensors')
+        self.assertFalse((native/descriptor['file']).exists())
 
     def test_family_selection_handles_flat_and_nested_model_configurations(self):
         full = bundled_profile_for({'model_type': 'glm_moe_dsa', 'hidden_size': 6144})
@@ -187,7 +207,10 @@ class StarterProfiles(unittest.TestCase):
             manifest = json.loads((bundle/'manifest.json').read_text())
             manifest['model_types'] = ['deepseek_v41']
             (bundle/'manifest.json').write_text(json.dumps(manifest))
-            source = bundled_profile_root()/'deepseek41-flash1017-v1'
+            from test_deepseek_setup import legacy_profile
+            source = legacy_profile(root/'legacy')
+            original = bundled_profile_root()/'deepseek41-flash1017-v1'
+            (source/'LICENSE').write_bytes((original/'LICENSE').read_bytes())
             # This tiny synthetic checkpoint exercises license copying; exact
             # native checkpoint binding is covered separately.
             with mock.patch('owner_mode.native_setup.checkpoint_matches'):

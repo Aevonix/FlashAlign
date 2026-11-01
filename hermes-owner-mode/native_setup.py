@@ -19,7 +19,7 @@ from .model_metadata import declared_openclaw_compat, declared_openclaw_request_
 from .native_bundle import check_bundle, host_platform, sha256
 from . import native_cluster
 from .native_remote import member_path, owned_directory, cuda_inventory, prepare_replay_directory
-from .profiles import read_json, validate_profile, stage_profile, _compatible_models, ProfileError
+from .profiles import read_json, validate_profile, stage_profile, _compatible_models, ProfileError, NATIVE_FORMAT, profile_fingerprint
 from .setup_runtime import SetupError
 
 
@@ -132,6 +132,8 @@ def speculation(home, spec, manifest, model_id, inventory):
 
 def check(home, spec, profile, *, model_id):
     from .engine_setup import tensorfold_arguments, declared_input_modalities
+    if profile.get('format') == NATIVE_FORMAT:
+        raise SetupError('This native matrix profile requires its vLLM native integration; TensorFold cannot load it')
     if spec.get('source') or spec.get('command'):
         raise SetupError('TensorFold setup accepts a verified binary bundle, not a Python source or custom command')
     if spec.get('api_transport', 'ssh') not in ('ssh', 'direct'):
@@ -328,15 +330,15 @@ def reject_untracked_replay_key(home, key_material):
 
 def prepare(home, spec, profile_path, *, model_id, key_file=None):
     from .engine_setup import private_json, unused_port
-    profile = validate_profile(profile_path)
+    profile = validate_profile(profile_path, allow_missing_payload=True)
     checked = check(home, spec, profile, model_id=model_id)
     bundle, manifest = Path(checked['bundle']), checked['manifest']
     if key_file is not None and manifest.get('durable_owner_replay', False):
         supplied = Path(key_file).expanduser()
         if supplied.exists():
             reject_untracked_replay_key(home, read_key(supplied))
-    identity = hashlib.sha256((sha256(bundle/'manifest.json')+profile['hashes']['profile.json']+
-                              profile['hashes']['profile.safetensors']+model_id+json.dumps(spec, sort_keys=True)).encode()).hexdigest()[:20]
+    identity = hashlib.sha256((sha256(bundle/'manifest.json')+profile_fingerprint(profile)+
+                              model_id+json.dumps(spec, sort_keys=True)).encode()).hexdigest()[:20]
     state = Path(home)/'.config/owner-mode/engines'/identity
     try:
         owned_directory(state, create=True)

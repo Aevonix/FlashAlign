@@ -2,7 +2,7 @@
 
 **ReAlign models instantly, on demand.**
 
-By Aevonix Research · Version 1.0.0
+By Aevonix Research · Version 1.1.0
 
 [![Stock DeepSeek V4.1 Flash refuses to help make a realistic-looking ID for a theatrical role; with FlashAlign on, the same model answers it](assets/demo/flashalign-promo-preview.gif)](https://aevonix.github.io/FlashAlign/)
 
@@ -43,13 +43,16 @@ whether tools inherit the profile. Setup checks activation and backs up changed
 configuration. Chat integrations restart their selected gateways; local terminal
 setup prints its launch command.
 
-All five starter profiles are included. No profile download or private
-repository access is needed.
+Five starter profiles are available. Four compact profiles are included in the
+checkout. The DeepSeek profile uses a 1.09 GB native tensor payload; setup fetches
+it from a public release and verifies its checksum. No private repository or
+login is required. [Profile details](profiles/README.md).
 
 Use the [profile inspector](docs/profile-inspection.md) to check a local
 profile's model pin, operators, sites, ranks and hashes before setup.
 
-Experimental test profiles based on [OrcaRouter](https://huggingface.co/orcarouter),
+Experimental test profiles based on [Keys](https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated),
+[OrcaRouter](https://huggingface.co/orcarouter),
 [Dealign](https://huggingface.co/dealignai), and
 [MoonMath](https://huggingface.co/MoonMath-ai) abliterated checkpoints.
 Fitting and runtime packaging by Aevonix. See the
@@ -57,7 +60,7 @@ Fitting and runtime packaging by Aevonix. See the
 
 | Model | Supported engines |
 | --- | --- |
-| DeepSeek V4.1 Flash 1017 | TensorFold, vLLM |
+| DeepSeek V4.1 Flash 1017 | Pinned native vLLM, official FP8 checkpoint |
 | GLM 5.3 Full | TensorFold |
 | GLM 5.3 Flash | TensorFold, SGLang |
 | Qwen3.8-27B | TensorFold, vLLM, SGLang, llama.cpp |

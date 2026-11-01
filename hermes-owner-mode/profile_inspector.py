@@ -41,7 +41,9 @@ def inspect_profile(path, *, max_basis_work=DEFAULT_BASIS_WORK):
             'requires': checked['requires'],
             'hashes': checked['hashes'], **audit,
             'basis_count': len(basis), 'basis_rows': sum(row['rank'] for row in basis),
-            'maximum_rank': max(row['rank'] for row in basis),
+            'maximum_rank': max((row['rank'] for row in basis), default=0),
+            **({'payload_file': checked['payload_file'], 'profile_format': checked['format']}
+               if checked.get('format') else {}),
             'assessment': {'file_structure': 'passed', 'tensor_values': 'passed',
                            'supplied_checksums': ('verified' if checksum_count == 2 else
                                                   'partial' if checksum_count else 'not_supplied'),
@@ -62,17 +64,23 @@ def render(report, details=False):
             'Model: ' + _display(model['id']),
             'Revision: ' + _display(model['revision']),
             'Transform: ' + _display(report['transform']),
-            f"Sites: {report['site_count']} | Bases: {report['basis_count']} | Maximum rank: {report['maximum_rank']}",
+            (f"Sites: {report['site_count']} | Native tensors: {len(report['tensors'])}"
+             if report.get('profile_format') == 'flashalign.native_wo_b.v1' else
+             f"Sites: {report['site_count']} | Bases: {report['basis_count']} | Maximum rank: {report['maximum_rank']}"),
             f"Hidden width: {report['hidden_size']} | Tensor file: {report['tensor_file_bytes']:,} bytes",
             'Requires: ' + (', '.join(_display(value) for value in report['requires']) or 'standard projection'),
             'File and numerical validation: passed',
             'Supplied checksums: ' + report['assessment']['supplied_checksums'].replace('_', ' '),
             'Runtime compatibility, model quality and semantic safety: not assessed',
             'SHA-256 profile.json: ' + report['hashes']['profile.json'],
-            'SHA-256 profile.safetensors: ' + report['hashes']['profile.safetensors']]
+            'SHA-256 '+report.get('payload_file', 'profile.safetensors')+': ' +
+            report['hashes'][report.get('payload_file', 'profile.safetensors')]]
     if details:
         rows.append('Sites:')
         for site in report['sites']:
+            if report.get('profile_format') == 'flashalign.native_wo_b.v1':
+                rows.append(f"  L{site['layer']} {_display(site['site'])}: native matrix; {_display(site['tensor'])}")
+                continue
             operator = report['operators'].get(site.get('operator'), {})
             rank = site.get('rank', operator.get('rank'))
             strength = site.get('scale', operator.get('scale'))
@@ -83,9 +91,12 @@ def render(report, details=False):
             if 'basis' in tensor:
                 basis = tensor['basis']
                 rows.append(f"  {_display(tensor['name'])}: row norms {basis['row_norm_min']:.7g}..{basis['row_norm_max']:.7g}, max cross-dot {basis['max_abs_cross_dot']:.3g}")
-            else:
+            elif 'range' in tensor:
                 value = tensor['range']
                 rows.append(f"  {_display(tensor['name'])}: range {value['minimum']:.7g}..{value['maximum']:.7g}, L2 norm {tensor['l2_norm']:.7g}")
+            else:
+                rows.append(f"  {_display(tensor['name'])}: {_display(tensor['dtype'])}, "
+                            f"{tensor['bytes']:,} bytes; {_display(tensor['validation'])}")
     return '\n'.join(rows)
 
 

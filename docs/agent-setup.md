@@ -41,10 +41,19 @@ For a local terminal plan, prepare the harness and report the printed
 `flashalign-client terminal ... --authorize` command. Launching a terminal is
 an interactive step, not an unattended gateway restart.
 
-The included [starter profiles](../profiles/README.md) are discovered without a
-download or private login. In an agent plan, `profile` may name an included starter
-directly; its `model` must match the pinned target or a declared catalog alias.
-Preserve the profile's experimental status when reporting setup results.
+The [starter profiles](../profiles/README.md) are discovered from local
+metadata without a private login. Four compact profiles are included in full.
+DeepSeek's native manifest declares a 1.09 GB public payload; managed preparation
+fetches missing bytes into an external cache and verifies them before staging.
+The offline inspector never fetches a missing payload. For offline preparation,
+place the verified payload beside its manifest.
+
+In an agent plan, `profile` may name an included starter directly; its `model`
+must match the pinned target or a declared catalog alias. The native DeepSeek
+starter requires its pinned vLLM container, official FP8 weights, four SM120
+GPUs and strength 1.0. Do not substitute TensorFold or another projection-only
+backend. Preserve the profile's experimental status and the public package's
+qualification status when reporting setup results.
 
 Choose a managed engine plan when the model needs an engine or profile setup.
 Choose the existing-endpoint plan below when an engine already implements the

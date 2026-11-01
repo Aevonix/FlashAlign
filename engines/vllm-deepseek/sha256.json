@@ -30,6 +30,6 @@
   "test_auth_compat.py": "774f385f09c3c5f4821899944f34b29771a15c4376f7081be6db7d99a2b5bfeb",
   "test_checkpoint_receipt.py": "b61a53b0e56d958b3bae62ddf165e4b16c5e9981bab1150d14f7620544a7b396",
   "test_flashalign_replay.py": "84daebb654480a52e998de0e791dd1a04e056985fad6a701308a8a45f84a10fc",
-  "tests/test_grouped_profiles.py": "20c04c213ad4f6632ee2c8c75409135d549635b2533d2d9655241a72874e7a53",
+  "tests/test_grouped_profiles.py": "aed3f5bd1b669ddb07d5f6a2bc2ef05563d8de714fcfa4d24b5f34405e9531e5",
   "tests/test_image_diagnostic.py": "47c3cf21b6c7bb62a7e6d26e8ba88f125be228b796d195ddd1dc415c078e5048"
 }
