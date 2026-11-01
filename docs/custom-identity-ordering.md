@@ -26,8 +26,7 @@ requires_plugins:
 `verified-identity-provider` is an example ID, not an included plugin. The host
 must support plugin dependencies, and that provider must be installed and
 enabled. Reapply and verify this deployment-specific overlay when updating
-FlashAlign. Do not add a particular private provider to the shared public
-manifest.
+FlashAlign.
 
 A dependency changes load order. It does not prove a contact's identity or
 grant permission to produce owner claims. The adapter must still validate
@@ -89,7 +88,7 @@ On when the request reaches its configured route.
 | `owner_unverified` | The gateway did not have a valid active proof for this turn. Check adapter loading, current native evidence and callback order. |
 | `no_middleware_context` | The request reached the proxy without its expected middleware context. Check the configured provider route and host request hook. |
 | `bad_chat_template_kwargs` | The authorized request contains unsupported template fields or values. Check the host's final serialization and the selected engine's compatibility declaration. |
-| Matching requested and effective profile | The engine reports the selected profile active. This does not establish that every model refusal disappears or that a profile reproduces an edited checkpoint exactly. |
+| Matching requested and effective profile | The engine reports the selected profile active. |
 
 If the authority cannot be constructed at startup, FlashAlign emits
 `FlashAlign identity authority unavailable` followed by the exception class.

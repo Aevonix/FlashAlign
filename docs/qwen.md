@@ -1,8 +1,7 @@
 # Qwen3.8-27B
 
 FlashAlign includes the experimental `qwen38-27b-v1` profile.
-Select it locally with the wizard or by name in an agent setup plan. No profile
-download or private-repository access is required.
+Select it locally with the wizard or by name in an agent setup plan.
 
 For TensorFold, the wizard selects a pinned 1.1.9 runtime bundle for the model
 format and hardware. The catalog includes these tested configurations:
@@ -32,19 +31,9 @@ owner execution are not
 supported by these bundles. Setup stops if the active speculative configuration
 is incompatible, preserving that configuration.
 
-The TensorFold serving path is text-only. The DGX Spark configuration passed
-wizard activation, request authorization, cache, harness-hook and structured
-output checks. A 48,037-token prompt reused 45,056 tokens separately in stock
-and owner mode. The x86_64 EXL3 configuration passed 26 device checks covering
-generation, authorization, concurrency and structured output. Both kept
-DFlash2 active. These results apply to the recorded configurations; they do
-not establish every context size or broad model quality. See
-[validation](validation.md) and [TensorFold setup](native-tensorfold.md).
-
-Matrix checks used 256 fresh inputs at each of the 129 runtime sites. Maximum
-relative output error against the selected edited checkpoint was 0.196%.
-These measurements do not establish model quality or full edited-checkpoint
-equivalence. The export excludes that checkpoint's native MTP changes.
+The TensorFold serving path is text only. See [validation](validation.md) for
+runtime and matrix results, and [TensorFold setup](native-tensorfold.md) for
+installation requirements.
 
 For agent setup, use `--config /private/setup.json --apply` to prepare files
 without starting the engine or restarting a gateway. See

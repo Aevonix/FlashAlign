@@ -1,12 +1,10 @@
 # FlashAlign SGLang integration
 
 This bridge applies a saved FlashAlign projection inside SGLang's target-model
-forward pass. It is not a prompt template, logit filter or a weight-file edit.
+forward pass.
 
 The integration is pinned to SGLang **v0.5.20**, commit
-`94602c9c2b7cbdb8efd5c52802dac6a1c180089e`. Runtime status is **experimental, GPU verified** for the Qwen model below.
-CPU tests establish
-component behavior, not complete serving correctness or model quality.
+`94602c9c2b7cbdb8efd5c52802dac6a1c180089e`. It supports the Qwen model below.
 
 ## Prepare and launch
 
@@ -29,11 +27,9 @@ python3 prepare.py --source /private/sglang-upstream --output /private/flashalig
   -- --context-length 65536 --enable-cache-report
 ```
 
-The default context is 65,536 tokens. Managed setup, 65,000-input-token
-requests in both modes, and native Hermes and OpenClaw checks passed on one
-95 GiB RTX PRO 6000 Blackwell Max-Q GPU with DFlash2 active. This context
-qualification used serial requests and reused pinned dependencies. Larger
-contexts and lower-memory devices need separate qualification.
+The default context is 65,536 tokens, tested with serial requests on one
+95 GiB RTX PRO 6000 Blackwell Max-Q GPU with DFlash2. See
+[validation](../../docs/validation.md) for setup, long-input and harness results.
 
 The model, profile and draft model must already exist. The key must be a private
 32-byte regular file. The launcher accepts repeated `--profile` arguments and
@@ -59,7 +55,7 @@ fallback disables it.
 - Existing in-memory radix-cache behavior with a server-created namespace
   containing the profile digest and exact strength. Owner and standard requests
   cannot share a namespace. LoRA composition, session-cache reuse, HiCache and
-distributed/disaggregated execution are rejected by this integration.
+  distributed/disaggregated execution are rejected by this integration.
 
 The supplied draft model is left unchanged and provides proposals. Only the target forward
 pass applies the selected profile; it verifies the proposals against that target.
@@ -99,18 +95,8 @@ Tests cover raw-body signatures, replay, tampering, cache namespaces, stock-row
 identity, mixed prefill and speculative verification rows, strict loader behavior,
 and actual PyTorch module hooks using the pinned full-attention naming pattern.
 
-The qualification run passed 23 CPU tests and 47 live checks on BF16
-Qwen3.8-27B with DFlash2. All 43 generated-answer checks passed, including all
-16 shared math/code fixtures in each mode, and both real streaming requests.
-Every generation reported active speculative verification. Repeat requests
-reused 576 cached tokens in their own mode; the first owner request and a change
-of strength reused zero. These small synthetic checks are not a broad benchmark.
-
-Two individual warm streaming measurements gave TTFT 0.113 seconds in standard
-mode and 0.139 seconds in owner mode. They are examples, not general latency
-guarantees. Startup took 295 seconds with first-time kernel compilation and
-33 seconds with those kernels cached on the qualification machine.
+See [validation](../../docs/validation.md) for live protocol, cache and answer
+checks, and [measured results](../../docs/benchmark-results.md) for timing samples.
 
 Upstream SGLang source retains its Apache 2.0 notices. FlashAlign runtime additions
-follow the surrounding FlashAlign repository's license. Profile creation code,
-checkpoint access and private model-quality records are not part of this bridge.
+follow the surrounding FlashAlign repository's license.

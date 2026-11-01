@@ -15,7 +15,6 @@ For Gemma, it runs before the following normalization and leaves routed experts
 unchanged. The GGUF adapter container carries the profile's Q factors, their
 negative transpose and each site's positive FP32 strength. It applies
 `y - owner_mode_scale * site_scale * (y @ Q.T) @ Q`. Source weights are read-only.
-No checkpoint pair, fitting procedure or private derivation data is required.
 
 ## Build without starting a service
 
@@ -149,8 +148,7 @@ answer fixtures, cache separation by strength, concurrent requests, streaming
 and long inputs. Separate copy probes confirmed accepted ngram draft tokens in
 both modes. Qwen Q8_0 passed 32 direct checks with its external draft.
 See [validation](../../docs/validation.md) for the longer-input and native
-harness results, including strict-answer limits. These runs do not establish
-broad model-quality equivalence.
+harness results, including strict-answer limits.
 
 The converter accepts standard projection profiles with finite positive site
 strengths and rejects unsupported transforms. Other model families, GGUF

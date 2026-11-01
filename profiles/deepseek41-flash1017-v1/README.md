@@ -5,12 +5,6 @@ This starter applies the exact native WO-B weights and scales from
 revision `de412d2249632903dace23399526e00a145aada5`.
 The source edit covers attention layers 10–35. Runtime packaging is by Aevonix.
 
-Use the official `deepseek-ai/DeepSeek-V4.1-Flash-1017` checkpoint at
-`1bae0e1088993b9b82de08f59de5be5a34e42170` with the
-[pinned native vLLM backend](../../engines/vllm-deepseek-native/README.md).
-The publisher does not identify the original stock revision used to produce
-its edit; the revision above is the audited serving base for this package.
-
 The profile format is `flashalign.native_wo_b.v1`, transform
 `native_matrix_override_v1`. Strength is fixed at **1.0**. The artifact contains
 26 native FP8 matrices and 26 UE8M0 scale tensors. It is not a direction-vector
@@ -36,20 +30,20 @@ Authorized requests select the edited WO-B matrices. Normal requests retain
 the stock matrices. Mixed batches select the correct operation per row, with
 separate cache identities. Speculative decoding stays enabled.
 
-Both backends use Linux x86_64 and four SM120 GPUs. The pinned vLLM image
-uses the official FP8 checkpoint. TensorFold 1.2.0 uses
-[`LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw`](https://huggingface.co/LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw/tree/04a492fc3b4d25ddbab8f2d2f07f235ec77c9010)
-at revision `04a492fc3b4d25ddbab8f2d2f07f235ec77c9010`. Its bundle explicitly
-binds that serving base to this profile's original official model pin.
+The current backends require Linux x86_64 and four SM120 GPUs. Both load the
+same profile payload with these pinned serving checkpoints:
 
-The profile file and native edited matrices are unchanged between engines.
-TensorFold keeps the EXL3 stock path and selects these FP8 matrices for owner
-rows. Base quantization and arithmetic differ from vLLM, so this is not a claim
-of identical full-model outputs. The source's EXL3 sidecars are not substitutes
-for this payload. SGLang and llama.cpp do not implement this native operator.
+| Backend | Checkpoint | Revision |
+| --- | --- | --- |
+| [vLLM](../../engines/vllm-deepseek-native/README.md) | `deepseek-ai/DeepSeek-V4.1-Flash-1017` (official FP8) | `1bae0e1088993b9b82de08f59de5be5a34e42170` |
+| [TensorFold 1.2.0](../../docs/native-tensorfold.md) | [`LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw`](https://huggingface.co/LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw/tree/04a492fc3b4d25ddbab8f2d2f07f235ec77c9010) | `04a492fc3b4d25ddbab8f2d2f07f235ec77c9010` |
 
-The profile uses exact source tensors, but full-model output identity and a
-particular refusal rate are not guaranteed. See [validation](../../docs/validation.md).
+TensorFold keeps the EXL3 stock path and selects the profile's FP8 matrices for
+owner rows. Its base quantization and arithmetic differ from vLLM. The source's
+EXL3 sidecars cannot replace this payload. SGLang and llama.cpp do not implement
+this native operator.
+
+See [validation](../../docs/validation.md) for measured results and limits.
 The software, model and profile-source terms are separate. Retain the
 [MIT notice](LICENSE) and [source agreement](RESPONSIBLE_USE.md).
 

@@ -13,7 +13,7 @@ Initial Aevonix FlashAlign release:
 - Managed Always On API gateway for clients that do not use a harness or the SDK.
 - Tool defaults and exact-name overrides for model access and child inheritance.
 - Setup wizard with harness detection, model discovery and compatibility checks.
-- Shared FlashAlign terminal design with a sharp pixel logo, a brief startup
+- Shared FlashAlign terminal interface with a pixel logo, a brief startup
   animation, keyboard selection panels and plain-text fallbacks.
 - Five included experimental starter profiles for GLM, DeepSeek, Qwen and Gemma,
   fitted and packaged by Aevonix from [credited checkpoints](profiles/SOURCES.md).

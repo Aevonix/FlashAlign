@@ -2,14 +2,9 @@
 
 An agent can detect harnesses, validate profiles and apply configuration without
 interactive prompts. Preparation stops before starting engines or restarting
-gateways; `--activate` performs that step. Agent setup uses the same profile
-checks and configuration writer as the wizard. OpenClaw preparation records a
-native plugin installation without restarting the gateway. Its startup service
-checks bridge readiness before serving calls.
-For TensorFold on one host or several Sparks, read [TensorFold setup](native-tensorfold.md).
-It stages checked binaries, libraries, source and the profile on each rank.
-Only commands that authenticate requests receive the signing key. Preparation
-then stops before activation.
+gateways; `--activate` performs that step. It uses the same checks as the wizard.
+For TensorFold on one host or several Sparks, read
+[TensorFold setup](native-tensorfold.md).
 For a fresh deployment, use a [managed engine plan](engine-setup.md#agent-preparation-and-activation)
 to prepare a supported engine, the profile and its deployment key automatically.
 
@@ -42,7 +37,7 @@ For a local terminal plan, prepare the harness and report the printed
 an interactive step, not an unattended gateway restart.
 
 The [starter profiles](../profiles/README.md) are discovered from local
-metadata without a private login. Four compact profiles are included in full.
+metadata. Four compact profiles are included in full.
 DeepSeek's native manifest declares a 1.09 GB public payload; managed preparation
 fetches missing bytes into an external cache and verifies them before staging.
 The offline inspector never fetches a missing payload. For offline preparation,
@@ -53,8 +48,7 @@ must match the pinned target or a declared serving base. The native DeepSeek
 starter supports the pinned vLLM container with official FP8 weights, or the
 TensorFold 1.2.0 bundle with its declared EXL3 base and original Engram source.
 Both require four SM120 GPUs and strength 1.0. Projection-only backends cannot
-load this profile. Preserve the profile's experimental status and the public package's
-qualification status when reporting setup results.
+load this profile.
 
 Choose a managed engine plan when the model needs an engine or profile setup.
 Choose the existing-endpoint plan below when an engine already implements the
@@ -178,5 +172,5 @@ authorized, run only the selected commands. In Verified contacts mode, verify an
 approved native message and an unapproved message through the harness. In Always
 On, verify both ordinary and delegated requests use the configured profile and
 that an attempted per-request stock override cannot bypass it. Mode changes do
-not re-enable a disabled deployment. A successful setup check does not
-establish native message routing, profile numerical parity or model quality.
+not re-enable a disabled deployment. See [validation](validation.md) for
+profile and runtime test coverage.

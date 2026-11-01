@@ -4,8 +4,7 @@
 
 FlashAlign is the product; Owner Mode is the profile-selection feature. The
 native plugin/provider ID is `owner-mode`, configuration lives under
-`~/.config/owner-mode/`, and the engine protocol uses `owner_mode`. These stable
-identifiers let installed adapters reuse their existing configuration.
+`~/.config/owner-mode/`, and the engine protocol uses `owner_mode`.
 
 In Verified contacts mode, Aevonix FlashAlign uses the harness's native channel
 and run metadata. The adapter must identify an incoming contact and bind it to
@@ -34,12 +33,8 @@ The OpenClaw integration targets the 2026.10.8 plugin interface. Its runtime
 requires Node 24.22.1+ on the 24.x line or 26.12.1+ on the 26.x line. Python 3.10+
 is required for the shared core and setup wizard.
 
-Adapter tests use synthetic native events. Hermes and OpenClaw hooks have also
-been exercised through real HTTP proxies against Qwen and GLM Flash on TensorFold
-engines. These are not full tests of every installed gateway or messaging
-transport. Verify native ingress,
-effective profile selection, revocation and delegation on your installed
-harness before enabling it for routine use.
+After setup, check message routing, profile selection, revocation and delegation
+through your installed harness. See [validation](validation.md) for test coverage.
 
 Verified contacts mode requires OpenClaw to isolate direct messages with
 `per-account-channel-peer` or `per-channel-peer`. Setup preserves those scopes.
@@ -52,14 +47,13 @@ not authorize Owner Mode.
 Verified contacts mode uses an installed adapter registry. WhatsApp and RCS
 direct messages are enabled by default. SMS and Telegram require explicit
 opt-in; Telegram uses native numeric user IDs. Each requires the harness's
-trusted transport metadata; the package does not install a messaging transport. Group chats and synthetic
-events use the standard model in this mode.
+trusted transport metadata and an installed messaging transport. Group chats
+and synthetic events use the standard model in this mode.
 
 Explicitly authorized local terminal sessions use a separate adapter with
 expiring, revocable grants. A CLI label, session name or prompt cannot create
 that authorization. See [channel and terminal setup](channels.md) for the
-commands and extension interface. Telegram has synthetic native-hook contract
-coverage; live delivery through your configured bot still needs a local check.
+commands and extension interface.
 
 On supported messaging transports, the adapters handle text, voice notes,
 photos and other attachments, forwarded messages, quoted replies, and queued
@@ -109,38 +103,33 @@ the signing key and load the correct profile for the exact model revision and
 serving format. The [starter pack](../profiles/README.md) includes five runtime
 profiles; additional profiles can be supplied by the operator.
 
-The adapters use the same signing protocol for each engine. Qwen3.8-27B and
-Gemma 4 26B A4B have paths on TensorFold, vLLM, SGLang and llama.cpp. Other models have the
-specific paths listed in [validation](validation.md); engine support for a model
-does not by itself establish FlashAlign support.
+Qwen3.8-27B and Gemma 4 26B A4B have paths on TensorFold, vLLM, SGLang and
+llama.cpp. The [starter pack](../profiles/README.md) lists each model's supported
+engines; [validation](validation.md) records the test results.
 
-Profiles describe operations on a model. The same artifact can be reused by
-multiple adapters when each supports its pinned model and serving format,
-operator and output sites. Compact
-profiles also require a supported basis rank; native tensor profiles require
-their declared storage format and parallel layout.
-Each model/engine combination still needs its own runtime validation.
+An engine can reuse a profile when it supports that profile's model revision,
+serving format, operator and output sites. Compact profiles also require a
+supported basis rank; native tensor profiles require their declared storage
+format and parallel layout.
 
 For compact profiles, setup checks each backend's `maximum_rank` before
 installation. The current GLM Flash and Qwen Flash Next SGLang adapters accept
 rank one; the other packaged vLLM, SGLang and llama.cpp adapters accept ranks up
-to 128. Site coverage and operator support still differ by adapter. A supported
-rank does not establish that an arbitrary profile has been tested on that engine.
+to 128. Site coverage and operator support differ by adapter.
 
 The llama.cpp integration uses upstream version 0.8.0 at commit
 `8642541b255bfb5dc39cd351a178be09013a55d6` and the declared Q8_0 GGUF
 checkpoints. Gemma setup defaults to ngram speculation and can preserve its
-official MTP draft. Other GGUF files require a matching compatibility
-declaration and separate validation. See the [llama.cpp guide](../engines/llamacpp/README.md).
+official MTP draft. Other GGUF files need a matching compatibility declaration.
+See the [llama.cpp guide](../engines/llamacpp/README.md).
 
 The four compact starters have TensorFold 1.1.9 paths, with model-specific
 builds and presets. The DeepSeek native starter has pinned vLLM and TensorFold
-1.2.0 paths. Python handles setup and process supervision, not model inference. The engine names in the support table identify
-available integrations. Each supplied bundle still requires its declared GPU
-architecture and rank count; setup checks those requirements separately.
-The bundles cover these tested checkpoint and hardware pairs:
+1.2.0 paths. TensorFold bundles support Linux x86_64 or aarch64 and declare the
+required GPU architecture and rank count. Setup checks those requirements.
+The following hardware was used to test the bundled configurations:
 
-| Model | Checkpoint format | Qualified hardware |
+| Model | Checkpoint format | Tested hardware |
 | --- | --- | --- |
 | DeepSeek V4.1 Flash 1017, TensorFold 1.2.0 | Declared LibertAIDAI EXL3 3.5-bpw base | Four RTX PRO 6000 GPUs, Linux x86_64, SM120 |
 | Qwen3.8-27B | MLX-format 4-bit | One DGX Spark, Linux aarch64, SM121 |
@@ -149,9 +138,8 @@ The bundles cover these tested checkpoint and hardware pairs:
 | GLM 5.3 Flash | NVIDIA NVFP4 | Four DGX Sparks, Linux aarch64, SM121 |
 | GLM 5.3 Full | EXL3 2.75-bpw | Four DGX Sparks, Linux aarch64, SM121 |
 
-MLX-format here describes the quantized checkpoint files. TensorFold reads
-those files and runs inference on NVIDIA GPUs under Linux; these results do
-not use Apple's MLX runtime or establish macOS support. Use the
+MLX-format describes the checkpoint files; TensorFold runs them on NVIDIA GPUs
+under Linux. Use the
 [model download guide](model-downloads.md) to select the pinned files for your
 model and backend.
 
@@ -159,37 +147,31 @@ The [pinned native vLLM backend](../engines/vllm-deepseek-native/README.md)
 for DeepSeek's `deepseek41-flash1017-v1` starter requires
 the official FP8 checkpoint at revision
 `1bae0e1088993b9b82de08f59de5be5a34e42170`, Linux x86_64 and four SM120 GPUs.
-The backend pins its container image, preserves adaptive DSpark with seven draft
-tokens, and uses FULL decode graphs with eager prefill. The native operator
-selects 26 WO-B matrices and 26 scale tensors at strength 1.0. It does not use
-a low-rank basis. Setup retrieves the 1.09 GB payload from a public release
-asset and verifies its size and hashes; no private repository access is needed.
-Fresh public-package GPU and wizard qualification for this vLLM backend is pending. See
-[validation](validation.md) for the earlier native-operator evidence and its limits.
+It uses adaptive DSpark with seven draft tokens, FULL decode graphs and eager
+prefill. The native operator selects 26 WO-B matrices and 26 scale tensors at
+strength 1.0. Setup retrieves and verifies the 1.09 GB profile payload from a
+public release asset.
 
 TensorFold 1.2.0 uses the same native profile payload with the declared
 LibertAIDAI EXL3 base at revision
-`04a492fc3b4d25ddbab8f2d2f07f235ec77c9010`, strength 1.0 and four ranks. Its
-base quantization and arithmetic differ from vLLM; identical edited matrices
-do not imply identical full-model outputs.
+`04a492fc3b4d25ddbab8f2d2f07f235ec77c9010`, strength 1.0 and four ranks on
+SM120 GPUs. Its base quantization and arithmetic differ from the FP8 vLLM path.
+Both current DeepSeek packages enforce this four-GPU layout.
 
-Legacy DeepSeek output-projection profiles can still use their separately
-qualified TensorFold or vLLM integration. The TensorFold EXL3 text preset has a
-65,536-token context, a 131,072-token pool and automatic DSML tool calls; forced
-tool selection, JSON Schema and image input are unsupported. Those integrations
-cannot load the native starter; its TensorFold path requires the new 1.2.0
-native-matrix bundle. Model support alone does not add support
-for a different profile operator.
+The DeepSeek TensorFold preset has a 65,536-token context and a 131,072-token
+pool. JSON Schema and guided output are unsupported. Older output-projection
+profiles use their matching TensorFold or vLLM packages; those packages cannot
+load the native starter. The older TensorFold preset supports automatic DSML
+tool calls; forced tool selection and image input are unsupported.
 
-GLM Full on TensorFold was qualified with an 8,192-token context, two concurrent
+GLM Full's TensorFold preset uses an 8,192-token context, two concurrent
 sequences and native MTP depth 4. It supports automatic tool calls. Forced tool
 selection, JSON Schema and image input are unsupported on this path.
 
-Setup matches explicit model IDs and pinned checkpoint metadata. A profile's
-presence in the starter pack does not qualify every engine or quantization.
-Before changing harness routing, the wizard verifies both signed profile
-activation and standard-mode requests. See [TensorFold setup](native-tensorfold.md)
-for remote ranks, SSH forwarding, legacy Engram prerequisites and architecture checks.
+Before changing harness routing, the wizard checks model and profile
+compatibility and verifies signed profile and standard-mode requests. See
+[TensorFold setup](native-tensorfold.md) for remote ranks, SSH forwarding and
+DeepSeek Engram prerequisites.
 
 Transcription, file decoding and vision depend on the configured model and
 harness capabilities. Advertise image input only for a model that supports it.
@@ -200,12 +182,5 @@ Always On also covers custom tools that send model requests through the supporte
 Chat Completions route. Responses API, Anthropic Messages and other model
 transports need an adapter to that route; they are outside the V1 API interface.
 
-Local managed engines are qualified on Linux with NVIDIA GPUs. macOS engine
-qualification is deferred. A remote client connection is not evidence of a
-locally supported macOS inference engine.
-
-TensorFold setup supports Linux x86_64 and aarch64 bundle contracts.
-GPU architecture and each model/operator combination require their own qualified
-bundle; CPU architecture alone does not establish compatibility. See
-[TensorFold](native-tensorfold.md) for multi-host preparation and current
-limits.
+Managed inference supports Linux with NVIDIA GPUs. macOS clients can connect to
+a remote engine; local macOS inference is not supported.
