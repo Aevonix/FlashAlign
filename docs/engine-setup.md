@@ -354,7 +354,7 @@ index or single-shard header fingerprints. These checks identify the tested
 layout; they do not replace the model distributor's complete download hashes.
 The wizard preserves supplied profile license notices when staging it.
 
-Native DeepSeek preparation verifies every pinned checkpoint payload and keeps
+Native vLLM DeepSeek preparation verifies every pinned checkpoint payload and keeps
 a resumable receipt outside the read-only model folder. The first pass reads
 about 510 GB; it does not download, copy or convert the base weights. Normal
 Hugging Face snapshot symlinks are supported. The native profile is a separate
@@ -362,7 +362,7 @@ verified public asset. Its operator keeps the stock and edited WO-B bindings
 immutable and selects between them per request or row. Strength is fixed at
 1.0; projection-only integrations cannot load it.
 
-The native launcher preserves adaptive DSpark7 and the declared graph settings.
+The native vLLM launcher preserves adaptive DSpark7 and the declared graph settings.
 Its default context is the model's 1,048,576-token limit; that configuration is
 not evidence of a completed million-token workload test. See the
 [DeepSeek integration](../engines/vllm-deepseek-native/README.md) for resource

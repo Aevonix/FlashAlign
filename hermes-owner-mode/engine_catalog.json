@@ -3,7 +3,7 @@
   "runtime_version": "1.1.9",
   "packages": [
     {
-      "id": "tensorfold-native-deepseek41-keys-linux-x86_64-sm120-v1.2.0-r3",
+      "id": "tensorfold-native-deepseek41-keys-linux-x86_64-sm120-v1.2.0-r4",
       "model_types": [
         "deepseek_v41"
       ],
@@ -14,9 +14,9 @@
       "cuda_architectures": [
         "sm_120"
       ],
-      "url": "https://github.com/Aevonix/FlashAlign/releases/download/v1.1.1/tensorfold-native-deepseek41-keys-linux-x86_64-sm120-v1.2.0-r3.tar.gz",
-      "sha256": "67192f0afce171532a3554428f7d517a159e74edd9cf2d89941c56d4026c492a",
-      "bytes": 290240440,
+      "url": "https://github.com/Aevonix/FlashAlign/releases/download/v1.1.1/tensorfold-native-deepseek41-keys-linux-x86_64-sm120-v1.2.0-r4.tar.gz",
+      "sha256": "9f6f95b75e96edeb82c2fc6f14c7aa45bcbcf4961d24592ef35ff4841faf5187",
+      "bytes": 290241949,
       "files": {
         "COMMERCIAL.md": {
           "sha256": "49c0bf9d56d32b0962313ffd20253ebf57de76ef964201eabf27f09132115a44",
@@ -611,19 +611,19 @@
           "bytes": 11412
         },
         "manifest.json": {
-          "sha256": "e0341921d125dd7fcde1ebd90714bcd993615e2550ad8f86b3ff365eb5c6de65",
+          "sha256": "e5ecf3bc0bbb6c9d7a9b3729d6f8c36d2b7edae580f1114e879f940580e8a1fa",
           "bytes": 34252
         },
         "sources/FLASHALIGN-LICENSE.md": {
           "sha256": "a47108c036aac05d3f5320de6340bfa65f9189effe2f379ae6615b4abd83515b",
           "bytes": 1508
         },
-        "sources/auxiliary/deepseek-runtime-aot-source-v1.tar.gz": {
-          "sha256": "080ed74d07016a546cd03f9e85b137767f00bc96d1f24fb1c8fb831e2506fcd7",
-          "bytes": 147628
+        "sources/auxiliary/deepseek-runtime-aot-source-v2.tar.gz": {
+          "sha256": "991a05754623a345e542e69e2b0fea6e9457f82bc49b8352c2caf35a3434040b",
+          "bytes": 149099
         },
-        "sources/auxiliary/deepseek-runtime-aot-source-v1.tar.gz.LICENSE.txt": {
-          "sha256": "0ad6c764b7affef25ef1d4ff1e95a3b498555de7f2ef8cd5687f844b775e29d1",
+        "sources/auxiliary/deepseek-runtime-aot-source-v2.tar.gz.LICENSE.txt": {
+          "sha256": "85093f2ec160a92ef38b5483229c89afd63da32d7bb3e552f72ac358b96cdc99",
           "bytes": 1162
         },
         "sources/tensorfold-source.tar.gz": {
