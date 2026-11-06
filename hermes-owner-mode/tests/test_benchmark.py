@@ -23,7 +23,7 @@ if "owner_mode" not in sys.modules:
     sys.modules[spec.name] = package
     spec.loader.exec_module(package)
 from flashalign import Client
-from flashalign.benchmark import aggregate, capture, metrics, private_directory, record_run, read_jsonl
+from flashalign.benchmark import aggregate, capture, metrics, private_directory, record_run, read_jsonl, read_recording
 from flashalign.benchmark_demo import build_demo
 from flashalign.benchmark_lm_eval import SignedEvaluationMixin
 
@@ -37,6 +37,18 @@ CASE = {"id": "safe", "group": "safe", "demo_safe": True,
 
 
 class BenchmarkTests(unittest.TestCase):
+    def test_patched_engine_build_digest_survives_public_provenance(self):
+        from flashalign.benchmark import validate_manifest
+        from flashalign.benchmark_reports import public_manifest
+        manifest = copy.deepcopy(MANIFEST)
+        manifest["engine"]["build_sha256"] = "a" * 64
+        validate_manifest(manifest)
+        self.assertEqual(public_manifest(manifest)["engine"]["build_sha256"], "a" * 64)
+        for bad in ("a" * 63, "A" * 64, True, "/private/build", "https://private/build"):
+            manifest["engine"]["build_sha256"] = bad
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                validate_manifest(manifest)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(dir="/var/tmp" if Path("/var/tmp").is_dir() else None)
         self.addCleanup(self.tmp.cleanup)
@@ -56,7 +68,8 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual(parts[3], expected)
         else:
             self.assertNotIn("X-Owner-Mode-Auth", request.headers)
-        events = [{"choices": [{"delta": {"content": "Safe "}}]},
+        events = [{"choices": [{"delta": {"content": getattr(self, "reply_content", "Safe "),
+                                            **({"reasoning_content": self.reply_reasoning} if hasattr(self, "reply_reasoning") else {})}}]},
                   {"choices": [{"delta": {"content": "answer."}}]},
                   {"choices": [{"delta": {}, "finish_reason": "stop"}],
                    "usage": {"prompt_tokens": 7, "completion_tokens": 3}}]
@@ -185,12 +198,11 @@ class BenchmarkTests(unittest.TestCase):
             aggregate(rows, MANIFEST, {}, cases_sha256="test", labels=labels + labels[:1])
 
     def test_html_uses_real_pair_and_escapes_model_output(self):
+        self.reply_content = "</script><script>alert('x')</script>"
+        self.reply_reasoning = "PRIVATE REASONING"
         self.run_fixture(warmups=0)
         path = self.root / "run/records.jsonl"
         rows = read_jsonl(path)
-        rows[0]["events"][0]["content"] = "</script><script>alert('x')</script>"
-        rows[0]["events"][0]["reasoning"] = "PRIVATE REASONING"
-        path.write_text("\n".join(json.dumps(r) for r in rows))
         payload = build_demo(self.root / "run", "safe", self.root / "demo.html", note="Development recording: one selected fixture.")
         html = (self.root / "demo.html").read_text()
         self.assertNotIn("</script><script>alert", html)
@@ -202,6 +214,84 @@ class BenchmarkTests(unittest.TestCase):
         path.write_text("\n".join(json.dumps(r) for r in rows))
         with self.assertRaises(ValueError):
             build_demo(self.root / "run", "safe", self.root / "bad.html")
+
+    def test_recording_reader_accepts_existing_v1_without_case_snapshot(self):
+        self.run_fixture(warmups=0)
+        path = self.root / "run/run.json"
+        run = json.loads(path.read_text())
+        del run["case_definitions"]
+        path.write_text(json.dumps(run))
+        loaded, rows, checksum = read_recording(self.root / "run")
+        self.assertNotIn("case_definitions", loaded)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(checksum), 64)
+
+    def test_changed_or_truncated_recording_cannot_be_exported(self):
+        self.run_fixture(warmups=0)
+        path = self.root / "run/records.jsonl"
+        original = path.read_bytes()
+        rows = read_jsonl(path)
+        rows[0]["events"][0]["content"] = "altered after collection"
+        path.write_text("\n".join(json.dumps(row) for row in rows))
+        with self.assertRaisesRegex(ValueError, "receipt"):
+            read_recording(self.root / "run")
+        with self.assertRaises(ValueError):
+            build_demo(self.root / "run", "safe", self.root / "changed.html")
+        self.assertFalse((self.root / "changed.html").exists())
+        path.write_bytes(original.splitlines(keepends=True)[0])
+        with self.assertRaisesRegex(ValueError, "receipt"):
+            read_recording(self.root / "run")
+
+    def test_run_settings_and_case_snapshot_must_match_receipt(self):
+        self.run_fixture(warmups=0)
+        path = self.root / "run/run.json"
+        original = json.loads(path.read_text())
+        changed = copy.deepcopy(original)
+        changed["request_settings"]["temperature"] = .7
+        path.write_text(json.dumps(changed))
+        with self.assertRaisesRegex(ValueError, "settings"):
+            read_recording(self.root / "run")
+        changed = copy.deepcopy(original)
+        changed["case_definitions"][0]["messages"][0]["content"] = "Different prompt"
+        path.write_text(json.dumps(changed))
+        with self.assertRaisesRegex(ValueError, "case definitions"):
+            read_recording(self.root / "run")
+
+    def test_unfinished_recording_has_no_unverified_export_fallback(self):
+        self.run_fixture(warmups=0)
+        (self.root / "run/aggregate.json").unlink()
+        with self.assertRaisesRegex(ValueError, "completed recording receipt"):
+            read_recording(self.root / "run")
+
+    def test_truncated_request_set_fails_even_with_updated_file_checksum(self):
+        self.run_fixture(warmups=0)
+        path = self.root / "run/records.jsonl"
+        path.write_bytes(path.read_bytes().splitlines(keepends=True)[0])
+        receipt_path = self.root / "run/aggregate.json"
+        receipt = json.loads(receipt_path.read_text())
+        receipt["recording_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        receipt_path.write_text(json.dumps(receipt))
+        with self.assertRaisesRegex(ValueError, "request count"):
+            read_recording(self.root / "run")
+
+    def test_mismatched_aggregate_manifest_is_rejected(self):
+        self.run_fixture(warmups=0)
+        path = self.root / "run/aggregate.json"
+        receipt = json.loads(path.read_text())
+        receipt["manifest"]["model"]["revision"] = "different"
+        path.write_text(json.dumps(receipt))
+        with self.assertRaisesRegex(ValueError, "run, settings or cases"):
+            read_recording(self.root / "run")
+
+    def test_huge_repetition_declaration_is_rejected_before_expansion(self):
+        self.run_fixture(warmups=0)
+        path = self.root / "run/run.json"
+        run = json.loads(path.read_text())
+        run["repetitions"] = 10 ** 30
+        run["warmups"] = 10 ** 30
+        path.write_text(json.dumps(run))
+        with self.assertRaisesRegex(ValueError, "request count"):
+            read_recording(self.root / "run")
 
 
 class FakeAPI:

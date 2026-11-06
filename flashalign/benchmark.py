@@ -15,6 +15,7 @@ import sys
 import time
 
 from . import Client
+from .benchmark_io import loads, read_bytes
 
 
 SCHEMA = "flashalign-benchmark-v1"
@@ -37,6 +38,95 @@ def read_json(path):
 
 def read_jsonl(path):
     return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
+
+
+def read_recording(path):
+    """Verify a completed v1 recording before labeling or exporting its text.
+
+    The recorder has always saved the exact JSONL digest in aggregate.json.
+    Missing receipts are incomplete recordings, not an unverified fallback.
+    Older v1 runs lack case definitions; their recorded case identities and
+    prompt fields must still agree across every repetition and both modes.
+    """
+    path = Path(path)
+    run = loads(read_bytes(path / "run.json"))
+    try:
+        receipt = loads(read_bytes(path / "aggregate.json"))
+    except FileNotFoundError as exc:
+        raise ValueError("A completed recording receipt is required") from exc
+    raw = read_bytes(path / "records.jsonl", limit=256 * 1024 * 1024)
+    recording_hash = hashlib.sha256(raw).hexdigest()
+    if (not isinstance(run, dict) or not isinstance(receipt, dict) or run.get("schema") != SCHEMA
+            or receipt.get("schema") != SCHEMA or receipt.get("recording_sha256") != recording_hash):
+        raise ValueError("Recording is incomplete or its receipt does not match")
+    validate_manifest(run["manifest"])
+    validate_options(run["request_settings"])
+    if (receipt.get("manifest") != run["manifest"] or receipt.get("request_settings") != run["request_settings"]
+            or receipt.get("request_settings_sha256") != digest(run["request_settings"])
+            or receipt.get("cases_sha256") != run.get("cases_sha256")):
+        raise ValueError("Recording run, settings or cases differ from its receipt")
+    rows = [loads(line) for line in raw.splitlines() if line.strip()]
+    repetitions, warmups = run.get("repetitions"), run.get("warmups")
+    if type(repetitions) is not int or repetitions < 1 or type(warmups) is not int or warmups < 0:
+        raise ValueError("Invalid recording repetition counts")
+    cases, indices, seen = {}, {}, set()
+    for row in rows:
+        if not isinstance(row, dict) or row.get("phase") not in ("warmup", "measured") or row.get("mode") not in ("off", "profile"):
+            raise ValueError("Invalid recorded case")
+        identity = row.get("record_id")
+        if not isinstance(identity, str) or identity in seen:
+            raise ValueError("Repeated recording identity")
+        seen.add(identity)
+        parts = identity.split(":")
+        if (len(parts) != 4 or parts[0] != row["phase"] or parts[3] != row["mode"]
+                or not parts[1].isdigit() or not parts[2].isdigit()
+                or int(parts[1]) != row.get("repetition")):
+            raise ValueError("Recording identity differs from its fields")
+        index, repetition = int(parts[2]), int(parts[1])
+        maximum = warmups if row["phase"] == "warmup" else repetitions
+        if repetition >= maximum or row["phase"] == "warmup" and index != 0:
+            raise ValueError("Recording lies outside the declared run")
+        case = {"id": row.get("case_id"), "messages": row.get("messages"),
+                "group": row.get("group"), "demo_safe": row.get("demo_safe")}
+        validate_cases([case])
+        checksum = row.get("case_sha256")
+        if not isinstance(checksum, str) or len(checksum) != 64 or any(c not in "0123456789abcdef" for c in checksum):
+            raise ValueError("Invalid recorded case digest")
+        definition = {**case, "case_sha256": checksum}
+        if cases.setdefault(case["id"], definition) != definition or indices.setdefault(index, case["id"]) != case["id"]:
+            raise ValueError("Recorded case fields changed across requests")
+        profile = "off" if row["mode"] == "off" else run["manifest"]["profile"]["name"]
+        scale = None if row["mode"] == "off" else run.get("scale")
+        if row.get("requested_profile") != profile or row.get("requested_scale") != scale:
+            raise ValueError("Recorded profile differs from the declared run")
+    if not cases or set(indices) != set(range(len(cases))):
+        raise ValueError("Recording case order is incomplete")
+    if len(rows) != 2 * (warmups + repetitions * len(cases)):
+        raise ValueError("Recording request count differs from the declared run")
+    expected = []
+    for phase, count, selected in (("warmup", warmups, [0]), ("measured", repetitions, range(len(cases)))):
+        for repetition in range(count):
+            for index in selected:
+                modes = ("off", "profile") if (repetition + index) % 2 == 0 else ("profile", "off")
+                expected.extend(f"{phase}:{repetition}:{index}:{mode}" for mode in modes)
+    if [row["record_id"] for row in rows] != expected:
+        raise ValueError("Recording is truncated, reordered or has extra requests")
+    definitions = run.get("case_definitions")
+    if definitions is not None:
+        validate_cases(definitions)
+        if digest(definitions) != run["cases_sha256"] or len(definitions) != len(cases):
+            raise ValueError("Recording case definitions differ")
+        for index, case in enumerate(definitions):
+            stored = cases.get(case["id"], {})
+            if (indices.get(index) != case["id"] or stored.get("case_sha256") != digest(case)
+                    or stored.get("messages") != case["messages"]
+                    or stored.get("group") != case.get("group", "custom")
+                    or stored.get("demo_safe") != case.get("demo_safe", False)):
+                raise ValueError("Recorded prompt differs from its case definition")
+    report = aggregate(rows, run["manifest"], run["request_settings"], cases_sha256=run["cases_sha256"])
+    if any(receipt.get(key) != value for key, value in report.items()):
+        raise ValueError("Recorded metrics differ from its receipt")
+    return run, rows, recording_hash
 
 
 def private_directory(path):
@@ -86,7 +176,7 @@ def validate_manifest(manifest):
     """A narrow allowlist prevents client credentials and URLs entering reports."""
     fields = {
         "model": {"id", "served_id", "revision", "weights_sha256", "quantization", "tokenizer_revision"},
-        "engine": {"name", "version", "commit", "settings_sha256"},
+        "engine": {"name", "version", "commit", "settings_sha256", "build_sha256"},
         "hardware": {"accelerator", "accelerator_count", "memory_gib", "power_limit_watts", "cpu"},
         "speculation": {"enabled", "method", "draft_model", "draft_revision", "draft_tokens"},
         "profile": {"name", "artifact_sha256"},
@@ -110,6 +200,10 @@ def validate_manifest(manifest):
     profile_hash = manifest["profile"]["artifact_sha256"]
     if len(profile_hash) != 64 or any(c not in "0123456789abcdef" for c in profile_hash):
         raise ValueError("profile.artifact_sha256 must be the SHA-256 of profile.safetensors")
+    build_hash = manifest["engine"].get("build_sha256")
+    if build_hash is not None and (not isinstance(build_hash, str) or len(build_hash) != 64
+                                   or any(c not in "0123456789abcdef" for c in build_hash)):
+        raise ValueError("engine.build_sha256 must be a SHA-256 digest")
 
 
 def number(value):
@@ -306,7 +400,8 @@ def record_run(config, manifest, cases, output, *, options, repetitions=1, warmu
     target = private_directory(output)
     run = {"schema": SCHEMA, "created_utc": datetime.now(timezone.utc).isoformat(),
            "manifest": manifest, "request_settings": options, "scale": scale,
-           "repetitions": repetitions, "warmups": warmups, "cases_sha256": digest(cases)}
+           "repetitions": repetitions, "warmups": warmups, "cases_sha256": digest(cases),
+           "case_definitions": cases}
     write_private(target / "run.json", run)
     records = []
     fd = os.open(target / "records.jsonl", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -341,6 +436,11 @@ def record_run(config, manifest, cases, output, *, options, repetitions=1, warmu
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    from .benchmark_cli import COMMANDS
+    if argv and argv[0] in COMMANDS:
+        from .benchmark_cli import main as evaluation_main
+        return evaluation_main(argv)
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     record = commands.add_parser("record", help="Record controlled signed off/profile pairs")
@@ -370,9 +470,10 @@ def main(argv=None):
                              "measured_requests": report["measured_requests"]}))
             return 0 if all(v["requests"] == v["completed"] for v in report["modes"].values()) else 1
         if args.command == "summarize":
-            run = read_json(args.run / "run.json")
-            result = aggregate(read_jsonl(args.run / "records.jsonl"), run["manifest"], run["request_settings"],
+            run, rows, recording_hash = read_recording(args.run)
+            result = aggregate(rows, run["manifest"], run["request_settings"],
                                cases_sha256=run["cases_sha256"], labels=read_jsonl(args.labels))
+            result["recording_sha256"] = recording_hash
             write_private(args.output, result)
             print(canonical({"labelled_requests": result["judgments"]["labelled_requests"]}))
         else:

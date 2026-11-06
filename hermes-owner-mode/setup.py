@@ -33,14 +33,14 @@ from owner_mode.engine_setup import stop_engine
 from owner_mode.model_metadata import (configure_hermes_reasoning, configure_hermes_images,
                                        configure_hermes_provider, configure_openclaw_compat,
                                        checked_request_compatibility, checked_openclaw_request_policy,
-                                       check_openclaw_request_config)
+                                       check_openclaw_request_config, model_request_compatibility)
 from owner_mode.setup_runtime import Console, SetupError, check_engine, engine_profiles, model_rows, restart_harnesses, register_openclaw, openclaw_session_scope, harness_context_requirements, check_harness_contexts, HERMES_MINIMUM_CONTEXT
 from owner_mode.setup_transaction import current_transaction, pending_setup, recover_setup, transactional_setup
+from owner_mode.engine_adapters import engine_adapters
+from owner_mode.runtime_files import runtime_files
+from owner_mode.resources import setup_resource
 
-MODULES = ['__init__.py','auth.py','identity.py','hermes_ingress.py','native_authority.py',
-           'content.py','hermes_observer.py',
-           'contacts.py','channels.py','access_setup.py','terminal.py','native_terminal.py','policy.py','proxy.py','plugin.py','bridge.py','serve.py','manage.py','setup.py',
-           'profiles.py','deepseek_grouped.py','native_profile.py','profile_assets.py','profile_inspector.py','setup_runtime.py','terminal_ui.py','terminal-logo.json','setup_transaction.py','automation.py','direct_gateway.py','engine_setup.py','engine_supervisor.py','engine_assets.py','native_bundle.py','native_setup.py','native_cluster.py','native_remote.py','engine_catalog.json','backend_setup.py','model_metadata.py','drafting.py','quickstart.py','client.py','harness_client.py','plugin.yaml','requirements.txt','README.md','LICENSE','NOTICE.md']
+MODULES = runtime_files(ROOT)
 
 
 def load_config(path):
@@ -134,7 +134,7 @@ def model_list(base_url, timeout=5):
 def profile_for(model, catalog=None):
     if catalog is None:
         try:
-            catalog = read_json(ROOT.parent/'profiles/catalog.json')
+            catalog = read_json(setup_resource('profiles')/'catalog.json')
         except (OSError, ValueError):
             return None
     matches = {item['profile'] for item in catalog.get('models', [])
@@ -173,7 +173,7 @@ def init_signing_key(path):
 
 @transactional_setup
 def provision(home, selected, base_url, model, profile, contacts, tools_default, engine_key=None,
-              *, profile_details=None, engine_check=None, model_info=None, api_key=None, mode='verified'):
+              *, profile_details=None, engine_check=None, model_info=None, api_key=None, mode='verified', engine_admin=None):
     endpoint = urlsplit(base_url)
     if endpoint.scheme not in {'http','https'} or not endpoint.hostname or endpoint.username or endpoint.password:
         raise ValueError('Enter a model base URL without credentials')
@@ -197,7 +197,7 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
         init_signing_key(key)
     read_key(key)
     store=ApprovalStore(state/'approvals.json')
-    pending_store=ApprovalStore(current_transaction().stage_file(store.path))
+    pending_store=ApprovalStore(current_transaction().stage_file(store.path), registry=store.registry)
     def defaults(value):value['tools']['default']=tools_default
     pending_store.update(defaults)
     pending_store.set_mode(mode)
@@ -209,13 +209,9 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
     release.mkdir(parents=True)
     for filename in MODULES:shutil.copy2(ROOT/filename,release/filename)
     route={'upstream':base_url,'profile':profile,'owner_mode_scale':1.0,'timeout':1800}
-    if model == 'deepseek-ai/DeepSeek-V4.1-Flash-1017':
-        route['request_compatibility'] = 'deepseek_v41'
-    if (model_info or {}).get('request_compatibility') is not None:
-        if 'request_compatibility' in route:
-            raise SetupError('Conflicting model request compatibility declarations')
-        declaration = checked_request_compatibility(model_info['request_compatibility'], require_model=False)
-        route['request_compatibility'] = checked_request_compatibility({**declaration, 'model': model})
+    declaration = model_request_compatibility(model, (model_info or {}).get('request_compatibility'))
+    if declaration is not None:
+        route['request_compatibility'] = declaration
     if api_key:
         if '\r' in api_key or '\n' in api_key or len(api_key) > 8192:
             raise ValueError('Invalid upstream API key')
@@ -291,7 +287,7 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
                               'control_key_file':str(control),'key_file':str(key),'routes':{'head':route}})
         extension=current_transaction().stage_tree(home/'.openclaw/extensions/owner-mode')
         for filename in ['index.mjs','terminal.mjs','terminal-runner.mjs','model-params.mjs','package.json','openclaw.plugin.json','LICENSE','NOTICE.md']:
-            shutil.copy2(ROOT.parent/'openclaw-owner-mode'/filename,extension/filename)
+            shutil.copy2(setup_resource('openclaw-owner-mode')/filename,extension/filename)
         descriptor={'id':model,'name':model,'reasoning':True,'input':['text'],
                     'contextWindow':32768,'maxTokens':8192,
                     'cost':{'input':0,'output':0,'cacheRead':0,'cacheWrite':0}}
@@ -328,6 +324,18 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
         existing=defaults.get('model')
         defaults['model']={**(existing if isinstance(existing,dict) else {}),'primary':'owner-mode/'+model}
         path=home/'.openclaw/openclaw.json';save_config(path,cfg);result['configs'].append(str(path))
+    client = {'base_url': base_url, 'model': model, 'profile': profile,
+              'key_file': str(key), 'mode': mode}
+    if route.get('api_key_file'):
+        client['api_key_file'] = route['api_key_file']
+    if engine_admin:
+        client.update({name: engine_admin[name] for name in ('admin_socket', 'admin_staging_directory', 'admin_remote')
+                       if name in engine_admin})
+    client_path = home/'.config/flashalign/client.json'
+    if client_path.exists() and load_config(client_path).get('gateway') is True:
+        client_path = home/'.config/flashalign/engine-client.json'
+    save_config(client_path, client)
+    result['client_config'] = str(client_path)
     save_config(state/'setup-result.json',result)
     return result
 
@@ -383,7 +391,7 @@ def main(argv=None):
     parser.add_argument('--model-path', type=Path, help='Local checkpoint for default managed setup')
     parser.add_argument('--profile', type=Path, help='Local profile for default managed setup')
     parser.add_argument('--engine-bundle', type=Path, help='Local TensorFold runtime package for managed setup')
-    parser.add_argument('--backend', choices=('auto', 'tensorfold', 'vllm', 'sglang', 'llamacpp'), default='auto',
+    parser.add_argument('--backend', choices=('auto', *engine_adapters().ids()), default='auto',
                         help='Engine for default setup; auto chooses from the local model format')
     parser.add_argument('--engine-python', help='Python interpreter for the managed engine')
     parser.add_argument('--drafter', type=Path, help='Existing local draft model; active speculative decoding is preserved')
@@ -458,7 +466,7 @@ def main(argv=None):
         return result
     if args.detect:
         from owner_mode.backend_setup import backend_catalog
-        roots = [*args.profiles, args.home/'.config/owner-mode/profiles', ROOT.parent/'profiles']
+        roots = [*args.profiles, args.home/'.config/owner-mode/profiles', setup_resource('profiles')]
         local, errors = discover_profiles(roots)
         found['profiles'] = {'valid': local, 'invalid': errors}
         found['backends'] = backend_catalog()
@@ -520,7 +528,7 @@ def main(argv=None):
     check_harness_contexts(selected, found,
         {'tokens': model_info.get('contextWindow'), 'source': 'model endpoint metadata'})
     console.step(3, 'Find and verify a profile')
-    roots = [*args.profiles, args.home/'.config/owner-mode/profiles', ROOT.parent/'profiles']
+    roots = [*args.profiles, args.home/'.config/owner-mode/profiles', setup_resource('profiles')]
     roots += [Path(item) for item in os.environ.get('FLASHALIGN_PROFILE_PATH', '').split(os.pathsep) if item]
     local, errors = discover_profiles(roots)
     for error in errors:
@@ -600,7 +608,7 @@ def main(argv=None):
     if input('Apply setup? [y/N]: ').strip().lower() not in {'y','yes'}:return
     openclaw_install = None
     if 'openclaw' in selected:
-        openclaw_install = register_openclaw(args.home, found['openclaw'].get('executable'), ROOT.parent/'openclaw-owner-mode')
+        openclaw_install = register_openclaw(args.home, found['openclaw'].get('executable'), setup_resource('openclaw-owner-mode'))
     result=provision(args.home,selected,base,model,profile,contacts,tools=='on',key,
                      profile_details=details, engine_check=check, model_info=model_info, api_key=api_key, mode=mode)
     if openclaw_install is not None:result['openclaw_install'] = openclaw_install
@@ -633,14 +641,19 @@ def main(argv=None):
     return result
 
 
-if __name__=='__main__':
+def cli(argv=None):
     try:
-        result = main()
+        result = main(argv)
         if result and any(item['status'] in ('failed', 'unavailable') for item in result.get('restart', {}).values()):
-            raise SystemExit(1)
+            return 1
     except (SetupError, ValueError, OSError) as error:
         Console(color=False).result(str(error), ok=False)
-        raise SystemExit(1)
+        return 1
     except (EOFError, KeyboardInterrupt):
         print('\nSetup cancelled.')
-        raise SystemExit(1)
+        return 1
+    return 0
+
+
+if __name__=='__main__':
+    raise SystemExit(cli())

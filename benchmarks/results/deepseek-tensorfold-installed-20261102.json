@@ -1,0 +1,110 @@
+{
+  "schema": "flashalign.installed-lifecycle-qualification.v1",
+  "passed": true,
+  "flashalign_revision": "5f2e7efacc67e2e28fad2e4190a742c45b7783c4",
+  "tensorfold_revision": "b505ce273d3c037f9e198a466720c55037c39baa",
+  "model": {
+    "id": "LibertAIDAI/DeepSeek-V4.1-Flash-1017-EXL3-3.5bpw",
+    "revision": "04a492fc3b4d25ddbab8f2d2f07f235ec77c9010"
+  },
+  "profile": {
+    "name": "deepseek41-flash1017-v1",
+    "payload_sha256": "88324ceaa2c0754a2bdb4ef6bb388a088438e352358343e6c2c882009cdde864",
+    "strength": 1.0
+  },
+  "hardware": "4x RTX PRO 6000 Blackwell Max-Q, SM120",
+  "platform": "Linux x86_64, SM120",
+  "configured_context_tokens": 65536,
+  "configured_slots": 2,
+  "installed_files_verified": 375,
+  "installed_runtime_tree_sha256": "2e413cd008a964ab2cb2e4142eeb83aba08eef9fd7ff2293523c2023e8d820bb",
+  "requests_observed_including_setup": 27,
+  "administrative_operations": 48,
+  "speculation": {
+    "algorithm": "DSpark",
+    "preserved_in_both_modes": true,
+    "stock_probe": {
+      "drafted_tokens": 42,
+      "accepted_tokens": 41
+    },
+    "owner_probe": {
+      "drafted_tokens": 44,
+      "accepted_tokens": 41
+    }
+  },
+  "cache_checks": [
+    {
+      "mode": "off",
+      "prompt_tokens": 1379,
+      "cold_cached_tokens": 0,
+      "warm_cached_tokens": 1376
+    },
+    {
+      "mode": "owner",
+      "prompt_tokens": 1379,
+      "cold_cached_tokens": 0,
+      "warm_cached_tokens": 1376
+    },
+    {
+      "mode": "alternate_owner",
+      "prompt_tokens": 1379,
+      "cold_cached_tokens": 0,
+      "warm_cached_tokens": 1376
+    }
+  ],
+  "stock_cache_after_owner_switch": {
+    "prompt_tokens": 1376,
+    "cached_tokens": 1360
+  },
+  "context_checks": [
+    {
+      "mode": "off",
+      "prompt_tokens": 60004,
+      "completion_tokens": 2,
+      "finish_reason": "stop"
+    },
+    {
+      "mode": "owner",
+      "prompt_tokens": 60004,
+      "completion_tokens": 2,
+      "finish_reason": "stop"
+    }
+  ],
+  "authorization_checks": [
+    "signed owner requests",
+    "unsigned stock requests",
+    "replay rejection",
+    "invalid signing key",
+    "native profile strength validation"
+  ],
+  "lifecycle_checks": [
+    "distinct compatible profile payloads",
+    "activation revision conflict",
+    "old and new generations in flight",
+    "mixed stock and owner streams",
+    "stream cancellation and slot release",
+    "cache eviction",
+    "rollback",
+    "retirement and fresh generation"
+  ],
+  "final_state": {
+    "alias_revision": 9,
+    "active_generations": 1,
+    "pending_transaction": false,
+    "original_profile_restored": true
+  },
+  "cleanup": {
+    "public_shutdown_exit_code": 0,
+    "all_witnessed_processes_gone": true,
+    "four_device_locks_released": true,
+    "reservation_released": true,
+    "two_empty_gpu_observations": true
+  },
+  "scope": "Fresh managed installation, signed requests, profile lifecycle, cache isolation/reporting, speculative decoding, bounded context and owned shutdown. These checks do not measure refusal rate, answer quality, throughput, the full configured context, or other hardware layouts.",
+  "release_package": {
+    "id": "tensorfold-dsv41-linux-x86_64-sm120-b505ce2-control-v2",
+    "sha256": "117cf8e846da31d31c4e465b5185f66d291c1e6d35300f91dbae106a9dc085bd",
+    "bytes": 312376969,
+    "matches_qualified_runtime_payload": true
+  }
+}

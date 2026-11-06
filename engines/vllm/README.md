@@ -9,7 +9,7 @@ by the other backends.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/python -m pip install vllm==0.32.0 /path/to/flashalign-vllm
+.venv/bin/python -m pip install vllm==0.32.0 /path/to/FlashAlign /path/to/FlashAlign/engines/vllm
 ```
 
 Start with an operator-provisioned private 32-byte signing key and local profile:
@@ -43,7 +43,7 @@ selection. It strips forged internal fields and authentication headers, adds the
 actual `X-Owner-Mode-Effective` response header, and gives each profile/digest/
 strength its own prefix-cache namespace. Standard requests also have a separate
 namespace. Only Chat Completions and Completions accept POST requests; alternate
-generation transports and administrative mutation routes are closed. Invalid or missing authentication is standard mode.
+generation transports and HTTP administrative mutation routes are closed. Invalid or missing authentication is standard mode.
 
 Profiles load in the engine workers. Hooks modify only selected batch rows at
 the actual embedding/output modules. The base weights stay unchanged; standard
@@ -65,3 +65,6 @@ configured through this launcher. Usage telemetry is disabled by the launcher.
 The extension uses vLLM's [general plugin mechanism](https://docs.vllm.ai/en/v0.32.0/design/plugin_system/).
 Its runner integration is pinned to the [0.32.0 GPU runner](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_model_runner.py).
 The cache namespace uses vLLM's [request salt in block hashes](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py).
+
+See [profile updates](LIFECYCLE.md) for the local administration socket,
+generation retention and runtime status endpoints.

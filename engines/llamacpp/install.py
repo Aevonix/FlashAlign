@@ -35,8 +35,10 @@ def main():
                      [str(state/'venv/bin/python'),'-m','pip','--isolated','install','--index-url','https://pypi.org/simple','-r',str(ROOT/'requirements.txt')],
                      ['cmake','-S',str(source),'-B',str(build),'-DGGML_CUDA='+('ON' if use_cuda else 'OFF'),
                       '-DLLAMA_BUILD_TESTS=ON','-DLLAMA_BUILD_EXAMPLES=OFF','-DLLAMA_BUILD_TOOLS=ON','-DLLAMA_CURL=OFF'],
-                     ['cmake','--build',str(build),'--target','llama-server','test-flashalign-output','-j',str(a.jobs)],
-                     [str(build/'bin/test-flashalign-output')]])
+                     ['cmake','--build',str(build),'--target','llama-server','test-flashalign-output',
+                      'test-flashalign-ownership','-j',str(a.jobs)],
+                     [str(build/'bin/test-flashalign-output')],
+                     [str(build/'bin/test-flashalign-ownership')]])
     with (state/'build.log').open('w') as log:
         for command in commands:subprocess.run(command,check=True,stdout=log,stderr=subprocess.STDOUT)
     binary=build/'bin/llama-server'

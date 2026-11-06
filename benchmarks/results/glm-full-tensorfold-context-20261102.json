@@ -1,0 +1,84 @@
+{
+  "schema": "flashalign.configured-context-smoke.v1",
+  "flashalign_revision": "5f2e7efacc67e2e28fad2e4190a742c45b7783c4",
+  "tensorfold_revision": "a7ed78d1c16fc9745f7540c504ebf87289be5e9a",
+  "model": "Mia-AiLab/GLM-5.3-EXL3-2.75bpw-TensorFold",
+  "model_revision": "cf1fee8923b770b0c47f7a032e1b0f30a57c626a",
+  "profile": "glm53-full-v1",
+  "hardware": "4 NVIDIA DGX Sparks",
+  "configured_context_tokens": 65536,
+  "configured_slots": 2,
+  "full_window_tested": false,
+  "builtin_activation_model_calls": 4,
+  "manual_model_calls": 6,
+  "requests": [
+    {
+      "case": "long",
+      "mode": "off",
+      "prompt_tokens": 12053,
+      "cached_tokens": 0,
+      "requested_output_tokens": 128,
+      "completion_tokens": 98,
+      "finish_reason": "stop"
+    },
+    {
+      "case": "long",
+      "mode": "off",
+      "prompt_tokens": 12053,
+      "cached_tokens": 12032,
+      "requested_output_tokens": 128,
+      "completion_tokens": 98,
+      "finish_reason": "stop"
+    },
+    {
+      "case": "long",
+      "mode": "owner",
+      "prompt_tokens": 12053,
+      "cached_tokens": 0,
+      "requested_output_tokens": 128,
+      "completion_tokens": 98,
+      "finish_reason": "stop"
+    },
+    {
+      "case": "long",
+      "mode": "owner",
+      "prompt_tokens": 12053,
+      "cached_tokens": 12032,
+      "requested_output_tokens": 128,
+      "completion_tokens": 98,
+      "finish_reason": "stop"
+    },
+    {
+      "case": "output-budget",
+      "mode": "off",
+      "prompt_tokens": 47,
+      "cached_tokens": 0,
+      "requested_output_tokens": 32768,
+      "completion_tokens": 133,
+      "finish_reason": "stop"
+    },
+    {
+      "case": "output-budget",
+      "mode": "owner",
+      "prompt_tokens": 47,
+      "cached_tokens": 0,
+      "requested_output_tokens": 32768,
+      "completion_tokens": 118,
+      "finish_reason": "stop"
+    }
+  ],
+  "speculation": {
+    "off": {
+      "accepted": 130.0,
+      "drafted": 231.0
+    },
+    "owner": {
+      "accepted": 117.0,
+      "drafted": 216.0
+    }
+  },
+  "profile_generation_and_digest_verified": true,
+  "public_shutdown_passed": true,
+  "all_four_guards_released": true,
+  "scope": "Configured64K/two-slot compatibility with observed~12K inputs, separate cold/warm mode caches and32768 output allowance admission. No full-window, throughput, answer-quality or actual32768-token generation claim."
+}

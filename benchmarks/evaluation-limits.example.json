@@ -1,0 +1,7 @@
+{
+  "max_response_bytes": 16777216,
+  "max_events": 65536,
+  "max_sse_event_bytes": 16777216,
+  "max_record_bytes": 67108864,
+  "max_judge_request_bytes": 67108864
+}

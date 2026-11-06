@@ -7,17 +7,17 @@ from contextvars import ContextVar
 import threading
 
 from .contacts import ApprovalStore
-from .channels import DEFAULT_REGISTRY
 from .content import bind_content, proof_matches
 from .hermes_observer import HermesObserver, event_copy
 from .identity import DM_TYPES, canonical_handle
 from . import hermes_ingress
+from .policy import IdentityResult
 
 
 class NativeAuthority:
-    def __init__(self, path, proof_type, *, registry=DEFAULT_REGISTRY):
-        self.registry = registry
+    def __init__(self, path, proof_type, *, registry=None):
         self.store = ApprovalStore(path, registry=registry)
+        self.registry = self.store.registry
         self.proof_type = proof_type
         self.lock = threading.RLock()
         self.pending = OrderedDict()
@@ -111,39 +111,50 @@ class NativeAuthority:
             pass
 
     def verify_turn(self, *, session_id, turn_id, **kwargs):
+        return self.verify_turn_result(session_id=session_id, turn_id=turn_id, **kwargs).proof
+
+    def verify_turn_result(self, *, session_id, turn_id, **kwargs):
+        """Return per-call diagnostics without changing native receipt consumption."""
         try:
             facts = hermes_ingress.turn_facts(**kwargs)
-            if (not self.registry.supports(facts.channel, 'native_message')
-                    or not facts.route_ok or facts.synthetic or facts.chat_type not in DM_TYPES):
-                return None
+            if not self.registry.supports(facts.channel, 'native_message'):
+                return IdentityResult(None, "non_owner_channel")
+            if not facts.route_ok:
+                reason = "no_session_context" if not facts.chat_id and not facts.chat_type else "turn_route_mismatch"
+                return IdentityResult(None, reason)
+            if facts.synthetic:
+                return IdentityResult(None, "turn_unbound")
+            if facts.chat_type not in DM_TYPES:
+                return IdentityResult(None, "group_chat")
             key = self._key(facts)
             with self.lock:
                 members = self.groups.pop(key, (key,))
                 rows = [self.pending.get(member) for member in members]
                 bound = self.rendered.pop(key, False)
                 if not rows or any(row is None for row in rows):
-                    return None
+                    return IdentityResult(None, "no_ingress_record")
                 for member in members:
                     self.pending.pop(member, None)
                     self.consumed[member] = True
                 self._trim(self.consumed, 8192)
             if bound is None:
-                return None
+                return IdentityResult(None, "render_rejected")
             if bound is False:
                 # Unmodified text works on hosts without a rendering observer.
                 if len(rows) != 1 or rows[0][0].media:
-                    return None
+                    return IdentityResult(None, "render_unbound")
                 bound = bind_content(rows[0][0].text)
             if not proof_matches(facts.text, bound, allow_text_context=True):
-                return None
+                return IdentityResult(None, "text_mismatch")
             grant = rows[0][1]
             for member, row in zip(members, rows):
                 if row[1] != grant or self.store.approved(member[0], member[1], member[2]) != row[1]:
-                    return None
-            return self.proof_type(session_id, turn_id, facts.channel, bound.own_text, grant_id=grant,
-                                   content_sha256=bound.content_sha256, content_parts=bound.content_parts)
+                    return IdentityResult(None, "approval_changed")
+            proof = self.proof_type(session_id, turn_id, facts.channel, bound.own_text, grant_id=grant,
+                                    content_sha256=bound.content_sha256, content_parts=bound.content_parts)
+            return IdentityResult(proof, "verified")
         except Exception:
-            return None
+            return IdentityResult(None, "authority_exception")
 
     def rendered_user_message(self, **context):
         """Normalize a native text-only hook to its current, route-bound user row."""

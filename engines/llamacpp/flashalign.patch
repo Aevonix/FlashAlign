@@ -1,8 +1,46 @@
-# FlashAlign modifications copyright (c) 2026 Aevonix Inc and contributors.
-# SPDX-License-Identifier: AGPL-3.0-only
-# Upstream context remains under the MIT terms in LICENSE.llama.cpp.
-# Commercial licensing is available from contact@aevonix.com.
-
+diff --git a/common/flashalign-ownership.h b/common/flashalign-ownership.h
+new file mode 100644
+index 000000000..dce55fc1b
+--- /dev/null
++++ b/common/flashalign-ownership.h
+@@ -0,0 +1,37 @@
++// SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
++// SPDX-License-Identifier: AGPL-3.0-only
++#pragma once
++
++#include <stdexcept>
++#include <utility>
++
++namespace flashalign {
++
++// Publish borrowed pointers only after the owning map has accepted the object.
++template <class Owners, class Views, class Key, class Value, class MakeView>
++auto publish_generation(Owners & owners, Views & views, const Key & key, Value && value, MakeView make_view) {
++    auto inserted = owners.emplace(key, std::forward<Value>(value));
++    if (!inserted.second) {
++        throw std::runtime_error("generation already exists");
++    }
++    try {
++        views.push_back(make_view(inserted.first->second));
++    } catch (...) {
++        owners.erase(inserted.first);
++        throw;
++    }
++    return inserted.first;
++}
++
++// Allocate the tombstone before a nonthrowing commit releases live resources.
++template <class Retired, class Key, class Digest, class Commit>
++void record_retirement(Retired & retired, const Key & key, const Digest & digest, Commit commit) {
++    static_assert(noexcept(commit()), "retirement commit must not throw");
++    auto inserted = retired.emplace(key, digest);
++    if (!inserted.second && inserted.first->second != digest) {
++        throw std::runtime_error("retired generation digest changed");
++    }
++    commit();
++}
++
++} // namespace flashalign
 diff --git a/common/speculative.cpp b/common/speculative.cpp
 index 4305ac6ac..4cf9d5dca 100644
 --- a/common/speculative.cpp
@@ -18,7 +56,7 @@ index 4305ac6ac..4cf9d5dca 100644
          result.n_gpu_layers          = params_spec.n_gpu_layers;
          result.tensor_buft_overrides = params_spec.tensor_buft_overrides;
 diff --git a/src/llama-adapter.cpp b/src/llama-adapter.cpp
-index 824601ed6..5760e8f00 100644
+index 824601ed6..74b536dff 100644
 --- a/src/llama-adapter.cpp
 +++ b/src/llama-adapter.cpp
 @@ -1,10 +1,12 @@
@@ -165,7 +203,7 @@ index 824601ed6..5760e8f00 100644
          }
      }
  
-@@ -525,3 +607,7 @@ const llama_token * llama_adapter_get_alora_invocation_tokens(const llama_adapte
+@@ -525,3 +607,11 @@ const llama_token * llama_adapter_get_alora_invocation_tokens(const llama_adapte
      GGML_ASSERT(adapter);
      return adapter->alora_invocation_tokens.data();
  }
@@ -173,20 +211,25 @@ index 824601ed6..5760e8f00 100644
 +bool llama_adapter_is_output_projection(const llama_adapter_lora * adapter) {
 +    return adapter != nullptr && adapter->output_projection;
 +}
++
++uint64_t llama_adapter_cache_generation(const llama_adapter_lora * adapter) {
++    return adapter == nullptr ? 0 : adapter->cache_generation;
++}
 diff --git a/src/llama-adapter.h b/src/llama-adapter.h
-index f0b1e50f8..6346b61ce 100644
+index f0b1e50f8..cc1292705 100644
 --- a/src/llama-adapter.h
 +++ b/src/llama-adapter.h
-@@ -4,6 +4,8 @@
+@@ -4,6 +4,9 @@
  
  #include "ggml-cpp.h"
  
 +#include <cmath>
++#include <atomic>
 +#include <limits>
  #include <string>
  #include <unordered_map>
  #include <vector>
-@@ -45,9 +47,23 @@ using llama_adapter_cvec_ptr = std::shared_ptr<llama_adapter_cvec>;
+@@ -45,9 +48,23 @@ using llama_adapter_cvec_ptr = std::shared_ptr<llama_adapter_cvec>;
  // llama_adapter_lora
  //
  
@@ -210,7 +253,17 @@ index f0b1e50f8..6346b61ce 100644
  
      // get actual scale based on rank and alpha
      float get_scale(float alpha, float adapter_scale) const {
-@@ -70,6 +86,8 @@ struct llama_adapter_lora {
+@@ -61,6 +78,9 @@ struct llama_adapter_lora_weight {
+ };
+ 
+ struct llama_adapter_lora {
++    // Process-local generations never recycle when an allocator reuses a pointer.
++    inline static std::atomic<uint64_t> next_generation{0};
++    const uint64_t cache_generation = ++next_generation;
+     llama_model * model = nullptr;
+ 
+     // map tensor name to lora_a_b
+@@ -70,6 +90,8 @@ struct llama_adapter_lora {
      std::vector<ggml_backend_buffer_ptr> bufs;
  
      float alpha;
@@ -220,16 +273,17 @@ index f0b1e50f8..6346b61ce 100644
      // gguf metadata
      std::unordered_map<std::string, std::string> gguf_kv;
 diff --git a/src/llama-ext.h b/src/llama-ext.h
-index fcd91e912..650b0aba0 100644
+index fcd91e912..6c64ba927 100644
 --- a/src/llama-ext.h
 +++ b/src/llama-ext.h
-@@ -189,3 +189,6 @@ LLAMA_API uint32_t llama_model_get_tok_embd_rows(const struct llama_model * mode
+@@ -189,3 +189,7 @@ LLAMA_API uint32_t llama_model_get_tok_embd_rows(const struct llama_model * mode
  
  // realtime models: number of tokens the output lags behind the audio input, used by mtmd; 0 if not applicable
  LLAMA_API uint32_t llama_model_n_tokens_delay(const struct llama_model * model);
 +
 +// Runtime output projections are target-model adapters, not draft-model adapters.
 +LLAMA_API bool llama_adapter_is_output_projection(const struct llama_adapter_lora * adapter);
++LLAMA_API uint64_t llama_adapter_cache_generation(const struct llama_adapter_lora * adapter);
 diff --git a/src/llama-graph.cpp b/src/llama-graph.cpp
 index cffd083d3..9ca66c28f 100644
 --- a/src/llama-graph.cpp
@@ -261,10 +315,10 @@ index cffd083d3..9ca66c28f 100644
                          ctx0, lw->b, // non-transposed lora_b
                          ggml_get_rows(ctx0, lw->a, ids)
 diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
-index 2e768cb38..23c30a651 100644
+index 2e768cb38..f5a835fd9 100644
 --- a/tests/CMakeLists.txt
 +++ b/tests/CMakeLists.txt
-@@ -400,3 +400,8 @@ if (TARGET gguf-model-data)
+@@ -400,3 +400,10 @@ if (TARGET gguf-model-data)
      target_link_libraries(test-export-graph-ops PRIVATE gguf-model-data)
      target_compile_definitions(test-export-graph-ops PRIVATE LLAMA_HF_FETCH)
  endif()
@@ -273,16 +327,19 @@ index 2e768cb38..23c30a651 100644
 +target_include_directories(test-flashalign-output PRIVATE ../src ../tools/server)
 +target_link_libraries(test-flashalign-output PRIVATE server-context)
 +llama_test(test-flashalign-output)
++llama_build(test-flashalign-ownership.cpp)
++llama_test(test-flashalign-ownership)
 diff --git a/tests/test-flashalign-output.cpp b/tests/test-flashalign-output.cpp
 new file mode 100644
-index 000000000..ac22ea6fe
+index 000000000..d29f35a82
 --- /dev/null
 +++ b/tests/test-flashalign-output.cpp
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,113 @@
 +// SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
 +// SPDX-License-Identifier: AGPL-3.0-only
 +// Commercial licensing: contact@aevonix.com.
 +#include "llama-adapter.h"
++#include <new>
 +#include "ggml-cpu.h"
 +#include "common.h"
 +#include "speculative.h"
@@ -298,6 +355,14 @@ index 000000000..ac22ea6fe
 +
 +int main() {
 +    llama_adapter_lora projection(nullptr), ordinary(nullptr);
++    // Reusing the exact allocation cannot reuse a profile/cache generation.
++    alignas(llama_adapter_lora) unsigned char recycled[sizeof(llama_adapter_lora)];
++    auto * first_generation = new (recycled) llama_adapter_lora(nullptr);
++    const auto old_generation = first_generation->cache_generation;
++    first_generation->~llama_adapter_lora();
++    auto * second_generation = new (recycled) llama_adapter_lora(nullptr);
++    assert(second_generation->cache_generation != old_generation);
++    second_generation->~llama_adapter_lora();
 +    projection.output_projection = true;
 +    common_params params;
 +    params.speculative.draft.mparams.path = "fixture";
@@ -383,26 +448,208 @@ index 000000000..ac22ea6fe
 +    }
 +    std::puts("native GGML projection: zero identity, non-unit site strengths and alpha interpolation passed");
 +}
+diff --git a/tests/test-flashalign-ownership.cpp b/tests/test-flashalign-ownership.cpp
+new file mode 100644
+index 000000000..b4365aeb8
+--- /dev/null
++++ b/tests/test-flashalign-ownership.cpp
+@@ -0,0 +1,124 @@
++// SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
++// SPDX-License-Identifier: AGPL-3.0-only
++#include "flashalign-ownership.h"
++
++#ifdef NDEBUG
++#undef NDEBUG
++#endif
++#include <cassert>
++#include <map>
++#include <memory>
++#include <new>
++#include <string>
++#include <vector>
++
++struct allocation_fault {
++    bool fail = false;
++};
++
++template <class T>
++struct fault_allocator {
++    using value_type = T;
++    allocation_fault * fault;
++    fault_allocator(allocation_fault * state = nullptr) : fault(state) {}
++    template <class U> fault_allocator(const fault_allocator<U> & other) : fault(other.fault) {}
++    T * allocate(size_t count) {
++        if (fault && fault->fail) {
++            fault->fail = false;
++            throw std::bad_alloc();
++        }
++        return std::allocator<T>{}.allocate(count);
++    }
++    void deallocate(T * ptr, size_t count) { std::allocator<T>{}.deallocate(ptr, count); }
++    template <class U> bool operator==(const fault_allocator<U> & other) const { return fault == other.fault; }
++    template <class U> bool operator!=(const fault_allocator<U> & other) const { return !(*this == other); }
++};
++
++struct tracked {
++    int & live;
++    explicit tracked(int & count) : live(count) { ++live; }
++    ~tracked() { --live; }
++};
++struct owned {
++    std::unique_ptr<tracked> ptr;
++};
++struct view {
++    tracked * ptr;
++};
++using owners_type = std::map<int, owned, std::less<int>, fault_allocator<std::pair<const int, owned>>>;
++using views_type = std::vector<view, fault_allocator<view>>;
++using retired_type = std::map<int, std::string, std::less<int>, fault_allocator<std::pair<const int, std::string>>>;
++
++static void publication_failures() {
++    for (int stage = 0; stage < 3; ++stage) {
++        int live = 0;
++        allocation_fault map_fault, vector_fault;
++        owners_type owners{std::less<int>{}, {&map_fault}};
++        views_type views{{&vector_fault}};
++        views.reserve(1);
++        flashalign::publish_generation(owners, views, 1, owned{std::make_unique<tracked>(live)},
++            [](const owned & item) { return view{item.ptr.get()}; });
++        tracked * const original = views[0].ptr;
++        map_fault.fail = stage == 0;
++        vector_fault.fail = stage == 1;
++        bool threw = false;
++        try {
++            flashalign::publish_generation(owners, views, 2, owned{std::make_unique<tracked>(live)},
++                [stage](const owned & item) {
++                    if (stage == 2) throw std::runtime_error("view construction failed");
++                    return view{item.ptr.get()};
++                });
++        } catch (const std::exception &) {
++            threw = true;
++        }
++        assert(threw && live == 1 && owners.size() == 1 && views.size() == 1);
++        assert(owners.count(2) == 0 && views[0].ptr == original && owners.at(1).ptr.get() == original);
++        flashalign::publish_generation(owners, views, 2, owned{std::make_unique<tracked>(live)},
++            [](const owned & item) { return view{item.ptr.get()}; });
++        assert(live == 2 && views[1].ptr == owners.at(2).ptr.get() && views[0].ptr == original);
++        owners.clear();
++        assert(live == 0);
++    }
++}
++
++static void retirement_failures() {
++    int live = 0;
++    allocation_fault map_fault, vector_fault, retired_fault;
++    owners_type owners{std::less<int>{}, {&map_fault}};
++    views_type views{{&vector_fault}};
++    retired_type retired{std::less<int>{}, {&retired_fault}};
++    flashalign::publish_generation(owners, views, 1, owned{std::make_unique<tracked>(live)},
++        [](const owned & item) { return view{item.ptr.get()}; });
++    tracked * const original = views[0].ptr;
++    bool committed = false;
++    const auto commit = [&]() noexcept {
++        views[0].ptr = nullptr;
++        owners.erase(1);
++        committed = true;
++    };
++    retired_fault.fail = true;
++    bool threw = false;
++    try {
++        flashalign::record_retirement(retired, 1, std::string("digest"), commit);
++    } catch (const std::bad_alloc &) {
++        threw = true;
++    }
++    assert(threw && !committed && live == 1 && owners.size() == 1 && retired.empty());
++    assert(views[0].ptr == original && owners.at(1).ptr.get() == original);
++    flashalign::record_retirement(retired, 1, std::string("digest"), commit);
++    assert(committed && live == 0 && owners.empty() && views[0].ptr == nullptr);
++    assert(retired.at(1) == "digest");
++    committed = false;
++    threw = false;
++    try {
++        flashalign::record_retirement(retired, 1, std::string("changed"), commit);
++    } catch (const std::runtime_error &) {
++        threw = true;
++    }
++    assert(threw && !committed && retired.at(1) == "digest");
++}
++
++int main() {
++    publication_failures();
++    retirement_failures();
++}
+diff --git a/tools/server/CMakeLists.txt b/tools/server/CMakeLists.txt
+index 4f3fa2458..988c0e4ac 100644
+--- a/tools/server/CMakeLists.txt
++++ b/tools/server/CMakeLists.txt
+@@ -35,7 +35,7 @@ endif()
+ 
+ target_include_directories(${TARGET} PRIVATE ../mtmd)
+ target_include_directories(${TARGET} PRIVATE ${PROJECT_SOURCE_DIR})
+-target_link_libraries(${TARGET} PUBLIC llama-common mtmd ${CMAKE_THREAD_LIBS_INIT})
++target_link_libraries(${TARGET} PUBLIC llama-common mtmd vendor-hash ${CMAKE_THREAD_LIBS_INIT})
+ 
+ # llama-server-impl: server logic, reusable by app
+ 
 diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
-index 2bd1ab9ec..194413a79 100644
+index 2bd1ab9ec..bbd41aa20 100644
 --- a/tools/server/server-context.cpp
 +++ b/tools/server/server-context.cpp
-@@ -16,6 +16,7 @@
+@@ -14,8 +14,11 @@
+ 
+ #include "build-info.h"
  #include "common.h"
++#include "flashalign-ownership.h"
  #include "fit.h"
  #include "llama.h"
 +#include "../../src/llama-ext.h"
++#include "../../src/llama-context.h"
  #include "log.h"
  #include "sampling.h"
  #include "speculative.h"
-@@ -45,6 +46,14 @@
+@@ -33,6 +36,11 @@
+ #include <random>
+ #include <utility>
+ #include <fstream>
++#include <cstdlib>
++#include <cctype>
++extern "C" {
++#include "../../vendor/hash/sha256/sha256.h"
++}
+ 
+ // fix problem with std::min and std::max
+ #if defined(_WIN32)
+@@ -45,6 +53,37 @@
  
  constexpr int HTTP_POLLING_SECONDS = 1;
  
-+static std::map<uintptr_t, float> flashalign_adapter_identity(const std::vector<common_adapter_lora_info> & adapters) {
-+    std::map<uintptr_t, float> result;
++static std::string flashalign_file_hash(const std::string & path) {
++    const auto status = std::filesystem::symlink_status(path);
++    if (!std::filesystem::is_regular_file(status) || std::filesystem::file_size(path) > 512ull*1024*1024) {
++        throw std::runtime_error("invalid profile file");
++    }
++    std::ifstream stream(path, std::ios::binary);
++    if (!stream) throw std::runtime_error("unreadable profile file");
++    sha256_t state;
++    sha256_init(&state);
++    char buffer[65536];
++    while (stream) {
++        stream.read(buffer, sizeof(buffer));
++        sha256_update(&state, reinterpret_cast<const unsigned char *>(buffer), stream.gcount());
++    }
++    if (!stream.eof()) throw std::runtime_error("profile read failed");
++    unsigned char digest[32];
++    sha256_final(&state, digest);
++    const char * hex = "0123456789abcdef";
++    std::string result;
++    for (auto byte : digest) { result += hex[byte >> 4]; result += hex[byte & 15]; }
++    return result;
++}
++
++static std::map<uint64_t, float> flashalign_adapter_identity(const std::vector<common_adapter_lora_info> & adapters) {
++    std::map<uint64_t, float> result;
 +    for (const auto & entry : adapters) {
-+        if (entry.scale != 0.0f) result[reinterpret_cast<uintptr_t>(entry.ptr)] = entry.scale;
++        if (entry.ptr != nullptr && entry.scale != 0.0f) result[llama_adapter_cache_generation(entry.ptr)] = entry.scale;
 +    }
 +    return result;
 +}
@@ -410,7 +657,145 @@ index 2bd1ab9ec..194413a79 100644
  static common_speculative_output_limits server_output_limits(const common_params & params) {
      if (!params.mmproj.path.empty()) {
          const auto mcaps = mtmd_get_cap_from_file(params.mmproj.path.c_str());
-@@ -1796,6 +1805,8 @@ private:
+@@ -1075,6 +1114,124 @@ private:
+ 
+     common_params params_base;
+ 
++    struct flashalign_generation {
++        llama_adapter_lora_ptr adapter;
++        size_t index;
++        std::string digest;
++    };
++    std::map<std::string, flashalign_generation> flashalign_generations;
++    std::map<std::string, std::string> flashalign_retired;
++    std::set<uint64_t> flashalign_graph_refs;
++    bool flashalign_fenced = false;
++
++    size_t flashalign_references(uint64_t generation) const {
++        size_t count = flashalign_graph_refs.count(generation);
++        for (const auto & slot : slots) {
++            count += slot.prompt.adapter_identity.count(generation);
++            if (slot.is_processing()) {
++                for (const auto & adapter : slot.lora) {
++                    count += adapter.scale != 0.0f && llama_adapter_cache_generation(adapter.ptr) == generation;
++                }
++            }
++        }
++        if (prompt_cache) {
++            for (const auto & state : prompt_cache->states) {
++                count += state.prompt.adapter_identity.count(generation);
++            }
++        }
++        return count;
++    }
++
++    json flashalign_control(const json & body) {
++        const auto action = body.at("action").get<std::string>();
++        if (action == "fence" || action == "resume") {
++            flashalign_fenced = action == "fence";
++            return {{"fenced", flashalign_fenced}};
++        }
++        if (action == "evict") {
++            if (std::any_of(slots.begin(), slots.end(), [](const server_slot & s) { return s.is_processing(); })) {
++                throw std::runtime_error("requests are still running");
++            }
++            llama_synchronize(ctx_tgt);
++            if (ctx_dft) llama_synchronize(ctx_dft);
++            for (auto & slot : slots) {
++                slot.prompt_clear();
++                slot.lora.clear();
++            }
++            if (prompt_cache) prompt_cache->states.clear();
++            llama_set_adapters_lora(ctx_tgt, nullptr, 0, nullptr);
++            // Drop every graph that could still hold tensor pointers before a
++            // generation is freed. No cache/speculation setting is changed.
++            ctx_tgt->sched_reserve();
++            flashalign_graph_refs.clear();
++            return {{"evicted", true}};
++        }
++        if (action == "inventory") {
++            json rows = json::array();
++            for (const auto & item : flashalign_generations) {
++                rows.push_back({{"generation", item.first}, {"digest", item.second.digest},
++                    {"index", item.second.index},
++                    {"references", flashalign_references(llama_adapter_cache_generation(item.second.adapter.get()))}});
++            }
++            return {{"generations", rows}, {"fenced", flashalign_fenced}};
++        }
++        const auto generation = body.at("generation").get<std::string>();
++        const auto digest = body.at("digest").get<std::string>();
++        if (generation.empty() || generation.size() > 96 || digest.size() != 64 ||
++            generation.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789-_") != std::string::npos ||
++            digest.find_first_not_of("0123456789abcdef") != std::string::npos) {
++            throw std::runtime_error("invalid generation");
++        }
++        auto found = flashalign_generations.find(generation);
++        if (action == "prepare") {
++            if (found != flashalign_generations.end()) {
++                if (found->second.digest != digest) throw std::runtime_error("generation digest changed");
++                return {{"index", found->second.index}};
++            }
++            if (flashalign_retired.count(generation)) throw std::runtime_error("generation retired");
++            const auto path = body.at("path").get<std::string>();
++            if (path.size() > 4096 || !std::filesystem::path(path).is_absolute()) throw std::runtime_error("invalid path");
++            const auto file_hash = body.at("file_sha256").get<std::string>();
++            if (flashalign_file_hash(path) != file_hash) throw std::runtime_error("profile file hash changed");
++            llama_adapter_lora_ptr adapter(llama_adapter_lora_init(model_tgt, path.c_str()));
++            if (!adapter || !llama_adapter_is_output_projection(adapter.get())) throw std::runtime_error("invalid profile");
++            if (flashalign_file_hash(path) != file_hash) throw std::runtime_error("profile file changed during loading");
++            char native_digest[128] = {};
++            llama_adapter_meta_val_str(adapter.get(), "flashalign.profile.digest", native_digest, sizeof(native_digest));
++            if (body.at("native_digest").get<std::string>() != native_digest) throw std::runtime_error("native digest changed");
++            const size_t index = params_base.lora_adapters.size();
++            flashalign::publish_generation(flashalign_generations, params_base.lora_adapters, generation,
++                flashalign_generation{std::move(adapter), index, digest}, [&](const flashalign_generation & owned) {
++                    return common_adapter_lora_info{path, 0.0f, "", "", owned.adapter.get()};
++                });
++            return {{"index", index}};
++        }
++        if (found == flashalign_generations.end()) {
++            if (action == "retire" && flashalign_retired.count(generation) && flashalign_retired.at(generation) == digest) {
++                return {{"retired", true}};
++            }
++            throw std::runtime_error("unknown generation");
++        }
++        if (found->second.digest != digest) throw std::runtime_error("generation digest changed");
++        if (action == "references") {
++            return {{"references", flashalign_references(llama_adapter_cache_generation(found->second.adapter.get()))}};
++        }
++        if (action == "commit") return {{"index", found->second.index}};
++        if (action == "retire") {
++            if (flashalign_references(llama_adapter_cache_generation(found->second.adapter.get()))) {
++                throw std::runtime_error("generation is still referenced");
++            }
++            flashalign::record_retirement(flashalign_retired, generation, digest, [&]() noexcept {
++                auto & entry = params_base.lora_adapters[found->second.index];
++                entry.ptr = nullptr;
++                entry.scale = 0.0f;
++                flashalign_generations.erase(found);
++            });
++            return {{"retired", true}};
++        }
++        throw std::runtime_error("unknown operation");
++    }
++
+     // note: keep these alive - they determine the lifetime of the model, context, etc.
+     common_init_result_ptr llama_init;
+ 
+@@ -1139,6 +1296,12 @@ private:
+         ctx_dft   = nullptr;
+         model_dft = nullptr;
+ 
++        if (ctx_tgt && !flashalign_generations.empty()) {
++            llama_synchronize(ctx_tgt);
++            llama_set_adapters_lora(ctx_tgt, nullptr, 0, nullptr);
++            ctx_tgt->sched_reserve();
++            flashalign_generations.clear();
++        }
+         llama_init.reset();
+ 
+         ctx_tgt = nullptr;
+@@ -1796,6 +1959,8 @@ private:
  
      server_slot * get_available_slot(const server_task & task) {
          server_slot * ret = nullptr;
@@ -419,7 +804,7 @@ index 2bd1ab9ec..194413a79 100644
  
          bool update_cache = false;
  
-@@ -1827,6 +1838,7 @@ private:
+@@ -1827,6 +1992,7 @@ private:
                      continue;
                  }
  
@@ -427,7 +812,7 @@ index 2bd1ab9ec..194413a79 100644
                  const auto & tokens = slot.prompt.tokens;
  
                  // skip the slot if it does not contains cached tokens
-@@ -1889,6 +1901,10 @@ private:
+@@ -1889,6 +2055,10 @@ private:
                  const int64_t t_start = ggml_time_us();
  
                  ret->prompt_save(*prompt_cache);
@@ -438,7 +823,13 @@ index 2bd1ab9ec..194413a79 100644
  
                  if (!ret->prompt_load(*prompt_cache, task.tokens)) {
                      ret->prompt_clear();
-@@ -1949,22 +1965,11 @@ private:
+@@ -1945,26 +2115,18 @@ private:
+                 output[i].scale = 0.0f;
+             }
+         }
++        output.erase(std::remove_if(output.begin(), output.end(),
++                [](const common_adapter_lora_info & entry) { return entry.ptr == nullptr; }), output.end());
+         return output;
      }
  
      bool launch_slot_with_task(server_slot & slot, server_task && task) {
@@ -460,13 +851,25 @@ index 2bd1ab9ec..194413a79 100644
 -        }
 +        const auto next_lora = task.params.lora.empty() ? params_base.lora_adapters : construct_lora_list(task.params.lora);
 +        const auto next_identity = flashalign_adapter_identity(next_lora);
++        for (const auto & item : next_identity) flashalign_graph_refs.insert(item.first);
 +        if (slot.prompt.adapter_identity != next_identity) slot.prompt_clear();
 +        slot.prompt.adapter_identity = next_identity;
 +        slot.lora = next_lora;
  
          // if using alora, make sure it's only a single one requested and active
          size_t alora_invocation_start = task.tokens.size();
-@@ -3213,6 +3218,11 @@ private:
+@@ -3015,6 +3177,10 @@ private:
+             case SERVER_TASK_TYPE_TTS:
+             case SERVER_TASK_TYPE_DECISION:
+                 {
++                    if (flashalign_fenced) {
++                        send_error(task, "FlashAlign admission is temporarily fenced", ERROR_TYPE_UNAVAILABLE);
++                        break;
++                    }
+                     if (task.need_sampling() && !decision.can_generate()) {
+                         send_error(task, "This model is a decision model without text generation, use /v1/systemone", ERROR_TYPE_NOT_SUPPORTED);
+                         break;
+@@ -3213,6 +3379,11 @@ private:
                  } break;
              case SERVER_TASK_TYPE_SLOT_SAVE:
                  {
@@ -478,7 +881,7 @@ index 2bd1ab9ec..194413a79 100644
                      const int id_slot = task.slot_action.id_slot;
                      server_slot * slot = get_slot_by_id(id_slot);
                      if (slot == nullptr) {
-@@ -3275,6 +3285,11 @@ private:
+@@ -3275,6 +3446,11 @@ private:
                  } break;
              case SERVER_TASK_TYPE_SLOT_RESTORE:
                  {
@@ -490,7 +893,33 @@ index 2bd1ab9ec..194413a79 100644
                      const int id_slot = task.slot_action.id_slot;
                      server_slot * slot = get_slot_by_id(id_slot);
                      if (slot == nullptr) {
-@@ -3819,8 +3834,7 @@ private:
+@@ -3376,6 +3552,7 @@ private:
+                     res->id = task.id;
+                     for (size_t i = 0; i < loras.size(); ++i) {
+                         auto & lora = loras[i];
++                        if (lora.ptr == nullptr) continue;
+                         std::string alora_invocation_string = "";
+                         const uint64_t n_alora_tokens = llama_adapter_get_alora_n_invocation_tokens(lora.ptr);
+                         llama_tokens alora_invocation_tokens;
+@@ -3407,6 +3584,17 @@ private:
+                     res->id = task.id;
+                     queue_results.send(std::move(res));
+                 } break;
++            case SERVER_TASK_TYPE_FLASHALIGN:
++                {
++                    try {
++                        auto res = std::make_unique<server_task_result_router>();
++                        res->id = task.id;
++                        res->data = flashalign_control(task.flashalign_control);
++                        queue_results.send(std::move(res));
++                    } catch (const std::exception &) {
++                        send_error(task, "FlashAlign lifecycle operation could not complete", ERROR_TYPE_INVALID_REQUEST);
++                    }
++                } break;
+         }
+ 
+         return true;
+@@ -3819,8 +4007,7 @@ private:
  
                      new_tokens.resize(slot.prompt.tokens.size() - n_discard);
  
@@ -500,6 +929,69 @@ index 2bd1ab9ec..194413a79 100644
                  }
  
                  slot.truncated = true;
+@@ -6687,6 +6874,50 @@ void server_routes::init_routes() {
+         return res;
+     };
+ 
++    const char * admin_env = std::getenv("FLASHALIGN_INTERNAL_ADMIN_TOKEN");
++    const std::string flashalign_admin_token = admin_env == nullptr ? "" : admin_env;
++    this->post_flashalign_control = [this, flashalign_admin_token](const server_http_req & req) {
++        auto res = create_response();
++        std::string supplied;
++        for (const auto & header : req.headers) {
++            std::string name = header.first;
++            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
++            if (name == "x-flashalign-internal-key") supplied = header.second;
++        }
++        unsigned difference = unsigned(supplied.size() ^ flashalign_admin_token.size());
++        if (supplied.size() == flashalign_admin_token.size()) {
++            for (size_t i = 0; i < supplied.size(); ++i) difference |= supplied[i] ^ flashalign_admin_token[i];
++        }
++        if (flashalign_admin_token.size() != 64 || difference != 0) {
++            res->error(format_error_response("Internal administration capability required", ERROR_TYPE_PERMISSION));
++            return res;
++        }
++        try {
++            if (req.body.size() > 65536) throw std::runtime_error("body limit");
++            json body = json::parse(req.body);
++            const auto action = body.at("action").get<std::string>();
++            std::set<std::string> expected = {"action"};
++            if (action == "prepare") expected = {"action", "generation", "digest", "path", "native_digest", "file_sha256"};
++            else if (action == "retire" || action == "commit" || action == "references") expected = {"action", "generation", "digest"};
++            else if (action != "inventory" && action != "fence" && action != "resume" && action != "evict") throw std::runtime_error("operation");
++            std::set<std::string> actual;
++            for (auto it = body.begin(); it != body.end(); ++it) actual.insert(it.key());
++            if (!body.is_object() || actual != expected) throw std::runtime_error("fields");
++            auto & rd = res->rd;
++            server_task task(SERVER_TASK_TYPE_FLASHALIGN);
++            task.id = rd.get_new_id();
++            task.flashalign_control = std::move(body);
++            rd.post_task(std::move(task));
++            auto result = rd.next(req.should_stop);
++            if (!result) return res;
++            if (result->is_error()) res->error(result->to_json());
++            else res->ok(result->to_json());
++        } catch (const std::exception &) {
++            res->error(format_error_response("Invalid internal lifecycle operation", ERROR_TYPE_INVALID_REQUEST));
++        }
++        return res;
++    };
++
+     this->get_lora_adapters = [this](const server_http_req & req) {
+         auto res = create_response();
+ 
+diff --git a/tools/server/server-context.h b/tools/server/server-context.h
+index d283c9121..951343215 100644
+--- a/tools/server/server-context.h
++++ b/tools/server/server-context.h
+@@ -136,6 +136,7 @@ struct server_routes {
+     server_http_context::handler_t post_systemone;
+     server_http_context::handler_t get_lora_adapters;
+     server_http_context::handler_t post_lora_adapters;
++    server_http_context::handler_t post_flashalign_control;
+ 
+     // to be used in router mode
+     json get_model_info() const;
 diff --git a/tools/server/server-task.cpp b/tools/server/server-task.cpp
 index 1a0d434a1..579710e0e 100644
 --- a/tools/server/server-task.cpp
@@ -537,14 +1029,30 @@ index 1a0d434a1..579710e0e 100644
  
          const float f_keep_cur = float(lcp_cur) / it->prompt.tokens.size();
 diff --git a/tools/server/server-task.h b/tools/server/server-task.h
-index 21b649ac4..a59913d4e 100644
+index 21b649ac4..b747e473a 100644
 --- a/tools/server/server-task.h
 +++ b/tools/server/server-task.h
-@@ -687,10 +687,19 @@ struct server_prompt {
+@@ -31,6 +31,7 @@ enum server_task_type {
+     SERVER_TASK_TYPE_SLOT_ERASE,
+     SERVER_TASK_TYPE_GET_LORA,
+     SERVER_TASK_TYPE_SET_LORA,
++    SERVER_TASK_TYPE_FLASHALIGN,
+     SERVER_TASK_TYPE_TTS,
+ };
+ 
+@@ -240,6 +241,7 @@ struct server_task {
+ 
+     // used by SERVER_TASK_TYPE_SET_LORA
+     std::map<int, float> set_lora; // mapping adapter ID -> scale
++    json flashalign_control;
+ 
+     // used by SERVER_TASK_TYPE_TTS
+     mtmd_helper::gen_audio::inp tts_inp;
+@@ -687,10 +689,19 @@ struct server_prompt {
      server_tokens tokens;
  
      std::list<common_prompt_checkpoint> checkpoints;
-+    std::map<uintptr_t, float> adapter_identity;
++    std::map<uint64_t, float> adapter_identity;
  
      void clear() {
          tokens.clear();
@@ -560,7 +1068,7 @@ index 21b649ac4..a59913d4e 100644
      }
  
      int n_tokens() const {
-@@ -701,6 +710,7 @@ struct server_prompt {
+@@ -701,6 +712,7 @@ struct server_prompt {
          return server_prompt {
              tokens.clone(),
              checkpoints,
@@ -568,3 +1076,15 @@ index 21b649ac4..a59913d4e 100644
          };
      }
  };
+diff --git a/tools/server/server.cpp b/tools/server/server.cpp
+index 8b1d42650..2b5533216 100644
+--- a/tools/server/server.cpp
++++ b/tools/server/server.cpp
+@@ -209,6 +209,7 @@ static void server_register_routes(server_http_context & ctx_http, server_routes
+     // LoRA adapters hotswap
+     ctx_http.get ("/lora-adapters",            ex_wrapper(routes.get_lora_adapters));
+     ctx_http.post("/lora-adapters",            ex_wrapper(routes.post_lora_adapters));
++    ctx_http.post("/flashalign/internal/profile", ex_wrapper(routes.post_flashalign_control));
+     // Save & load slots
+     ctx_http.get ("/slots",                    ex_wrapper(routes.get_slots));
+     ctx_http.post("/slots/:id_slot",           ex_wrapper(routes.post_slots));

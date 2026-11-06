@@ -3,12 +3,14 @@
 FlashAlign includes the experimental `qwen38-27b-v1` profile.
 Select it locally with the wizard or by name in an agent setup plan.
 
-For TensorFold, the wizard selects a pinned 1.1.9 runtime bundle for the model
-format and hardware. The catalog includes these tested configurations:
+For TensorFold, the wizard selects a pinned 1.2.0 runtime bundle for the model
+format and hardware. The catalog includes these configurations; see
+[validation](validation.md) for the tested version and scope of each run:
 
 | Model format | Hardware | Draft model |
 | --- | --- | --- |
 | MLX-format 4-bit | One DGX Spark, Linux aarch64, SM121 | DFlash2 |
+| MLX-format 4-bit | One RTX PRO 6000, Linux x86_64, SM120 | DFlash2 |
 | EXL3 2.0-bpw | One RTX PRO 6000, Linux x86_64, SM120 | DFlash2 |
 
 The model and DFlash2 draft model must already be present on the model host.
@@ -23,7 +25,7 @@ extracted compatible bundle. Runtime retrieval downloads the engine package
 from FlashAlign release assets without a GitHub login; profiles are included
 locally and model weights must be provided separately.
 
-Both TensorFold configurations run on one NVIDIA GPU with the external DFlash2
+These TensorFold configurations run on one NVIDIA GPU with the external DFlash2
 drafter. They support standard and owner requests, concurrent batches, and
 separate in-memory prefix caches for each profile and strength. The main model's
 embedding, attention and MLP outputs are covered. Native MTP and tensor parallel

@@ -1,16 +1,17 @@
 {
   "upstream": "https://github.com/ggml-org/llama.cpp",
   "revision": "8642541b255bfb5dc39cd351a178be09013a55d6",
-  "patch_sha256": "f468b7db9b07e54cca2c6bc178fe77a4a0d1e8e3ce5e8465d0324bb5f91e59aa",
+  "patch_sha256": "b1f1f07df47bd4d1a1ddb61e6d523cd83122465937c6202cfd15039081f0b26d",
   "adapter_type": "flashalign_projection",
   "status": "Qwen3.8 and Gemma4 CUDA runtime qualified; native agent answer-quality limits documented",
   "off_bypass": "zero-scale adapters removed before graph creation",
-  "caches": "adapter identity and exact FP32 strength retained across memory-cache allocation, cloning and context shifts; disk slot persistence rejected when profiles are loaded",
+  "caches": "Immutable adapter generations and exact FP32 strength identify every cached prefix; retired generations wait for request, cache and synchronized graph references to drain.",
   "draft_profile_inheritance": "Main-model projection adapters excluded from external draft model",
   "architectures": [
     "qwen35",
     "gemma4"
   ],
   "projection_version": 2,
-  "site_scale": "finite positive FP32 metadata at most FLT_MAX/2, applied independently at each matrix output"
+  "site_scale": "finite positive FP32 metadata at most FLT_MAX/2, applied independently at each matrix output",
+  "profile_lifecycle": "Owned Unix administration socket; staged generation load, transactional alias activation and rollback; quiescent cache eviction and retirement."
 }

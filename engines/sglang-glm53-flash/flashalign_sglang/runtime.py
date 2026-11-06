@@ -18,6 +18,7 @@ from safetensors.torch import load_file
 
 from .gate import Gate, PREFIX, read_key
 from .flashalign_replay import deployment_replay_store
+from .lifecycle_support import profile_digest
 
 _active = ContextVar('flashalign_glm_forward', default=None)
 _audit_seen = set()
@@ -79,7 +80,7 @@ def load_profile(directory):
         keys.update(names.values())
     if set(sites) != set(expected) or set(tensors) != keys:
         raise ValueError('Incomplete GLM selected writer/MTP coverage or unexpected tensors')
-    return Profile(name, hashlib.sha256(raw+binary.read_bytes()).hexdigest(), MODEL, sites)
+    return Profile(name, profile_digest(raw, binary.read_bytes()), MODEL, sites)
 
 
 @lru_cache(maxsize=1)
@@ -266,29 +267,48 @@ def install(runner):
             if name in bindings and bindings[name] != site:
                 raise ValueError('Conflicting GLM writer binding')
             bindings[name] = site
-    handles = []
-    for name, site in bindings.items():
-        module = modules[name]
-        if site[1] == 'shared_expert_out':
-            original = module._forward_shared_experts
-            def shared(self, *args, original=original, site=site, **kwargs):
-                output = original(*args, **kwargs)
-                active = _active.get()
-                if output is None or active is None or active[0] is not runner:
-                    return output
-                return project(output, active[1], site, profiles, gate)
-            module._forward_shared_experts = MethodType(shared, module)
-            handles.append((module, original))
-        else:
-            def hook(module, inputs, output, site=site):
-                active = _active.get()
-                if active is None or active[0] is not runner:
-                    return output
-                value = output[0] if isinstance(output, tuple) else output
-                updated = project(value, active[1], site, profiles, gate)
-                return (updated, *output[1:]) if isinstance(output, tuple) else updated
-            handles.append(module.register_forward_hook(hook))
+    handles = list(getattr(runner, "flashalign_handles", ()))
+    installed = getattr(runner, "flashalign_installed_sites", {})
+    previous_handles = len(handles)
+    previous_sites = dict(installed)
+    try:
+        for name, site in bindings.items():
+            if name in installed:
+                if installed[name] != site: raise ValueError("Conflicting FlashAlign installed site")
+                continue
+            module = modules[name]
+            if site[1] == 'shared_expert_out':
+                original = module._forward_shared_experts
+                def shared(self, *args, original=original, site=site, **kwargs):
+                    output = original(*args, **kwargs)
+                    active = _active.get()
+                    if output is None or active is None or active[0] is not runner:
+                        return output
+                    return project(output, active[1], site, profiles, gate)
+                module._forward_shared_experts = MethodType(shared, module)
+                handles.append((module, original))
+            else:
+                def hook(module, inputs, output, site=site):
+                    active = _active.get()
+                    if active is None or active[0] is not runner:
+                        return output
+                    value = output[0] if isinstance(output, tuple) else output
+                    updated = project(value, active[1], site, profiles, gate)
+                    return (updated, *output[1:]) if isinstance(output, tuple) else updated
+                handles.append(module.register_forward_hook(hook))
+            installed[name] = site
+    except BaseException:
+        for handle in reversed(handles[previous_handles:]):
+            if isinstance(handle, tuple):
+                module, original = handle
+                setattr(module, original.__name__, original)
+            else:
+                handle.remove()
+        installed.clear()
+        installed.update(previous_sites)
+        raise
     runner.flashalign_handles = handles
+    runner.flashalign_installed_sites = installed
     audit_record('install:'+str(draft), {'kind': 'install',
                  'role': 'native_mtp' if draft else 'target',
                  'installed_sites': [list(site) for site in bindings.values()],

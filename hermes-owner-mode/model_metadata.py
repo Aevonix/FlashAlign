@@ -12,6 +12,8 @@ import struct
 
 from .profiles import read_json
 from .setup_runtime import SetupError
+from .request_capabilities import portable_generation_settings
+from .model_adapters import model_adapters
 
 
 OPENCLAW_THINKING_FORMATS = frozenset({
@@ -53,7 +55,7 @@ def declared_openclaw_compat(metadata, model_type):
 def checked_request_compatibility(value, *, require_model=True):
     if require_model and (value is None or value == 'deepseek_v41'):
         return value
-    if isinstance(value, dict) and value.get('kind') == 'gemma_boolean_thinking_v1':
+    if isinstance(value, dict) and value.get('kind') in ('boolean_thinking_v1', 'gemma_boolean_thinking_v1'):
         required = {'kind'} | ({'model'} if require_model else set())
         if (set(value) != required
                 or require_model and (not isinstance(value.get('model'), str) or not value['model'])):
@@ -70,6 +72,18 @@ def checked_request_compatibility(value, *, require_model=True):
             or len(set(efforts)) != len(efforts)):
         raise SetupError('Unsupported template reasoning effort declaration')
     return copy.deepcopy(value)
+
+
+def model_request_compatibility(model, declaration=None, *, registry=None):
+    registry = registry or model_adapters()
+    """An explicit serving declaration takes precedence over a legacy adapter."""
+    if declaration is None:
+        adapter = registry.get(model)
+        declaration = adapter.request_declaration() if adapter is not None else None
+    if declaration is None:
+        return None
+    checked = checked_request_compatibility(declaration, require_model=False)
+    return checked_request_compatibility({**checked, 'model': model})
 
 
 def declared_request_compatibility(metadata, model_type):
@@ -242,41 +256,7 @@ def configure_openclaw_compat(config, model, descriptor, model_info=None):
 
 def _portable_generation_settings(extra):
     """Copy request-generation options, excluding provider transport and identity."""
-    result = {}
-    numeric = {'temperature', 'top_p', 'top_k', 'min_p', 'max_tokens', 'max_completion_tokens',
-               'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'length_penalty',
-               'seed', 'min_tokens', 'n', 'top_logprobs'}
-    for key in numeric:
-        value = extra.get(key)
-        if type(value) in (int, float) and math.isfinite(value):
-            result[key] = value
-    for key in ('ignore_eos', 'logprobs'):
-        if type(extra.get(key)) is bool:
-            result[key] = extra[key]
-    if isinstance(extra.get('reasoning_effort'), str) or type(extra.get('reasoning_effort')) is int:
-        result['reasoning_effort'] = extra['reasoning_effort']
-    stop = extra.get('stop')
-    if isinstance(stop, str) or isinstance(stop, list) and all(isinstance(item, str) for item in stop):
-        result['stop'] = copy.deepcopy(stop)
-    ids = extra.get('stop_token_ids')
-    if isinstance(ids, list) and all(type(item) is int for item in ids):
-        result['stop_token_ids'] = ids.copy()
-    options = extra.get('chat_template_kwargs')
-    if isinstance(options, dict):
-        safe = {key: options[key] for key in ('enable_thinking', 'preserve_thinking') if type(options.get(key)) is bool}
-        for key in ('reasoning_effort', 'thinking_budget'):
-            if isinstance(options.get(key), str) or type(options.get(key)) is int:
-                safe[key] = options[key]
-        if safe:
-            result['chat_template_kwargs'] = safe
-    response = extra.get('response_format')
-    if isinstance(response, dict) and response.get('type') in ('text', 'json_object', 'json_schema'):
-        safe = {'type': response['type']}
-        schema = response.get('json_schema')
-        if response['type'] == 'json_schema' and isinstance(schema, dict):
-            safe['json_schema'] = {key: copy.deepcopy(schema[key]) for key in ('name', 'description', 'schema', 'strict') if key in schema}
-        result['response_format'] = safe
-    return result
+    return portable_generation_settings(extra)
 
 
 def configure_hermes_provider(config, model, base_url, modalities=None):
@@ -357,9 +337,11 @@ def configure_hermes_images(config, modalities):
     return result
 
 
-def configure_hermes_reasoning(config, model):
-    """Use Hermes' per-model override for the native DeepSeek effort vocabulary."""
-    if model != 'deepseek-ai/DeepSeek-V4.1-Flash-1017':
+def configure_hermes_reasoning(config, model, *, registry=None):
+    registry = registry or model_adapters()
+    """Preserve or adapt the configured effort using a trusted model declaration."""
+    adapter = registry.get(model)
+    if adapter is None or not adapter.hermes_efforts:
         return None
     agent = config.get('agent', {})
     if not isinstance(agent, dict):
@@ -382,13 +364,13 @@ def configure_hermes_reasoning(config, model):
         if isinstance(value, str) and value.strip().lower() in known:
             effective, source = value.strip().lower(), origin
             break
-    if effective in {'none', 'false', 'disabled', 'low', 'high', 'xhigh', 'max'}:
+    if effective in {'none', 'false', 'disabled'} | set(adapter.hermes_efforts):
         return {'status': 'preserved', 'source': source, 'effort': effective}
     config.setdefault('agent', {})
-    config['agent'].setdefault('reasoning_overrides', {})[model] = 'low'
-    return {'status': 'adjusted', 'source': source, 'effort': 'low',
+    config['agent'].setdefault('reasoning_overrides', {})[model] = adapter.hermes_default_effort
+    return {'status': 'adjusted', 'source': source, 'effort': adapter.hermes_default_effort,
             'field': 'agent.reasoning_overrides.'+model,
-            'reason': 'The native DeepSeek engine does not accept the generic medium/minimal/ultra effort defaults'}
+            'reason': 'The selected model adapter does not accept the configured generic effort default'}
 
 
 def compatible_request(body, compatibility=None):
@@ -396,11 +378,16 @@ def compatible_request(body, compatibility=None):
     compatibility = checked_request_compatibility(compatibility)
     if compatibility is None:
         return body
+    if isinstance(compatibility, str):
+        adapter = model_adapters().get(body.get('model'))
+        if adapter is None or adapter.legacy_request_name != compatibility:
+            return body
+        compatibility = model_request_compatibility(body['model'])
     if isinstance(compatibility, dict):
         if body.get('model') != compatibility['model'] or body.get('reasoning_effort') is None:
             return body
         effort = body['reasoning_effort']
-        if compatibility['kind'] == 'gemma_boolean_thinking_v1':
+        if compatibility['kind'] in ('boolean_thinking_v1', 'gemma_boolean_thinking_v1'):
             if effort != 'none':
                 return body
             options = body.get('chat_template_kwargs', {})
@@ -424,16 +411,7 @@ def compatible_request(body, compatibility=None):
         result = {key: value for key, value in body.items() if key != 'reasoning_effort'}
         result['chat_template_kwargs'] = options
         return result
-    if compatibility != 'deepseek_v41':
-        raise SetupError('Unsupported model request compatibility rule')
-    if body.get('model') != 'deepseek-ai/DeepSeek-V4.1-Flash-1017' or body.get('reasoning_effort') != 'none':
-        return body
-    options = body.get('chat_template_kwargs', {})
-    if not isinstance(options, dict):
-        raise SetupError('DeepSeek chat_template_kwargs must be an object')
-    result = {key: value for key, value in body.items() if key != 'reasoning_effort'}
-    result['chat_template_kwargs'] = {**options, 'enable_thinking': False}
-    return result
+    raise SetupError('Unsupported model request compatibility rule')
 
 
 def safetensors_header_fingerprint(path):

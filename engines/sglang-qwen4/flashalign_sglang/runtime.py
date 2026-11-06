@@ -17,6 +17,7 @@ from safetensors.torch import load_file
 
 from .gate import Gate, PREFIX, read_key
 from .flashalign_replay import deployment_replay_store
+from .lifecycle_support import profile_digest
 
 _active = ContextVar('flashalign_qwen4_forward',default=None)
 _audit_seen = set()
@@ -79,7 +80,7 @@ def load_profile(directory):
         if not isinstance(item,dict) or item.get('model_type')!='qwen4_exp':raise ValueError('Unsupported compatible model type')
         if not isinstance(item.get('id'),str) or not re.fullmatch(r'[0-9a-f]{40}',item.get('revision','')):raise ValueError('Compatible model must be pinned')
         if any(not re.fullmatch(r'[0-9a-f]{64}',item.get(key,'')) for key in ('config_sha256','index_sha256','quantization_config_sha256')):raise ValueError('Compatible model fingerprints are required')
-    return Profile(name,hashlib.sha256(raw+binary.read_bytes()).hexdigest(),meta['model'],2560,sites,compatible)
+    return Profile(name,profile_digest(raw, binary.read_bytes()),meta['model'],2560,sites,compatible)
 
 
 @lru_cache(maxsize=1)
@@ -219,26 +220,45 @@ def install(runner):
             operator['q']=operator['q'].to(runner.device)
             if name in bindings and bindings[name]!=site:raise ValueError('Conflicting writer binding')
             bindings[name]=site
-    handles=[]
-    for name,site in bindings.items():
-        kind=site[2];module=modules[name]
-        if kind=='combined_mlp_out':
-            original=module._run_qwen4_exp_mlp
-            def wrapped_mlp(self,hidden,batch,original=original,site=site):
-                output=original(hidden,batch);active=_active.get()
-                return project(output,batch,site,profiles,gate) if active is not None and active[0] is runner else output
-            module._run_qwen4_exp_mlp=MethodType(wrapped_mlp,module)
-            handles.append((module,original))
-        else:
-            def hook(module,inputs,output,site=site,kind=kind):
-                active=_active.get()
-                if active is None or active[0] is not runner:return output
-                batch=active[1];first=output[0] if isinstance(output,tuple) else output
-                single=kind=='text_embedding_out' and first.shape[0]==len(getattr(batch,'flashalign_cache_salts',[]) or [])
-                modified=project(first,batch,site,profiles,gate,one_per_request=single)
-                return (modified,*output[1:]) if isinstance(output,tuple) else modified
-            handles.append(module.register_forward_hook(hook))
+    handles=list(getattr(runner, "flashalign_handles", ()))
+    installed=getattr(runner, "flashalign_installed_sites", {})
+    previous_handles = len(handles)
+    previous_sites = dict(installed)
+    try:
+        for name,site in bindings.items():
+            if name in installed:
+                if installed[name] != site: raise ValueError("Conflicting FlashAlign installed site")
+                continue
+            kind=site[2];module=modules[name]
+            if kind=='combined_mlp_out':
+                original=module._run_qwen4_exp_mlp
+                def wrapped_mlp(self,hidden,batch,original=original,site=site):
+                    output=original(hidden,batch);active=_active.get()
+                    return project(output,batch,site,profiles,gate) if active is not None and active[0] is runner else output
+                module._run_qwen4_exp_mlp=MethodType(wrapped_mlp,module)
+                handles.append((module,original))
+            else:
+                def hook(module,inputs,output,site=site,kind=kind):
+                    active=_active.get()
+                    if active is None or active[0] is not runner:return output
+                    batch=active[1];first=output[0] if isinstance(output,tuple) else output
+                    single=kind=='text_embedding_out' and first.shape[0]==len(getattr(batch,'flashalign_cache_salts',[]) or [])
+                    modified=project(first,batch,site,profiles,gate,one_per_request=single)
+                    return (modified,*output[1:]) if isinstance(output,tuple) else modified
+                handles.append(module.register_forward_hook(hook))
+            installed[name] = site
+    except BaseException:
+        for handle in reversed(handles[previous_handles:]):
+            if isinstance(handle, tuple):
+                module, original = handle
+                setattr(module, original.__name__, original)
+            else:
+                handle.remove()
+        installed.clear()
+        installed.update(previous_sites)
+        raise
     runner.flashalign_handles=handles
+    runner.flashalign_installed_sites = installed
 
 
 def owner_forward(function):

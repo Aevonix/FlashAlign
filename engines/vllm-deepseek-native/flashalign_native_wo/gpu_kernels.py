@@ -10,7 +10,7 @@ from vllm.triton_utils import triton, tl
 def _mask_tmp(Source, Dest, Owners, Indices, ROWS: tl.constexpr,
               RANK: tl.constexpr, GROUPS: tl.constexpr,
               S0: tl.constexpr, S1: tl.constexpr, S2: tl.constexpr,
-              CAPACITY: tl.constexpr, HAS_INDICES: tl.constexpr, BLOCK: tl.constexpr):
+              CAPACITY: tl.constexpr, HAS_INDICES: tl.constexpr, SLOT: tl.constexpr, BLOCK: tl.constexpr):
     row = tl.program_id(0)
     source_row = tl.load(Indices + row) if HAS_INDICES else row
     valid = (source_row >= 0) & (source_row < CAPACITY)
@@ -18,7 +18,7 @@ def _mask_tmp(Source, Dest, Owners, Indices, ROWS: tl.constexpr,
     col = tl.program_id(1) * BLOCK + tl.arange(0, BLOCK)
     offset = row * S0 + (col % RANK) * S1 + (col // RANK) * S2
     # No real off-row intermediate is loaded. Zeros fill every inactive slot.
-    if owner != 0:
+    if owner == SLOT:
         value = tl.load(Source + offset, col < RANK * GROUPS, other=0)
     else:
         value = tl.full((BLOCK,), 0, tl.bfloat16)
@@ -28,12 +28,12 @@ def _mask_tmp(Source, Dest, Owners, Indices, ROWS: tl.constexpr,
 @triton.jit
 def _scatter(Output, Edited, Owners, Indices, WIDTH: tl.constexpr,
              O0: tl.constexpr, O1: tl.constexpr, E0: tl.constexpr, E1: tl.constexpr,
-             CAPACITY: tl.constexpr, HAS_INDICES: tl.constexpr, BLOCK: tl.constexpr):
+             CAPACITY: tl.constexpr, HAS_INDICES: tl.constexpr, SLOT: tl.constexpr, BLOCK: tl.constexpr):
     row = tl.program_id(0)
     source_row = tl.load(Indices + row) if HAS_INDICES else row
     valid = (source_row >= 0) & (source_row < CAPACITY)
     owner = tl.load(Owners + source_row, valid, other=0)
-    if owner != 0:
+    if owner == SLOT:
         col = tl.program_id(1) * BLOCK + tl.arange(0, BLOCK)
         value = tl.load(Edited + row * E0 + col * E1, col < WIDTH, other=0)
         tl.store(Output + row * O0 + col * O1, value, col < WIDTH)
@@ -52,7 +52,9 @@ def _validate_rows(rows, tensor, indices):
         raise ValueError("Native attention rows exceed owner capacity")
 
 
-def mask_tmp(source, dest, owners, indices):
+def mask_tmp(source, dest, owners, indices, *, slot=1):
+    if type(slot) is not int or slot < 1:
+        raise ValueError('Invalid generation slot')
     _validate_rows(owners, source, indices)
     if (source.ndim != 3 or source.dtype != torch.bfloat16
             or dest.shape != source.shape or dest.stride() != source.stride()
@@ -63,10 +65,12 @@ def mask_tmp(source, dest, owners, indices):
         _mask_tmp[(source.shape[0], triton.cdiv(source.shape[1] * source.shape[2], 256))](
             source, dest, owners, indices if indices is not None else owners,
             source.shape[0], source.shape[1], source.shape[2], *source.stride(),
-            owners.numel(), indices is not None, 256)
+            owners.numel(), indices is not None, slot, 256)
 
 
-def scatter_owner(output, edited, owners, indices):
+def scatter_owner(output, edited, owners, indices, *, slot=1):
+    if type(slot) is not int or slot < 1:
+        raise ValueError('Invalid generation slot')
     _validate_rows(owners, output, indices)
     if (output.ndim != 3 or output.shape[2] != 1 or output.shape != edited.shape
             or output.dtype != torch.bfloat16 or output.dtype != edited.dtype
@@ -76,4 +80,4 @@ def scatter_owner(output, edited, owners, indices):
         _scatter[(output.shape[0], triton.cdiv(output.shape[1], 256))](
             output, edited, owners, indices if indices is not None else owners,
             output.shape[1], output.stride(0), output.stride(1),
-            edited.stride(0), edited.stride(1), owners.numel(), indices is not None, 256)
+            edited.stride(0), edited.stride(1), owners.numel(), indices is not None, slot, 256)

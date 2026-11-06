@@ -214,5 +214,11 @@
         "file": "gemma-4-26B-A4B-it-Q8_0.gguf"
       }
     }
+  },
+  "profile_lifecycle": {
+    "schema": "flashalign.lifecycle-launch.v1",
+    "source_argument": "--state",
+    "subdirectory": "lifecycle",
+    "socket_argument": "--admin-socket"
   }
 }

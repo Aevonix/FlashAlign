@@ -73,9 +73,13 @@ class NativeOptionAliases(unittest.TestCase):
             config = {'method': 'dspark' if kind == 'vllm-deepseek' else 'ngram',
                       'num_speculative_tokens': 5 if kind == 'vllm-deepseek' else 3}
             if kind == 'vllm-deepseek': config['model'] = '/models/source_config'
-            with self.subTest(kind=kind), native_cli(kind) as (cli, calls, registered):
-                cli.main(self.arguments(kind)+['--speculative_config='+json.dumps(config),
-                    '--max_model_len=131072', '--generation_config', '/models/generation_config'])
+            with self.subTest(kind=kind), native_cli(kind) as (cli, calls, registered), \
+                 tempfile.TemporaryDirectory() as temporary:
+                arguments = self.arguments(kind)+['--speculative_config='+json.dumps(config),
+                    '--max_model_len=131072', '--generation_config', '/models/generation_config']
+                if kind in ('vllm', 'vllm-gemma4'):
+                    arguments += ['--profile_state_dir', temporary]
+                cli.main(arguments)
                 self.assertEqual(len(calls), 1)
                 self.assertEqual(registered, [True])
                 argv = calls[0]

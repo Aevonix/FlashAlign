@@ -19,6 +19,8 @@ import tempfile
 from .deepseek_grouped import (DEEPSEEK_GROUP_SCHEMA, DEEPSEEK_MODEL,
                                validate_grouped_profile)
 from .native_profile import FORMAT as NATIVE_FORMAT, REQUIRES as NATIVE_REQUIRES, NativePayload, load_spec
+from .profile_adapters import (DEFAULT_ARTIFACT_FORMATS, DEFAULT_OPERATORS, OperatorContext, OperatorLayout, TensorRule,
+                               artifact_formats, operator_adapters)
 
 
 class ProfileError(ValueError):
@@ -40,7 +42,7 @@ def stage_profile(source, destination):
     destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = Path(tempfile.mkdtemp(prefix=destination.name+'.new-', dir=destination.parent))
     try:
-        for name in dict.fromkeys(('profile.json', checked.get('payload_file', 'profile.safetensors'),
+        for name in dict.fromkeys((*checked.get('artifact_files', ('profile.json', checked.get('payload_file', 'profile.safetensors'))),
                                    'sha256.json', 'payload-download.json')):
             original = Path(checked['path'])/name
             if original.is_file():
@@ -59,15 +61,8 @@ def stage_profile(source, destination):
         if temporary.exists():shutil.rmtree(temporary)
 
 
-FORMS = {
-    'projection': set(),
-    'row_gain_projection_v1': {'row_gain'},
-    'row_normalized_projection_v1': {'row_gain', 'row_norm_preconditioning'},
-    'input_low_rank_delta_v1': {'matrix_input'},
-    'weighted_output_projection_v1': {'per_direction_strength'},
-    'residual_writer_group_projection_v1': {'writer_groups', 'text_embedding_before_multimodal_merge',
-                                           'ple_value_projection', 'native_mtp_writer_groups'},
-}
+# Compatibility inventory; validation uses the trusted operator registry.
+FORMS = {name: set(DEFAULT_OPERATORS.get(name).requirements) for name in DEFAULT_OPERATORS.ids()}
 MAX_HEADER = 4 * 1024 * 1024
 MAX_PROFILE = 256 * 1024 * 1024
 def _deepseek_group_tensors(profile, hidden, sites):
@@ -273,7 +268,35 @@ def profile_fingerprint(profile):
                                      separators=(',', ':')).encode()).hexdigest()
 
 
-def validate_profile(path, *, include_audit=False, max_basis_work=None, allow_missing_payload=False):
+class ArtifactContext:
+    """Bounded manifest and payload snapshots for trusted format validators."""
+    def __init__(self, root, manifest, raw, profile, *, include_audit, max_basis_work,
+                 allow_missing_payload, operators):
+        self.root, self.manifest, self.manifest_bytes, self.profile = root, manifest, raw, profile
+        self.include_audit, self.max_basis_work = include_audit, max_basis_work
+        self.allow_missing_payload, self.operators = allow_missing_payload, operators
+        self._payload_hashes = {}
+        self._payload_sizes = {}
+
+    def read_payload(self, filename, *, limit=MAX_PROFILE):
+        if (not isinstance(filename, str) or re.fullmatch(r'[A-Za-z0-9_.-]{1,255}', filename) is None
+                or filename in ('.', '..', 'profile.json') or type(limit) is not int
+                or not 0 < limit <= MAX_PROFILE):
+            raise ProfileError('Invalid bounded artifact payload request')
+        remaining = MAX_PROFILE - sum(size for name, size in self._payload_sizes.items() if name != filename)
+        if remaining <= 0:
+            raise ProfileError('Artifact payloads exceed the bounded reader budget')
+        value = _read_bounded(self.root/filename, min(limit, remaining))
+        digest = hashlib.sha256(value).hexdigest()
+        if filename in self._payload_hashes and self._payload_hashes[filename] != digest:
+            raise ProfileError('Profile payload changed during validation')
+        self._payload_hashes[filename] = digest
+        self._payload_sizes[filename] = len(value)
+        return value
+
+
+def validate_profile(path, *, include_audit=False, max_basis_work=None, allow_missing_payload=False,
+                     format_registry=None, operator_registry=None):
     """Validate schema, float payloads and supplied hashes, not model quality."""
     path = Path(path).expanduser()
     manifest = path / 'profile.json' if path.is_dir() else path
@@ -282,39 +305,50 @@ def validate_profile(path, *, include_audit=False, max_basis_work=None, allow_mi
     profile = _json_document(manifest_bytes)
     if not isinstance(profile, dict):
         raise ProfileError('Profile metadata must be an object')
-    if profile.get('format') == NATIVE_FORMAT:
-        return _validate_native_profile(root, manifest, manifest_bytes, include_audit=include_audit,
-                                        allow_missing_payload=allow_missing_payload)
-    if profile.get('format') is not None:
+    registry = artifact_formats() if format_registry is None else format_registry
+    adapter = registry.get(profile.get('format'))
+    if adapter is None:
         raise ProfileError('Unsupported profile format')
-    name = profile.get('name')
-    model = profile.get('model')
-    if (not isinstance(name, str) or not name.strip() or name == 'off' or len(name) > 256
-            or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in name)):
-        raise ProfileError('Invalid profile name')
-    if not isinstance(model, dict) or not isinstance(model.get('id'), str) or not model['id']:
-        raise ProfileError('Profile must identify its model')
-    if not isinstance(model.get('revision'), str) or not model['revision']:
-        raise ProfileError('Profile must pin a model revision')
-    compatible = _compatible_models(profile.get('compatible_models', []))
-    hidden = profile.get('hidden_size')
-    if not _positive_int(hidden):
-        raise ProfileError('Invalid profile hidden size')
-    transform = profile.get('transform', 'projection')
-    requires = profile.get('requires', [])
-    schema = profile.get('schema')
+    context = ArtifactContext(root, manifest, manifest_bytes, profile, include_audit=include_audit,
+                              max_basis_work=max_basis_work, allow_missing_payload=allow_missing_payload,
+                              operators=operator_adapters() if operator_registry is None else operator_registry)
+    result = adapter.validate(context)
+    if not isinstance(result, dict):
+        raise ProfileError('Artifact validator returned no descriptor')
+    hashes = result.get('hashes')
+    manifest_hash = hashlib.sha256(manifest_bytes).hexdigest()
+    if not isinstance(hashes, dict) or hashes.get('profile.json') != manifest_hash:
+        raise ProfileError('Artifact descriptor does not bind its manifest bytes')
+    if any(not isinstance(name, str) or re.fullmatch(r'[A-Za-z0-9_.-]{1,255}', name) is None
+           or name in ('.', '..') or not isinstance(value, str) or re.fullmatch(r'[0-9a-f]{64}', value) is None
+           for name, value in hashes.items()):
+        raise ProfileError('Invalid artifact byte inventory')
+    if not any(adapter is builtin for builtin in DEFAULT_ARTIFACT_FORMATS.adapters()):
+        expected = {'profile.json': manifest_hash, **context._payload_hashes}
+        if not context._payload_hashes or hashes != expected:
+            raise ProfileError('Artifact descriptor does not bind its validated payload bytes')
+        receipt = root/'sha256.json'
+        if receipt.is_file():
+            recorded = read_json(receipt)
+            if not isinstance(recorded, dict) or any(name in recorded and recorded[name] != value
+                                                    for name, value in hashes.items()):
+                raise ProfileError('Profile checksum mismatch')
+        name, model = result.get('name'), result.get('model')
+        if (not isinstance(name, str) or not name or name == 'off' or len(name) > 256
+                or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in name)
+                or not isinstance(model, dict) or not isinstance(model.get('id'), str) or not model['id']
+                or not isinstance(model.get('revision'), str) or not model['revision']
+                or result.get('artifact_valid') is not True):
+            raise ProfileError('Invalid validated artifact descriptor')
+        result = {**result, 'format': adapter.format, 'manifest': str(manifest.resolve()),
+                  'path': str(root), 'source': 'local'}
+    return {**result, 'artifact_files': sorted(hashes)}
+
+
+def _builtin_operator_layout(context):
+    profile, hidden, sites = context.profile, context.hidden_size, context.sites
+    transform, schema = profile.get('transform', 'projection'), profile.get('schema')
     deepseek_grouped = schema == DEEPSEEK_GROUP_SCHEMA
-    if schema is not None and not deepseek_grouped:
-        raise ProfileError('Unsupported profile schema')
-    if (not isinstance(transform, str) or transform not in FORMS or not isinstance(requires, list)
-            or any(not isinstance(item, str) for item in requires)
-            or len(set(requires)) != len(requires)
-            or (not deepseek_grouped and set(requires) != FORMS[transform])
-            or (deepseek_grouped and transform != 'projection')):
-        raise ProfileError('Unsupported or inconsistent profile transform')
-    sites = profile.get('sites')
-    if not isinstance(sites, list) or not sites or len(sites) > 4096:
-        raise ProfileError('Profile must contain valid transform sites')
     grouped = transform == 'residual_writer_group_projection_v1'
     expected = (_deepseek_group_tensors(profile, hidden, sites) if deepseek_grouped
                 else _group_tensors(profile, hidden, sites) if grouped else {})
@@ -339,17 +373,62 @@ def validate_profile(path, *, include_audit=False, max_basis_work=None, allow_mi
             if site['scale'] != 1:
                 raise ProfileError('Weighted projections require unit site scale')
             expected[prefix + '.strengths'] = [rank]
-        if 'row_gain' in requires:
+        if 'row_gain' in profile.get('requires', []):
             expected[prefix + '.g'] = [hidden]
-        if 'row_norm_preconditioning' in requires:
+        if 'row_norm_preconditioning' in profile.get('requires', []):
             expected[prefix + '.m'] = [hidden]
         if transform == 'input_low_rank_delta_v1':
             width = site.get('input_size')
             if not _positive_int(width):
                 raise ProfileError('Invalid input-delta width')
             expected[prefix + '.B'] = [rank, width]
+    return OperatorLayout({key: TensorRule(tuple(shape), 'basis' if key.endswith('.Q') or key in basis_keys
+                                         else 'positive' if key.endswith(('.g', '.m', '.strengths')) else 'finite')
+                           for key, shape in expected.items()})
+
+
+def _validate_dense_profile(context):
+    root, manifest, manifest_bytes, profile = context.root, context.manifest, context.manifest_bytes, context.profile
+    include_audit, max_basis_work = context.include_audit, context.max_basis_work
+    name = profile.get('name')
+    model = profile.get('model')
+    if (not isinstance(name, str) or not name.strip() or name == 'off' or len(name) > 256
+            or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in name)):
+        raise ProfileError('Invalid profile name')
+    if not isinstance(model, dict) or not isinstance(model.get('id'), str) or not model['id']:
+        raise ProfileError('Profile must identify its model')
+    if not isinstance(model.get('revision'), str) or not model['revision']:
+        raise ProfileError('Profile must pin a model revision')
+    compatible = _compatible_models(profile.get('compatible_models', []))
+    hidden = profile.get('hidden_size')
+    if not _positive_int(hidden):
+        raise ProfileError('Invalid profile hidden size')
+    transform = profile.get('transform', 'projection')
+    requires = profile.get('requires', [])
+    schema = profile.get('schema')
+    deepseek_grouped = schema == DEEPSEEK_GROUP_SCHEMA
+    operator = context.operators.get(transform)
+    if ((schema is not None and not isinstance(schema, str))
+            or (operator is not None and schema not in operator.schemas)):
+        raise ProfileError('Unsupported profile schema')
+    if (operator is None or not isinstance(requires, list)
+            or any(not isinstance(item, str) for item in requires)
+            or len(set(requires)) != len(requires)
+            or (not deepseek_grouped and set(requires) != operator.requirements)):
+        raise ProfileError('Unsupported or inconsistent profile transform')
+    sites = profile.get('sites')
+    if (not isinstance(sites, list) or not sites or len(sites) > 4096
+            or any(not isinstance(site, dict) for site in sites)):
+        raise ProfileError('Profile must contain valid transform sites')
+    grouped = transform == 'residual_writer_group_projection_v1'
+    layout = operator.layout(OperatorContext(profile, hidden, sites))
+    if not isinstance(layout, OperatorLayout):
+        raise ProfileError('Operator returned an invalid tensor layout')
+    expected = {key: list(rule.shape) for key, rule in layout.tensors.items()}
+    basis_keys = {key for key, rule in layout.tensors.items() if rule.validation == 'basis'}
+    positive_keys = {key for key, rule in layout.tensors.items() if rule.validation == 'positive'}
     basis_work = sum(shape[0] * (shape[0] + 1) // 2 * shape[1]
-                     for key, shape in expected.items() if key.endswith('.Q') or key in basis_keys)
+                     for key, shape in expected.items() if key in basis_keys)
     if max_basis_work is not None:
         if type(max_basis_work) is not int or max_basis_work < 1:
             raise ProfileError('Basis validation work limit must be a positive integer')
@@ -394,9 +473,9 @@ def validate_profile(path, *, include_audit=False, max_basis_work=None, allow_mi
                 raise ProfileError('Profile contains non-finite tensor values')
             detail = {'name': key, 'dtype': 'F32', 'shape': shape,
                       'bytes': end - start} if include_audit else None
-            if key.endswith(('.g', '.m', '.strengths')) and any(value <= 0 for value in values):
+            if key in positive_keys and any(value <= 0 for value in values):
                 raise ProfileError('Profile gain and norm values must be positive')
-            if key.endswith('.Q') or key in basis_keys:
+            if key in basis_keys:
                 rank, width = shape
                 if rank > 128:
                     raise ProfileError('Profile rank exceeds the setup validator limit of 128')
@@ -527,7 +606,8 @@ def discover_profiles(paths):
 
 
 def bundled_profile_root():
-    return Path(__file__).resolve().parents[1]/'profiles'
+    from .resources import setup_resource
+    return setup_resource('profiles')
 
 
 def copy_profile_notices(source, destination):

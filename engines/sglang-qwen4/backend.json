@@ -194,5 +194,10 @@
       "output_budget": "remaining_context"
     }
   },
-  "maximum_rank": 1
+  "maximum_rank": 1,
+  "profile_lifecycle": {
+    "schema": "flashalign.lifecycle-launch.v1",
+    "state_argument": "--lifecycle-state",
+    "socket_argument": "--admin-socket"
+  }
 }

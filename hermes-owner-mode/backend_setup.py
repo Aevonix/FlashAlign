@@ -20,7 +20,8 @@ from urllib.parse import urlsplit
 
 from .auth import read_key, ensure_key
 from .drafting import MissingDraftModel, argument, draft_settings
-from .engine_setup import available_devices, digest, prepare_python_headers, private_json, unused_port
+from .engine_setup import (available_devices, digest, prepare_python_headers, private_json,
+                           unused_port, _external_cleanup_contract)
 from .model_metadata import (inspect_model, safetensors_header_fingerprint,
                              declared_openclaw_compat, declared_request_compatibility,
                              declared_openclaw_request_policy)
@@ -28,10 +29,14 @@ from .profiles import (DEEPSEEK_GROUP_SCHEMA, NATIVE_FORMAT, match_profile, read
                        validate_profile, stage_profile, profile_sites, profile_fingerprint)
 from .setup_runtime import (SetupError, managed_context_window, normalize_engine_arguments,
                             require_full_vllm_options)
+from .speculation import sglang_speculation
+from .engine_adapters import engine_adapters
+from .runtime_environment import interpreter_path, python_environment
+from .resources import setup_resource
 
 
 KINDS = ('tensorfold', 'vllm', 'sglang', 'llamacpp')
-KIT_ROOT = Path(__file__).resolve().parents[1]/'engines'
+KIT_ROOT = setup_resource('engines')
 
 
 def _kits():
@@ -40,7 +45,7 @@ def _kits():
             continue
         metadata = read_json(path)
         kind = metadata.get('backend', metadata.get('engine'))
-        if kind in KINDS[1:]:
+        if kind in engine_adapters().ids() and engine_adapters().get(kind).uses_backend_kits:
             yield path.parent, metadata, kind
 
 
@@ -76,18 +81,30 @@ def select_backend_python(spec, metadata):
         raise SetupError('Engine python must name an interpreter')
     minimum = metadata.get('python_min_version')
     default = str(explicit or sys._base_executable)
+    environment = spec.get('environment', {})
+    if (not isinstance(environment, dict)
+            or any(not isinstance(key, str) or not isinstance(value, str)
+                   for key, value in environment.items())):
+        raise SetupError('Engine environment must contain string values')
+    path = environment.get('PATH', os.environ.get('PATH', os.defpath))
     if minimum is None:
-        return {'executable': default, 'version': None, 'minimum': None, 'automatic': explicit is None}
+        executable = interpreter_path(default, path=path)
+        if executable is None:
+            raise SetupError('The selected engine.python interpreter is unavailable')
+        return {'executable': executable, 'version': None, 'minimum': None, 'automatic': explicit is None}
     if (not isinstance(minimum, list) or len(minimum) != 2
             or any(type(part) is not int or part < 0 for part in minimum) or minimum[0] != 3):
         raise SetupError('Engine integration has an invalid Python requirement')
     candidates = [default]
     if explicit is None:
         candidates += [sys.executable]
-        candidates += [shutil.which('python'+str(minimum[0])+'.'+str(minor))
+        candidates += [shutil.which('python'+str(minimum[0])+'.'+str(minor), path=path)
                        for minor in range(minimum[1], max(minimum[1], 15)+1)]
-        candidates += [shutil.which('python3')]
+        candidates += [shutil.which('python3', path=path)]
     for executable in dict.fromkeys(candidate for candidate in candidates if candidate):
+        executable = interpreter_path(executable, path=path)
+        if executable is None:
+            continue
         version = _python_version(executable)
         if version is not None and version[0] == 3 and version[:2] >= tuple(minimum):
             return {'executable': executable, 'version': list(version), 'minimum': minimum,
@@ -624,31 +641,19 @@ def _speculation(home, spec, kind, model_id, *, metadata=None, proc_root=Path('/
             raise SetupError('Ngram lookup minimum exceeds its maximum')
         result['speculative_config'] = config
     elif kind == 'sglang':
-        methods = metadata.get('speculative_algorithms', ['DFLASH'])
-        draftless = metadata.get('draftless_speculative_algorithms', [])
-        if (not isinstance(draftless, list) or any(not isinstance(item, str) for item in draftless)
-                or len(draftless) != len(set(draftless))
-                or any(method != 'NGRAM' or method not in methods for method in draftless)):
-            raise SetupError('Invalid SGLang draftless speculative capability')
-        selected_method = result.get('draft_algorithm', methods[0])
-        if not isinstance(selected_method, str):
-            raise SetupError('A speculative algorithm must be a string')
-        method = selected_method.upper()
-        if method not in methods:
-            raise SetupError('The active speculative method is unsupported by this SGLang integration; it will not be disabled')
-        if method in draftless:
+        plan = sglang_speculation(metadata, result)
+        method = plan.method
+        if plan.source == 'none':
             if result.get('draft_model'):
-                raise SetupError('NGRAM speculation does not use an external draft model')
+                raise SetupError(f'{method} speculation does not use an external draft model')
             result['draft_algorithm'] = method
-        elif ('native_mtp_writer_groups' in metadata.get('required_features', [])
-                or method in metadata.get('native_speculative_algorithms', [])):
+        elif plan.source == 'target':
             model = str(Path(spec['model_path']).expanduser().resolve())
             if result.get('draft_model') and str(Path(result['draft_model']).resolve()) != model:
                 raise SetupError('This integration requires the model native MTP; the active draft model will not be replaced')
             result.update(draft_model=model, draft_algorithm=method)
         else:
-            manifest = {'requires_draft_model': True, 'min_parallel': 1,
-                        'draft_model_architectures': ['DFlash2DraftModel', 'DFlashDraftModel']}
+            manifest = plan.draft_manifest()
             if not result.get('draft_model') and metadata.get('default_draft_subdirectory'):
                 result['draft_model'] = str(_bundled_draft_path(spec['model_path'], metadata))
             selected = draft_settings(home, {**spec, **result}, manifest, model_id, proc_root=Path('/nonexistent'))
@@ -719,6 +724,11 @@ def _native_profile_layers(kit, metadata, model, sites):
 
 
 def check_backend(home, spec, profile, *, model_id, proc_root=Path('/proc')):
+    return engine_adapters().get(spec.get('kind', 'tensorfold')).check(
+        home, spec, profile, model_id=model_id, proc_root=proc_root)
+
+
+def _check_python_backend(home, spec, profile, *, model_id, proc_root=Path('/proc')):
     kind = spec.get('kind')
     if kind not in KINDS[1:]:
         raise SetupError('Choose tensorfold, vllm, sglang or llamacpp as the engine kind')
@@ -882,9 +892,18 @@ def _run(command, log_path, *, cwd=None, env=None):
         raise SetupError('Engine preparation could not start; check the required Python, Git and build tools') from error
 
 
-def _copy_kit(original, destination):
-    files = {str(path.relative_to(original)): digest(path) for path in original.rglob('*')
-             if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc'}
+def _copy_kit(original, destination, *, shared_runtime=False):
+    sources = {str(path.relative_to(original)): path for path in original.rglob('*')
+               if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc'}
+    if shared_runtime:
+        from .runtime_files import runtime_files
+        root = Path(__file__).resolve().parent
+        for name in runtime_files(root):
+            target = 'owner_mode/' + name
+            if target in sources:
+                raise SetupError('Engine kit cannot replace the shared runtime package')
+            sources[target] = root/name
+    files = {name: digest(path) for name, path in sources.items()}
     if destination.exists():
         actual = {str(path.relative_to(destination)): digest(path) for path in destination.rglob('*')
                   if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc'}
@@ -893,7 +912,11 @@ def _copy_kit(original, destination):
     else:
         temporary = destination.with_name(destination.name+'.new-'+secrets.token_hex(8))
         try:
-            shutil.copytree(original, temporary, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+            temporary.mkdir(mode=0o700)
+            for name, source in sources.items():
+                target = temporary/name
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                shutil.copy2(source, target)
             actual = {str(path.relative_to(temporary)): digest(path) for path in temporary.rglob('*')
                       if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc'}
             if actual != files:
@@ -905,6 +928,35 @@ def _copy_kit(original, destination):
     return files
 
 
+def _requirement_pin(distribution, lines):
+    """Read an exact runtime pin from trusted kit requirements, never a release table."""
+    canonical = lambda value: re.sub(r'[-_.]+', '-', value).lower()
+    pins = []
+    for line in lines:
+        if not isinstance(line, str):
+            raise SetupError('Engine requirements must contain strings')
+        value = line.split('#', 1)[0].strip()
+        found = re.fullmatch(r'([A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9_,.-]+\])?\s*(.*)', value)
+        if not found or canonical(found[1]) != canonical(distribution):
+            continue
+        exact = re.fullmatch(r'==\s*([A-Za-z0-9][A-Za-z0-9.!+_-]*)', found[2])
+        if exact is None:
+            raise SetupError('The engine distribution needs one exact version pin')
+        pins.append(exact[1])
+    if len(pins) != 1:
+        raise SetupError('The engine distribution needs one exact version pin')
+    return pins[0]
+
+
+def _runtime_pin(kit, metadata, distribution):
+    pin = _requirement_pin(distribution, (kit/'requirements.txt').read_text().splitlines())
+    declared = metadata.get('requirements')
+    if declared is not None:
+        if not isinstance(declared, list) or _requirement_pin(distribution, declared) != pin:
+            raise SetupError('The engine metadata and requirements pins disagree')
+    return pin
+
+
 def _prepare_runtime(kind, spec, kit, state):
     log = state/'install.log'
     metadata = read_json(kit/'backend.json') if (kit/'backend.json').is_file() else {}
@@ -912,6 +964,9 @@ def _prepare_runtime(kind, spec, kit, state):
     install = spec.get('install_dependencies', False)
     if type(install) is not bool:
         raise SetupError('install_dependencies must be true or false')
+    def run_python(arguments):
+        environment = python_environment(python, spec.get('environment'))
+        _run([python, *arguments], log, env={**os.environ, **environment})
     if metadata.get('runtime') == 'docker':
         entry = kit/'prepare.py'
         module_spec = importlib.util.spec_from_file_location('flashalign_managed_docker_prepare', entry)
@@ -929,7 +984,7 @@ def _prepare_runtime(kind, spec, kit, state):
         if not installation.is_file():
             if not install:
                 raise SetupError('llama.cpp needs engine.install_dependencies=true or a prepared installation.json')
-            _run([python, str(kit/'install.py'), '--state', str(state/'native'), '--cuda', 'on'], log)
+            run_python([str(kit/'install.py'), '--state', str(state/'native'), '--cuda', 'on'])
         runtime = read_json(installation)
         expected = read_json(kit/'backend.json')['revision']
         patch = read_json(kit/'patch.json')['patch_sha256']
@@ -945,19 +1000,19 @@ def _prepare_runtime(kind, spec, kit, state):
     if install:
         environment = state/'venv'
         if not (environment/'bin/python').is_file():
-            _run([python, '-m', 'venv', str(environment)], log)
+            run_python(['-m', 'venv', str(environment)])
         python = str(environment/'bin/python')
         receipt = state/'dependencies.json'
         signature = digest(kit/'requirements.txt')
         if not receipt.is_file() or read_json(receipt).get('requirements_sha256') != signature:
-            _run([python, '-m', 'pip', '--isolated', 'install', '-r', str(kit/'requirements.txt')], log)
+            run_python(['-m', 'pip', '--isolated', 'install', '-r', str(kit/'requirements.txt')])
             if kind == 'vllm':
                 # Build tooling can write egg-info/build folders into its input tree.
                 # Keep the runtime copy immutable across prepare and activation.
                 with tempfile.TemporaryDirectory(prefix='package-build-', dir=state) as temporary:
                     package = Path(temporary)/'source'
                     shutil.copytree(kit, package)
-                    _run([python, '-m', 'pip', '--isolated', 'install', '--no-deps', str(package)], log)
+                    run_python(['-m', 'pip', '--isolated', 'install', '--no-deps', str(package)])
             private_json(receipt, {'requirements_sha256': signature})
     if kind == 'vllm':
         # PYTHONPATH alone cannot install vLLM's general-plugin entry point.
@@ -967,8 +1022,8 @@ def _prepare_runtime(kind, spec, kit, state):
         target = metadata.get('plugin_entrypoint', 'flashalign_vllm.plugin:register')
         if not isinstance(target, str) or re.fullmatch(r'[A-Za-z0-9_.]+:[A-Za-z0-9_]+', target) is None:
             raise SetupError('Invalid pinned engine plugin entry point')
-        supplied_environment = {'env': {**os.environ, **spec['environment']}} if spec.get('environment') else {}
-        _run([python, '-c', "import importlib.metadata as m; assert m.version('vllm') == '0.32.0'; entries=[e for e in m.entry_points(group='vllm.general_plugins') if e.name == "+repr(plugin)+"]; assert entries and all(e.value == "+repr(target)+" for e in entries)"], log, **supplied_environment)
+        version = _runtime_pin(kit, metadata, 'vllm')
+        run_python(['-c', "import importlib.metadata as m; assert m.version('vllm') == "+repr(version)+"; entries=[e for e in m.entry_points(group='vllm.general_plugins') if e.name == "+repr(plugin)+"]; assert entries and all(e.value == "+repr(target)+" for e in entries)"])
         runtime = {'python': python, 'build_environment': prepare_python_headers(
             python, state, install=install, environment=spec.get('environment'))}
         overlay_requirements = metadata.get('isolated_overlay_requirements')
@@ -984,8 +1039,7 @@ def _prepare_runtime(kind, spec, kit, state):
                     version = metadata.get('overlay_version')
                     if not isinstance(distribution, str) or not isinstance(version, str):
                         raise SetupError('This engine needs its isolated runtime overlay; enable dependency installation')
-                    _run([python, '-c', 'import importlib.metadata as m; assert m.version('+repr(distribution)+') == '+repr(version)],
-                         log, env={**os.environ, **spec.get('environment', {})})
+                    run_python(['-c', 'import importlib.metadata as m; assert m.version('+repr(distribution)+') == '+repr(version)])
                     runtime['provided_pythonpath'] = spec.get('environment', {}).get('PYTHONPATH', '')
                     runtime['overlay_source'] = 'operator-provided compatible environment'
                     return runtime
@@ -993,15 +1047,16 @@ def _prepare_runtime(kind, spec, kit, state):
                     raise SetupError('The existing runtime overlay lacks its matching receipt; preserve it and use a fresh deployment')
                 with tempfile.TemporaryDirectory(prefix='overlay-build-', dir=state) as temporary:
                     prepared = Path(temporary)/'overlay'
-                    _run([python, '-m', 'pip', '--isolated', 'install', '--no-deps', '--require-hashes',
-                          '--target', str(prepared), '-r', str(kit/overlay_requirements)], log)
+                    run_python(['-m', 'pip', '--isolated', 'install', '--no-deps', '--require-hashes',
+                                '--target', str(prepared), '-r', str(kit/overlay_requirements)])
                     private_json(prepared/'flashalign-overlay.json', {'requirements_sha256': signature})
                     os.replace(prepared, overlay)
             if not overlay.is_dir():
                 raise SetupError('The isolated runtime overlay is missing')
             runtime['overlay'] = str(overlay)
         return runtime
-    _run([python, '-c', "import importlib.metadata as m; assert m.version('sglang') == '0.5.20'"], log)
+    version = _runtime_pin(kit, metadata, 'sglang')
+    run_python(['-c', "import importlib.metadata as m; assert m.version('sglang') == "+repr(version)])
     source = state/'sglang'
     if not source.exists():
         original = Path(spec['source']).expanduser().resolve() if spec.get('source') else state/'upstream'
@@ -1012,7 +1067,7 @@ def _prepare_runtime(kind, spec, kit, state):
             _run(['git', '-C', str(original), 'remote', 'add', 'origin', 'https://github.com/sgl-project/sglang.git'], log)
             _run(['git', '-C', str(original), 'fetch', '--depth', '1', 'origin', read_json(kit/'backend.json')['upstream_revision']], log)
             _run(['git', '-C', str(original), 'checkout', '--detach', 'FETCH_HEAD'], log)
-        _run([python, str(kit/'prepare.py'), '--source', str(original), '--output', str(source)], log)
+        run_python([str(kit/'prepare.py'), '--source', str(original), '--output', str(source)])
     receipt = read_json(source/'flashalign-build.json')
     if receipt.get('commit') != read_json(kit/'backend.json')['upstream_revision']:
         raise SetupError('SGLang source differs from the pinned integration')
@@ -1057,12 +1112,34 @@ def _prepare_checkpoint_receipts(spec, checked, runtime, kit, state):
                 raise SetupError('Checkpoint receipt must be owned and not writable by other users')
             private_json(destination, read_json(source))
         _run([runtime['python'], str(entry), '--model', checked['model']['path'],
-              '--receipt', str(destination), '--role', role, '--verify'], state/'install.log')
+              '--receipt', str(destination), '--role', role, '--verify'], state/'install.log',
+             env={**os.environ, **python_environment(runtime['python'], spec.get('environment'))})
         paths[role] = str(destination)
     return paths
 
 
 def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
+    return engine_adapters().get(spec.get('kind', 'tensorfold')).prepare(
+        home, spec, profile_path, model_id=model_id, key_file=key_file)
+
+
+def _prepare_external_cleanup(metadata, deployment):
+    declaration = metadata.get('external_cleanup')
+    if declaration is None:
+        _external_cleanup_contract(deployment)
+        return {}
+    if (not isinstance(declaration, dict)
+            or set(declaration) != {'schema', 'script', 'timeout_seconds'}):
+        raise SetupError('Invalid external engine cleanup declaration')
+    script = declaration.get('script')
+    if not isinstance(script, str):
+        raise SetupError('Invalid external engine cleanup script')
+    spec = {**declaration, 'script_sha256': deployment['integration_files'].get(script)}
+    _external_cleanup_contract({**deployment, 'external_cleanup': spec})
+    return {'external_cleanup': spec}
+
+
+def _prepare_python_backend(home, spec, profile_path, *, model_id, key_file=None):
     from .profile_assets import materialize_profile
     profile = validate_profile(profile_path, allow_missing_payload=True)
     checked = check_backend(home, spec, profile, model_id=model_id)
@@ -1074,14 +1151,22 @@ def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
     spec = {**spec, 'python': checked['python']['executable']}
     kind = checked['kind']
     original = Path(checked['kit'])
+    shared_runtime = checked['metadata'].get('requires_shared_runtime', False)
+    if type(shared_runtime) is not bool:
+        raise SetupError('Invalid shared runtime declaration')
     kit_hash = hashlib.sha256(''.join(digest(path) for path in sorted(original.rglob('*'))
                                     if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc').encode()).hexdigest()
+    if shared_runtime:
+        from .runtime_files import runtime_files
+        root = Path(__file__).resolve().parent
+        shared = {name: digest(root/name) for name in runtime_files(root)}
+        kit_hash = hashlib.sha256((kit_hash+json.dumps(shared, sort_keys=True)).encode()).hexdigest()
     identity = hashlib.sha256((kit_hash+profile_fingerprint(profile)+str(Path(spec['model_path']).resolve())+
                                model_id+json.dumps(spec, sort_keys=True, default=str)).encode()).hexdigest()[:20]
     state = Path(home)/'.config/owner-mode/engines'/identity
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     kit = state/'integration'
-    files = _copy_kit(original, kit)
+    files = _copy_kit(original, kit, shared_runtime=shared_runtime)
     runtime = _prepare_runtime(kind, spec, kit, state)
     verifier = checked['metadata'].get('model_integrity_verifier')
     if verifier:
@@ -1090,7 +1175,8 @@ def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
             raise SetupError('Invalid model integrity verifier')
         receipt = state/'model-integrity/checkpoint.json'
         _run([runtime['python'], str(entry), '--model', checked['model']['path'],
-              '--receipt', str(receipt), '--verify'], state/'install.log')
+              '--receipt', str(receipt), '--verify'], state/'install.log',
+             env={**os.environ, **python_environment(runtime['python'], spec.get('environment'))})
         runtime['model_receipt'] = str(receipt)
     checkpoint_receipts = _prepare_checkpoint_receipts(spec, checked, runtime, kit, state)
     key = Path(key_file).expanduser().resolve() if key_file else state/'engine.key'
@@ -1193,6 +1279,8 @@ def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
                 '--state', str(state/'native-runtime'), *common, '--engine-args', str(state/'native-arguments.json')]
         if drafting.get('draft_model'):
             argv += ['--draft-model', drafting['draft_model']]
+    from .lifecycle_setup import prepare_lifecycle
+    argv, control = prepare_lifecycle(checked['metadata'], state, argv)
     environment = spec.get('environment', {})
     if not isinstance(environment, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in environment.items()):
         raise SetupError('Engine environment must contain string values')
@@ -1201,6 +1289,9 @@ def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
     env = {**environment, **runtime.get('build_environment', {}), 'CUDA_VISIBLE_DEVICES': ','.join(map(str, checked['devices'])),
            'TORCH_EXTENSIONS_DIR': str(state/'torch-extensions'), 'TRITON_CACHE_DIR': str(state/'triton-cache'),
            'HF_HUB_DISABLE_TELEMETRY': '1'}
+    if 'PATH' in environment:
+        env['PATH'] = environment['PATH']
+    env = python_environment(python, env)
     if kind == 'vllm' and runtime.get('container_runtime') != 'docker':
         runtime_path = runtime.get('overlay') or runtime.get('provided_pythonpath')
         env['PYTHONPATH'] = os.pathsep.join([str(kit), runtime_path]) if runtime_path else str(kit)
@@ -1209,6 +1300,7 @@ def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
               'model': model_id, 'profile': profile['name'], 'key_file': str(key), 'profile_path': str(staged),
               'integration_files': files, 'drafting': drafting, 'status': 'prepared', 'install_dependencies': False,
               'python': python, 'requirements': []}
+    result.update(control)
     if checked.get('gguf_binding'):
         result['gguf_model'] = checked['gguf_binding']
     if verifier:
@@ -1225,5 +1317,6 @@ def prepare_backend(home, spec, profile_path, *, model_id, key_file=None):
     if checkpoint_receipts:
         result.update(checkpoint_receipts=checkpoint_receipts, resource_policy=checked['metadata'].get('resource_policy'),
                       replay_file=str(state/'runtime/replay/nonces.sqlite3'), hardware_activation_check='pending')
+    result.update(_prepare_external_cleanup(checked['metadata'], result))
     private_json(state/'deployment.json', result)
     return result

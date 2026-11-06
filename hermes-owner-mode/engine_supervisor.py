@@ -4,10 +4,12 @@
 """Dedicated Linux subreaper for one managed engine command; no model logic."""
 import argparse
 import ctypes
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -137,6 +139,73 @@ def save(path,value):
     fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
     with os.fdopen(fd,'w') as out:json.dump(value,out,sort_keys=True);out.write('\n');out.flush();os.fsync(out.fileno())
     os.replace(temporary,path)
+    directory=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:os.fsync(directory)
+    finally:os.close(directory)
+
+
+
+@contextmanager
+def unit_lock(directory, timeout=20):
+    """Retain one inode for all launch/stop decisions, including crash recovery."""
+    try:import fcntl
+    except ImportError as error:raise RuntimeError('Local managed units require POSIX flock') from error
+    path=directory/'unit.lock'
+    fd=os.open(path,os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW|os.O_NONBLOCK,0o600)
+    try:
+        info=os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid()
+                or info.st_nlink!=1 or stat.S_IMODE(info.st_mode)!=0o600):
+            raise ValueError('Unsafe native unit lock')
+        deadline=time.monotonic()+timeout
+        while True:
+            try:
+                fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic()>=deadline:raise ValueError('Native unit operation is busy')
+                time.sleep(.02)
+        current=path.lstat()
+        if (current.st_dev,current.st_ino,current.st_nlink)!=(info.st_dev,info.st_ino,1):
+            raise ValueError('Native unit lock changed')
+        yield
+    finally:os.close(fd)
+
+
+def read_unit_record(path):
+    """Bounded no-follow reads, retrying only an atomic snapshot replacement."""
+    for attempt in range(4):
+        try:fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+        except FileNotFoundError:return None
+        with os.fdopen(fd,'rb') as stream:
+            before=os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid!=os.getuid()
+                    or before.st_nlink not in (0,1) or stat.S_IMODE(before.st_mode)!=0o600
+                    or before.st_size>1024*1024):raise ValueError('Unsafe native unit record')
+            # An atomic publisher can detach this inode before a pathname
+            # lookup reflects its replacement. Never consume a detached file.
+            if before.st_nlink==0:
+                if attempt<3:time.sleep(.001)
+                continue
+            data=stream.read(1024*1024+1)
+            after=os.fstat(stream.fileno())
+            if (not stat.S_ISREG(after.st_mode) or after.st_uid!=os.getuid()
+                    or after.st_nlink not in (0,1) or stat.S_IMODE(after.st_mode)!=0o600
+                    or after.st_size>1024*1024):raise ValueError('Unsafe native unit record')
+            if after.st_nlink==0:
+                if attempt<3:time.sleep(.001)
+                continue
+            fields=('st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns','st_nlink')
+            if any(getattr(before,k)!=getattr(after,k) for k in fields):
+                try:current=path.lstat()
+                except FileNotFoundError:continue
+                if (current.st_dev,current.st_ino)!=(before.st_dev,before.st_ino):continue
+                raise ValueError('Native unit record changed')
+        if len(data)>1024*1024:raise ValueError('Native unit record exceeds limit')
+        value=json.loads(data)
+        if not isinstance(value,dict):raise ValueError('Invalid native unit record')
+        return value
+    raise ValueError('Native unit record changed repeatedly')
 
 
 def reap(child):
@@ -167,7 +236,7 @@ def finish(root,child,path,base):
         time.sleep(.2)
 
 
-def supervise(command,path):
+def supervise(command,path,unit_nonce=None):
     root=identity(os.getpid(),True)
     if root is None:raise RuntimeError('Supervisor identity unavailable')
     set_subreaper();stopping=False;child=None;code=1
@@ -176,7 +245,21 @@ def supervise(command,path):
         stopping=True
     for sig in (signal.SIGTERM,signal.SIGINT):signal.signal(sig,stop)
     base={'version':1,'supervisor':root,'command':None}
-    save(path,{**base,'status':'starting','all_children_reaped':False})
+    if unit_nonce is not None:
+        with unit_lock(path.parent):
+            intent=read_unit_record(path.parent/'unit-launch.json')
+            if (intent is None or intent.get('nonce')!=unit_nonce
+                    or intent.get('phase') not in ('pending','cancelled')
+                    or intent.get('supervisor') not in (None,root)):
+                raise ValueError('Native launch intent does not authorize this supervisor')
+            stopping=stopping or intent['phase']=='cancelled'
+            base['nonce']=unit_nonce
+            # This self-publication survives loss of the RPC process or its ACK.
+            save(path.parent/'unit-live.json',{'nonce':unit_nonce,'supervisor':root})
+            save(path,{**base,'status':'starting','all_children_reaped':False})
+            save(path.parent/'unit-launch.json',{**intent,'phase':'owned','supervisor':root})
+    else:
+        save(path,{**base,'status':'starting','all_children_reaped':False})
     try:
         if not stopping:
             child=subprocess.Popen(command)
@@ -192,10 +275,10 @@ def supervise(command,path):
 
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--state',type=Path,required=True);parser.add_argument('command',nargs=argparse.REMAINDER);args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--state',type=Path,required=True);parser.add_argument('--unit-nonce');parser.add_argument('command',nargs=argparse.REMAINDER);args=parser.parse_args()
     command=args.command[1:] if args.command[:1]==['--'] else args.command
     if not command:parser.error('A managed command is required')
-    return supervise(command,args.state)
+    return supervise(command,args.state,args.unit_nonce)
 
 if __name__=='__main__':
     try:raise SystemExit(main())

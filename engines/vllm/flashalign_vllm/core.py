@@ -15,6 +15,7 @@ import re
 import stat
 import threading
 import time
+from .auth_contract import authenticate_header, read_signing_key
 
 
 class FieldError(ValueError):
@@ -26,22 +27,11 @@ class Selection:
     name: str
     digest: str
     scale: float
+    generation: str | None = None
 
 
 def load_key(path):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o077:
-            raise ValueError('Signing key must be an owned regular private file')
-        if info.st_uid != os.getuid():
-            raise ValueError('Signing key belongs to another user')
-        key = os.read(fd, 33)
-    finally:
-        os.close(fd)
-    if len(key) != 32:
-        raise ValueError('Signing key must contain exactly 32 bytes')
-    return key
+    return read_signing_key(path)
 
 
 class Gate:
@@ -63,19 +53,11 @@ class Gate:
             return None
         if not self.profiles:
             raise FieldError('this server was started without owner-mode profiles: owner_mode must be "off"')
-        if self.key is None or len(headers) != 1:
-            return None
-        match = re.fullmatch(r'v1:([0-9]{1,12}):([A-Za-z0-9_-]{16,128}):([0-9a-f]{64})', headers[0])
-        if not match:
-            return None
-        stamp, nonce, supplied = match.groups()
         now = self.clock()
-        if abs(now-int(stamp)) > 60:
+        auth = authenticate_header(self.key, raw, headers, now=now)
+        if auth is None:
             return None
-        message = stamp+'\n'+nonce+'\n'+hashlib.sha256(raw).hexdigest()
-        wanted = hmac.new(self.key, message.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(wanted, supplied):
-            return None
+        stamp, nonce = auth.timestamp, auth.nonce
         if self.replay_store is not None:
             if not self.replay_store.consume(nonce, int(stamp)+61, now=now):
                 return None
@@ -164,7 +146,8 @@ def cache_key(selection, store, model_identity, original=None):
     mode = 'off' if selection is None else selection.name
     digest = '' if selection is None else selection.digest
     scale = '' if selection is None else selection.scale.hex()
-    material = json.dumps([model_identity,mode,digest,scale,original],sort_keys=True,separators=(',',':'))
+    generation = '' if selection is None else selection.generation
+    material = json.dumps([model_identity,mode,digest,scale,generation,original],sort_keys=True,separators=(',',':'))
     return 'flashalign:'+hashlib.sha256(material.encode()).hexdigest()
 
 
@@ -185,7 +168,8 @@ def project(output, profiles, layer, site):
     """Off rows never participate in transform arithmetic."""
     groups = []
     for start, end, selection in _spans.get():
-        profile = profiles.get(selection.name)
+        profile = (profiles.resolve(selection.generation, selection.digest)
+                   if selection.generation is not None else profiles.get(selection.name))
         if profile is None or profile.digest != selection.digest:
             raise ValueError('Unknown profile selection in worker')
         operator = profile.sites.get((layer,site))
@@ -216,11 +200,18 @@ def spans_for_runner(runner, profiles):
         mode = extra.get('_flashalign_profile')
         if mode is None:
             continue
-        profile = profiles.get(mode)
+        generation = extra.get('_flashalign_generation')
+        registry = getattr(runner, '_flashalign_lifecycle', None)
+        if generation is not None:
+            if registry is None:
+                raise ValueError('Worker does not support profile generations')
+            profile = registry.resolve(generation, extra.get('_flashalign_digest'))
+        else:
+            profile = profiles.get(mode)
         if profile is None or extra.get('_flashalign_digest') != profile.digest:
             raise ValueError('Worker profile identity mismatch')
         scale = extra.get('_flashalign_scale')
         if type(scale) not in (int,float) or not math.isfinite(scale) or not 0 < scale <= 2:
             raise ValueError('Invalid worker profile strength')
-        spans.append((int(starts[index]),int(starts[index+1]),Selection(mode,profile.digest,float(scale))))
+        spans.append((int(starts[index]),int(starts[index+1]),Selection(mode,profile.digest,float(scale),generation)))
     return spans

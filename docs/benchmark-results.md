@@ -1,11 +1,68 @@
 # Measured results
 
-These are small qualification runs. Results apply to the listed
-configurations; they are not full capability, refusal-rate or
-maximum-throughput benchmarks. [Run your own comparison](benchmarks.md) with
-the included recorder and optional evaluation tools.
+Each report names the model, profile, engine, settings and metric it measured.
+Refusal behavior, answer quality and request timing are separate measurements.
+[Run your own comparison](benchmarks.md) with the included tools.
 
-**The DeepSeek measurements use the retired version 1.0 compact profile.**
+## Qwen3.8-27B: automated refusal comparison
+
+On the complete 443-case FR443 suite, the judge counted **289/443 stock answers
+as refusals (65.24%)**, compared with **11/443 profile answers (2.48%)**. All
+886 answers and judgments were valid. The paired change was −62.75 percentage
+points, with a 95% interval of [−67.19, −58.24].
+
+The corpus mixes safe, harmful and unsafe requests. This is a judge-rated
+refusal result; answer correctness and general capability were not scored.
+The predeclared 40-case human audit is pending.
+
+[Full report, subsets and settings](qwen-fr443-results.md) ·
+[Machine-readable evidence](../benchmarks/results/qwen-fr443-20261101.json)
+
+## Qwen/SGLang: graph Owner Mode timing
+
+A separate comparison measured **1.324× end-to-end completion-token throughput**
+for the opt-in graph Owner Mode path versus the previous release's eager Owner Mode
+path. The conditional 95% interval was **[1.313, 1.335]**, based on three paired
+process blocks. The primary workload used 258 input tokens and exactly 256
+output tokens, with 90 primary requests per arm.
+
+This includes initial request latency and is not a decode-only tok/s figure.
+Both arms had the profile active; it is not an off-versus-on comparison. The
+study does not establish general capability or the separate completion-regression
+confidence gate.
+
+[Full report and limitations](qwen-sglang-timing.md) ·
+[Offline recomputation bundle](../benchmarks/evidence/qwen-sglang-20261101/README.md)
+
+## Qwen/SGLang: graph Owner Mode quality
+
+The fixed paired comparison did not establish all capability gates.
+Completion and GSM8K passed at the first look; IFEval and MBPP did not
+establish their conservative 2-percentage-point bounds at the fixed maximum.
+Both arms had the same profile active. Eager remains the default and
+the graph path remains opt-in.
+
+[Results, criterion and limits](qwen-sglang-quality.md) ·
+[Aggregate evidence](../benchmarks/results/qwen-sglang-quality-20261102.json)
+
+## GLM Full / TensorFold: distributed recovery
+
+Six fault cases passed in a cohort that later failed a test-harness assertion.
+Separate runs checked history rollover using 1,019 aborted transactions,
+intentional worker loss and recovery from the retained journal after a fresh
+four-rank restart. The tests used an 8,192-token context, two slots and active
+native MTP. This is combined functional evidence, not a throughput or quality
+measurement, and does not turn the earlier failed cohort into a pass.
+
+[Scope and limitations](validation.md#glm-full-distributed-recovery) ·
+[Machine-readable evidence](../benchmarks/results/glm-full-tensorfold-recovery-20261102.json)
+
+## Earlier qualification runs
+
+These are small runs on the configurations named below. They do not establish
+full capability, refusal-rate or maximum-throughput results.
+
+**The DeepSeek measurements below use the retired version 1.0 compact profile.**
 The current native Keys starter uses a different artifact and engine path.
 
 The [30 October 2026 aggregate results](../benchmarks/results/native-qualification-20261030.json)
@@ -13,7 +70,7 @@ include model revisions, engine and profile hashes, recorded settings, sample
 counts and timing values. They omit prompts, response logs and private
 deployment configuration.
 
-## DeepSeek: the same tasks in both modes
+### DeepSeek: the same tasks in both modes
 
 Setup: DeepSeek V4.1 Flash 1017, EXL3 3.5-bpw, TensorFold 1.1.9, four
 RTX PRO 6000 Blackwell Max-Q GPUs at a 325 W power limit per GPU. DSpark
@@ -42,7 +99,7 @@ manifest, limiting reproducibility. The code case completed with the same
 output hash in both modes, but only two of its three generated self-tests
 passed in either mode.
 
-## DeepSeek: 64K input and separate cache reuse
+### DeepSeek: 64K input and separate cache reuse
 
 The same engine binary and checkpoint also ran a 65,536-token context preset,
 a 131,072-token pool and one live slot with DSpark and CUDA graphs active. An
@@ -58,7 +115,7 @@ The model was already loaded. Requests alternated modes; each mode first
 reported no cached prefix, then reused its own. Six-token answers make this a
 cache and retrieval check, with no long-output decode or general reasoning score.
 
-## Gemma: a small GSM8K pilot
+### Gemma: a small GSM8K pilot
 
 TensorFold with Gemma 4 26B A4B, MLX-format 4-bit weights and DFlash active on one
 Linux/NVIDIA DGX Spark scored **14/16 off** and **15/16 on**. MLX describes the
@@ -68,7 +125,7 @@ GSM8K test questions, five examples per question and a 512-token output budget.
 The [Gemma result file](../benchmarks/results/gemma-native-gsm8k-pilot.json) records
 the dataset, evaluator, model and engine revisions and extraction metrics.
 
-## Qwen: runtime checks and a GSM8K pilot
+### Qwen: runtime checks and a GSM8K pilot
 
 Qwen3.8-27B EXL3 2.0-bpw passed 26 TensorFold checks on one SM120 GPU:
 16 prose/code fixture requests, four structured-output/tool cases, and six
@@ -82,11 +139,10 @@ gave the same counts. The [pilot record](../benchmarks/results/qwen-native-gsm8k
 contains the exact model, engine, dataset and evaluator revisions.
 
 The two GSM8K pilots use small, non-random samples and do not establish general
-quality gains or parity. Full refusal-rate, over-refusal and cross-model
-capability results are not published. See [validation](validation.md) for
-other model and engine checks.
+quality gains or parity. Broader capability and cross-model results are not
+published. See [validation](validation.md) for other model and engine checks.
 
-## Qwen SGLang: startup and TTFT
+### Qwen SGLang: startup and TTFT
 
 The BF16 Qwen3.8-27B SGLang 0.5.20 run used DFlash2 on one RTX PRO 6000
 Blackwell Max-Q. Two individual warm streaming requests measured TTFT of
@@ -94,7 +150,7 @@ Blackwell Max-Q. Two individual warm streaming requests measured TTFT of
 with first-time kernel compilation and **33 seconds** with those kernels cached.
 These are individual samples from that deployment, not latency distributions.
 
-## llama.cpp: short prose comparison
+### llama.cpp: short prose comparison
 
 These runs used llama.cpp 0.8.0 at upstream commit
 `8642541b255bfb5dc39cd351a178be09013a55d6`, the pinned Q8_0 checkpoints, one RTX PRO 6000

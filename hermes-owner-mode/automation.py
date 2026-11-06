@@ -15,6 +15,7 @@ from .engine_setup import check_engine_setup, prepare_engine, activate_engine, p
 from .setup_transaction import pending_setup, recover_setup
 from .model_metadata import check_openclaw_request_file
 from .direct_gateway import prepare_gateway, activate_gateway, prior_client_gateway, retire_prior_gateway
+from .resources import setup_command, setup_resource
 
 
 def read_plan(path):
@@ -179,7 +180,7 @@ def run_plan(path, home, found, provision, *, apply=False, activate=False, profi
             details = validate_profile(deployment['profile_path'])
         result.update(engine=deployment, artifact_validated=True, status='engine_prepared', applied=True,
                       activation='engine launch pending' if plan.get('engine_only') else 'engine launch and gateway restart pending')
-        result['next_command'] = ['bash', str(Path(__file__).resolve().parents[1]/'install.sh'),
+        result['next_command'] = [*setup_command(),
                                   '--home', str(home), '--config', str(Path(path).absolute()), '--activate']
         if not activate:
             if plan.get('engine_only') and plan['mode'] == 'always_on':
@@ -204,7 +205,7 @@ def run_plan(path, home, found, provision, *, apply=False, activate=False, profi
                 'artifact_validated':details.get('artifact_valid') is True,
                 'gateway':gateway, 'base_url':gateway['base_url'], 'restart':{},
                 'activation':'Always On gateway launch pending',
-                'next_command':['bash',str(Path(__file__).resolve().parents[1]/'install.sh'),
+                'next_command':[*setup_command(),
                                 '--home',str(home),'--config',str(Path(path).absolute()),'--activate']}
     check = check_engine(plan['base_url'], model['id'], details['name'], plan['engine_key_file'], token)
     result = {**(result if plan.get('engine') else {}), 'status': 'verified', 'applied': False, 'harnesses': plan['harnesses'],
@@ -221,7 +222,7 @@ def run_plan(path, home, found, provision, *, apply=False, activate=False, profi
             # Publishing a direct client now would lose the owned stop handle.
             result.update(status='gateway_transition_prepared', applied=False,
                           activation='existing gateway remains active until --activate',
-                          next_command=['bash', str(Path(__file__).resolve().parents[1]/'install.sh'),
+                          next_command=[*setup_command(),
                                         '--home', str(home), '--config', str(Path(path).absolute()), '--activate'])
             return result
         if apply or activate:
@@ -239,6 +240,9 @@ def run_plan(path, home, found, provision, *, apply=False, activate=False, profi
                           'profile': details['name'], 'key_file': str(plan['engine_key_file']), 'mode': plan['mode']}
                 if plan.get('api_key_file'):
                     client['api_key_file'] = str(plan['api_key_file'])
+            if plan.get('engine'):
+                client.update({key: deployment[key] for key in ('admin_socket', 'admin_staging_directory', 'admin_remote')
+                               if key in deployment})
             if activate:
                 retired = retire_prior_gateway(prior_gateway, result.get('gateway'))
                 if retired is not None:
@@ -251,10 +255,12 @@ def run_plan(path, home, found, provision, *, apply=False, activate=False, profi
         openclaw_install = None
         if 'openclaw' in plan['harnesses']:
             openclaw_install = register_openclaw(home, found['openclaw'].get('executable'),
-                Path(__file__).resolve().parents[1]/'openclaw-owner-mode')
+                setup_resource('openclaw-owner-mode'))
+        control = ({'engine_admin': {key: deployment[key] for key in ('admin_socket', 'admin_staging_directory', 'admin_remote')
+                                    if key in deployment}} if plan.get('engine') else {})
         result.update(provision(home, plan['harnesses'], plan['base_url'], model['id'], details['name'],
             plan['contacts'], plan['tools_default'], plan['engine_key_file'],
-            profile_details=details, engine_check=check, model_info=model, api_key=token, mode=plan['mode']))
+            profile_details=details, engine_check=check, model_info=model, api_key=token, mode=plan['mode'], **control))
         if openclaw_install is not None:result['openclaw_install'] = openclaw_install
         result.update(status='awaiting_restart', applied=True)
     local_harnesses = terminal_harnesses(plan['contacts'])

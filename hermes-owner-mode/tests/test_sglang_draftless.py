@@ -3,16 +3,20 @@
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """Draftless NGRAM capability does not weaken existing draft-model checks."""
 import json
+import io
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from test_setup import wizard
+from test_setup import wizard, make_profile
 from owner_mode.backend_setup import KIT_ROOT, _native_profile_layers, _speculation, prepare_backend
 from owner_mode.model_metadata import declared_request_compatibility
 from owner_mode.setup_runtime import SetupError
+from owner_mode.quickstart import make_default_plan
 
 
 class DraftlessSGLang(unittest.TestCase):
@@ -43,11 +47,35 @@ class DraftlessSGLang(unittest.TestCase):
         with self.assertRaisesRegex(SetupError, 'unsupported'):
             self.check(active={'kind': 'sglang', 'draft_algorithm': 'DFLASH'})
 
-    def test_capability_is_explicit_and_limited_to_ngram(self):
+    def test_capability_must_be_an_explicit_unique_subset(self):
         for value in ('NGRAM', ['DFLASH'], ['NGRAM', 'NGRAM'], ['OTHER'], [{}]):
             with self.subTest(value=value), self.assertRaises(SetupError):
                 self.check(metadata={'speculative_algorithms':['NGRAM','DFLASH'],
                                      'draftless_speculative_algorithms':value})
+
+    def test_registered_draftless_algorithm_needs_no_core_name_change(self):
+        metadata = {'speculative_algorithms': ['CUSTOM_LOOKUP'],
+                    'draftless_speculative_algorithms': ['CUSTOM_LOOKUP']}
+        self.assertEqual(self.check(metadata=metadata), {'draft_algorithm': 'CUSTOM_LOOKUP'})
+
+    def test_default_gemma_plan_uses_ngram_without_prompting_for_draft(self):
+        model = self.home/'model'
+        model.mkdir()
+        (model/'config.json').write_text(json.dumps({'model_type': 'gemma4', 'hidden_size': 2}))
+        profile = make_profile(self.home/'profile')
+        kit = KIT_ROOT/'sglang-gemma4'
+        metadata = json.loads((kit/'backend.json').read_text())
+        args = SimpleNamespace(home=self.home, model_path=model, profile=profile,
+                               engine_bundle=None, backend='sglang', profiles=[],
+                               engine_python=None, devices='0', tools_default='off',
+                               engine_only=True, drafter=None)
+        with (patch('owner_mode.backend_setup._select_kit', return_value=(kit, metadata)),
+              patch('owner_mode.backend_setup.active_speculation', return_value=None),
+              patch('builtins.input', side_effect=AssertionError('Unexpected draft prompt')),
+              redirect_stdout(io.StringIO())):
+            plan = json.loads(make_default_plan(args, {}, wizard.Console(color=False)).read_text())
+        self.assertEqual(plan['engine']['draft_algorithm'], 'NGRAM')
+        self.assertNotIn('draft_model', plan['engine'])
 
     def test_dflash_still_requires_draft_selection(self):
         with (patch('owner_mode.backend_setup.draft_settings', return_value={'draft_model':'unchanged'}) as draft,
@@ -66,7 +94,7 @@ class DraftlessSGLang(unittest.TestCase):
                  'drafting':{'draft_algorithm':'NGRAM'},'arguments':[],'devices':['0']}
         with (patch('owner_mode.backend_setup.check_backend',return_value=checked),
               patch('owner_mode.backend_setup._prepare_runtime',return_value={'python':sys.executable,'source':str(self.home/'source')})):
-            result=prepare_backend(self.home,self.spec,profile,model_id='fixture')
+            result=prepare_backend(self.home,{**self.spec, 'kind':'sglang'},profile,model_id='fixture')
         argv=result['commands'][0]['argv']
         self.assertNotIn('--draft-model',argv)
         self.assertEqual(argv[argv.index('--draft-algorithm')+1],'NGRAM')

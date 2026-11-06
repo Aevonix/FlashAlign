@@ -79,11 +79,13 @@ def attach(runner, profiles):
     for name,(layer,site) in targets.items():
         def hook(module,args,output,layer=layer,site=site):
             if isinstance(output,tuple):
-                first=project(output[0],profiles,layer,site)
+                first=project(output[0],getattr(runner,'_flashalign_lifecycle',profiles),layer,site)
                 return output if first is output[0] else (first,*output[1:])
-            return project(output,profiles,layer,site)
+            return project(output,getattr(runner,'_flashalign_lifecycle',profiles),layer,site)
         modules[name].register_forward_hook(hook)
     runner._flashalign_profiles=profiles
+    from .generations import install_generations
+    install_generations(runner, profiles)
 
 
 def register():

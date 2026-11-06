@@ -166,3 +166,26 @@ values. Engines must explicitly support this weighted operator; accepting the
 file schema does not establish runtime support. Do not average the strengths or
 silently use an ordinary unweighted projection. Standard-mode rows bypass all
 transform arithmetic, and mixed batches modify only the authenticated rows.
+
+## Managed external resources
+
+An engine kit that starts resources outside its process tree declares a
+shutdown helper in `backend.json`:
+
+```json
+{"external_cleanup": {"schema": "flashalign.external-cleanup.v1", "script": "cleanup.py", "timeout_seconds": 35}}
+```
+
+Setup pins the staged helper's checksum. After reaping managed processes, the
+caller runs that helper with `--state-dir` and `--deadline-monotonic`, within
+the deployment's total shutdown budget. The helper must verify resource
+ownership and return JSON with the same schema, `status: "stopped"` and
+`external_resources_stopped: true`. An unknown resource state, timeout or failed
+check leaves shutdown incomplete and preserves its recovery records. A
+deployment that declares an external runtime without this contract must be
+prepared again before managed shutdown can confirm success.
+
+The native Docker helper checks the daemon identity, container ID, image and
+ownership labels recorded by the launcher. An unresolved creation intent does
+not establish that no container exists. Other engines can supply their own
+helper using the same contract; host-only engines need no helper.

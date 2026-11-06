@@ -169,6 +169,8 @@ def test_worker_receipt_rejects_public_directory(tmp_path, monkeypatch):
 def test_launcher_preserves_native_command_arguments(tmp_path, monkeypatch, native_requested):
     from flashalign_native import launch
     called = []
+    monkeypatch.setenv('FLASHALIGN_PROFILE_STATE', '')
+    monkeypatch.setenv('FLASHALIGN_PROFILE_ADMIN_SOCKET', '')
     item = profile()
     fake = SimpleNamespace(name=item.name, meta=item.meta, is_native_wo=native_requested,
                            validate_payload=lambda: called.append('validated'))
@@ -185,7 +187,8 @@ def test_launcher_preserves_native_command_arguments(tmp_path, monkeypatch, nati
                  'FLASHALIGN_DEEPSEEK_KEY_FILE', 'FLASHALIGN_DEEPSEEK_MODEL_ID',
                  'FLASHALIGN_NATIVE_SERVED_MODELS', 'FLASHALIGN_DEEPSEEK_ALLOW_RESEARCH',
                  'FLASHALIGN_NATIVE_SECURE_LAUNCH', 'FLASHALIGN_REPLAY_STORE',
-                 'VLLM_USE_V2_MODEL_RUNNER', 'VLLM_PLUGINS'):
+                     'VLLM_USE_V2_MODEL_RUNNER', 'VLLM_PLUGINS',
+                     'FLASHALIGN_PROFILE_STATE', 'FLASHALIGN_PROFILE_ADMIN_SOCKET'):
         monkeypatch.delenv(name, raising=False)
     tmp_path.chmod(0o700)
     args = ['--profile', str(item.directory), '--key-file', str(tmp_path / 'key'),
@@ -195,8 +198,11 @@ def test_launcher_preserves_native_command_arguments(tmp_path, monkeypatch, nati
         args += ['--native-receipts', str(tmp_path)]
     args += ['--', 'serve', '/model', '--served-model-name', 'test-model', '--port', '1']
     launch.main(args)
-    assert called[-1] == ['vllm', 'serve', '/model', '--served-model-name', 'test-model',
-                          '--port', '1', '--middleware', 'flashalign_native.middleware.OwnerMiddleware']
+    expected = ['vllm', 'serve', '/model', '--served-model-name', 'test-model', '--port', '1']
+    if native_requested:
+        expected += ['--worker-extension-cls', 'flashalign_native.lifecycle.WorkerExtension']
+    expected += ['--middleware', 'flashalign_native.middleware.OwnerMiddleware']
+    assert called[-1] == expected
 
 
 @pytest.mark.parametrize('authenticated,scale,status,effective', [
@@ -230,6 +236,7 @@ def test_native_strength_is_checked_after_authentication(authenticated, scale, s
         await send({'type': 'http.response.body', 'body': b'{}'})
 
     middleware = object.__new__(OwnerMiddleware)
+    middleware.lifecycle = None
     middleware.app = app
     middleware.profiles = {item.name: item}
     middleware.gate = Gate(middleware.profiles, key)
@@ -264,6 +271,7 @@ def exchange(body, *, sign=True, repeat=False):
         await send({'type':'http.response.start','status':200,'headers':[]})
         await send({'type':'http.response.body','body':b'{}'})
     middleware = object.__new__(OwnerMiddleware)
+    middleware.lifecycle = None
     middleware.app=app; middleware.profiles={item.name:item}
     middleware.model=item.meta['model']['id']; middleware.served_models=['synthetic-alias']
     middleware.gate=Gate(middleware.profiles,key)
@@ -309,6 +317,7 @@ def test_replayed_signature_falls_back_and_media_cache_stays_namespaced():
 def test_websocket_and_precomputed_embedding_routes_fail_closed():
     from flashalign_native.middleware import OwnerMiddleware
     middleware=object.__new__(OwnerMiddleware)
+    middleware.lifecycle = None
     sent=[]
     async def unused():raise AssertionError('websocket must not reach the engine')
     async def send(value):sent.append(value)

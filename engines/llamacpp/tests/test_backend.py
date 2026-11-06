@@ -17,7 +17,7 @@ sys.path.insert(0,str(ROOT))
 if os.environ.get('FLASHALIGN_GGUF_PYTHON'):
     sys.path.insert(0,os.environ['FLASHALIGN_GGUF_PYTHON'])
 from launcher import Gate,FieldError,speculative_arguments
-from profile_gguf import read_profile,convert
+from profile_gguf import read_profile,convert,read_snapshot
 import gguf
 
 
@@ -79,6 +79,16 @@ class Authentication(unittest.TestCase):
 
 
 class Conversion(unittest.TestCase):
+    def test_payload_reader_rejects_pipes_symlinks_and_oversized_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/'large').write_bytes(b'12345')
+            with self.assertRaises(ValueError):read_snapshot(root/'large',4)
+            (root/'link').symlink_to(root/'large')
+            with self.assertRaises(OSError):read_snapshot(root/'link',8)
+            os.mkfifo(root/'pipe')
+            with self.assertRaises(ValueError):read_snapshot(root/'pipe',8)
+
     def test_roundtrip_native_container(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);write_profile(root)

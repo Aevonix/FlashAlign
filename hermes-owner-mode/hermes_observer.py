@@ -52,35 +52,48 @@ class _NativeRenderHub:
     """Observe the final host-built message, after local images become data URLs."""
     def __init__(self, runner_type):
         self.runner_type = runner_type
-        self.original = runner_type._native_image_run_message
-        self.original_run = runner_type._run_conversation_with_approval
         self.listeners = weakref.WeakSet()
+        self.wrapper = self.run_wrapper = None
+        self.refresh()
 
-        @wraps(self.original)
+    def refresh(self):
+        if self.runner_type._native_image_run_message is not self.wrapper:
+            self._render_wrapper(self.runner_type._native_image_run_message)
+        if self.runner_type._run_conversation_with_approval is not self.run_wrapper:
+            self._scope_wrapper(self.runner_type._run_conversation_with_approval)
+
+    def _render_wrapper(self, original):
+        self.original = original
+        @wraps(original)
         def render(turn, *args, **kwargs):
-            result = self.original(turn, *args, **kwargs)
-            for observer in list(self.listeners):
-                observer.observe_native_render(turn, result)
+            result = original(turn, *args, **kwargs)
+            if self.wrapper is render:
+                for observer in list(self.listeners):
+                    observer.observe_native_render(turn, result)
             return result
 
         self.wrapper = render
-        runner_type._native_image_run_message = render
+        self.runner_type._native_image_run_message = render
 
-        @wraps(self.original_run)
+    def _scope_wrapper(self, original):
+        self.original_run = original
+        @wraps(original)
         def run(turn, *args, **kwargs):
+            if self.run_wrapper is not run:
+                return original(turn, *args, **kwargs)
             scopes = []
             for observer in list(self.listeners):
                 authority = observer.authority()
                 if authority is not None:
                     scopes.append((authority, authority.render_scope.set((True, None))))
             try:
-                return self.original_run(turn, *args, **kwargs)
+                return original(turn, *args, **kwargs)
             finally:
                 for authority, token in reversed(scopes):
                     authority.render_scope.reset(token)
 
         self.run_wrapper = run
-        runner_type._run_conversation_with_approval = run
+        self.runner_type._run_conversation_with_approval = run
 
 
 class HermesObserver:
@@ -129,11 +142,18 @@ class HermesObserver:
     def attach(self, gateway):
         self.attach_merge()
         self.attach_native_render()
-        if gateway is None or any(row[0] is gateway for row in self.renderers):
+        if gateway is None:
             return
         for name, first_item in [('_prepare_profile_scoped_inbound_message_text', False),
                                  ('_hmwa_apply_message_timestamp', True)]:
             original = getattr(gateway, name, None)
+            previous = next((row for row in self.renderers if row[0] is gateway and row[1] == name), None)
+            if previous is not None:
+                if original is previous[3]:
+                    continue
+                # A host replacement is the new baseline. Never restore the
+                # stale method when this observer is later unloaded.
+                self.renderers.remove(previous)
             if not callable(original):
                 continue
             try:
@@ -157,9 +177,11 @@ class HermesObserver:
                    ('_native_image_run_message', '_run_conversation_with_approval')):
             return
         hub = getattr(runner_type, '_flashalign_native_render_observer', None)
-        if hub is None or runner_type._native_image_run_message is not hub.wrapper:
+        if hub is None or not callable(getattr(hub, 'refresh', None)):
             hub = _NativeRenderHub(runner_type)
             runner_type._flashalign_native_render_observer = hub
+        else:
+            hub.refresh()
         hub.listeners.add(self)
         self.native_hub = hub
 
@@ -209,6 +231,10 @@ class HermesObserver:
             result = original(*args, **kwargs)
 
             def observed(value):
+                # A host decorator can retain an older wrapper. Only the
+                # current attachment may observe, including after awaits.
+                if not any(row[0] is gateway and row[3] is render for row in self.renderers):
+                    return value
                 authority = self.authority()
                 if authority is not None and event is not None:
                     try:
@@ -249,8 +275,10 @@ class HermesObserver:
         if self.native_hub:
             hub = self.native_hub
             hub.listeners.discard(self)
-            if not hub.listeners and hub.runner_type._native_image_run_message is hub.wrapper:
-                hub.runner_type._native_image_run_message = hub.original
+            if not hub.listeners:
+                if hub.runner_type._native_image_run_message is hub.wrapper:
+                    hub.runner_type._native_image_run_message = hub.original
                 if hub.runner_type._run_conversation_with_approval is hub.run_wrapper:
                     hub.runner_type._run_conversation_with_approval = hub.original_run
-                delattr(hub.runner_type, '_flashalign_native_render_observer')
+                if getattr(hub.runner_type, '_flashalign_native_render_observer', None) is hub:
+                    delattr(hub.runner_type, '_flashalign_native_render_observer')

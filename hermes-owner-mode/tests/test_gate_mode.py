@@ -252,6 +252,7 @@ class TestGateDecisions(GateBase):
             response = client.post(self.proxy.base_url("head") + "/chat/completions", json=self.body())
         self.assertEqual(response.status_code, 502)
         self.assertLess(time.monotonic() - started, 5)
+        self.assertTrue(self.audit_recorded.wait(5), "Proxy audit callback did not complete")
         self.assertEqual(self.rows[-1]["status"], 502)
         self.engine = Engine(self.key)  # for tearDown
 

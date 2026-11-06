@@ -5,15 +5,15 @@
 import json
 from pathlib import Path
 
-from .benchmark import SCHEMA, digest, read_json, read_jsonl
+from .benchmark import SCHEMA, digest, read_recording
 
 
 def build_demo(run_path, case_id, output, *, repetition=0, note=""):
     if not isinstance(note, str) or len(note) > 2000:
         raise ValueError("Demo note must be text of at most 2000 characters")
     run_path = Path(run_path)
-    run = read_json(run_path / "run.json")
-    rows = [r for r in read_jsonl(run_path / "records.jsonl")
+    run, recording, _ = read_recording(run_path)
+    rows = [r for r in recording
             if r["case_id"] == case_id and r["phase"] == "measured" and r["repetition"] == repetition]
     if len(rows) != 2 or {r["mode"] for r in rows} != {"off", "profile"}:
         raise ValueError("Select one complete off/profile pair")

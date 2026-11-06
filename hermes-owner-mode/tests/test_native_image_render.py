@@ -151,6 +151,51 @@ class FinalNativeImageBindings(GateBase):
         self.authority.close()
         self.assertIs(self.turn_type._native_image_run_message, self.original)
 
+    def test_replaced_native_scope_is_reattached_on_next_ingress(self):
+        original_run = self.turn_type._run_conversation_with_approval
+        first = self.event(); first.message_id = 'first'
+        self.begin(first, self.image(), render_message_id='first')
+        self.assertTrue(self.policy.is_owner_work('s', 't'))
+        self.turn_type._run_conversation_with_approval = original_run
+        second = self.event(); second.message_id = 'second'
+        self.begin(second, self.image(), render_message_id='second')
+        self.assertTrue(self.policy.is_owner_work('s', 't'))
+        self.authority.close()
+        self.assertIs(self.turn_type._run_conversation_with_approval, original_run)
+        self.assertIs(self.turn_type._native_image_run_message, self.original)
+
+    def test_native_replacement_wrapping_old_observer_does_not_duplicate_or_recurse(self):
+        self.authority.hear(event=self.event(), gateway=self.gateway)
+        old_render = self.turn_type._native_image_run_message
+        old_run = self.turn_type._run_conversation_with_approval
+        calls = []
+        def render(turn):
+            calls.append('render')
+            return old_render(turn)
+        def run(turn, callback):
+            calls.append('run')
+            return old_run(turn, callback)
+        self.turn_type._native_image_run_message = render
+        self.turn_type._run_conversation_with_approval = run
+        with mock.patch.object(self.authority.observer, 'observe_native_render',
+                               wraps=self.authority.observer.observe_native_render) as observe:
+            self.begin(self.event(), self.image())
+        self.assertTrue(self.policy.is_owner_work('s', 't'))
+        self.assertEqual(calls, ['run', 'render'])
+        self.assertEqual(observe.call_count, 1)
+        self.authority.close()
+        self.assertIs(self.turn_type._native_image_run_message, render)
+        self.assertIs(self.turn_type._run_conversation_with_approval, run)
+
+    def test_unload_preserves_unobserved_native_replacement(self):
+        self.authority.hear(event=self.event(), gateway=self.gateway)
+        original_run = self.authority.observer.native_hub.original_run
+        replacement = lambda turn: turn._ctx.rendered
+        self.turn_type._native_image_run_message = replacement
+        self.authority.close()
+        self.assertIs(self.turn_type._native_image_run_message, replacement)
+        self.assertIs(self.turn_type._run_conversation_with_approval, original_run)
+
     def test_concurrent_native_images_do_not_exchange_identity_or_content(self):
         approved, unknown = self.event(), self.event(phone='+15550000012')
         approved.message_id, unknown.message_id = 'approved-image', 'unknown-image'

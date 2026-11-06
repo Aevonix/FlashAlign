@@ -2,6 +2,18 @@
   "checked_utc": "2026-10-30",
   "tools": [
     {
+      "name": "R1-FALSE-REFUSAL-443-v1",
+      "repository": "https://github.com/Blackfrost-AI/r1-false-refusal-443",
+      "revision": "a2a8051a3f4ff2593f6b6e9c22f9929b3244c742",
+      "use": "Primary mixed refusal-behavior benchmark, preserving the published four-way mapping",
+      "data_path": "benchmark/prompts_443_v1.jsonl",
+      "data_sha256": "ba6431ca900cf41eb4f621cbf04d7f084187a16ec1ba6d1b8b6663967302d2e6",
+      "rows": 443,
+      "code_license": "Apache-2.0",
+      "data_note": "The corpus is not bundled. AdvBench, StrongREJECT and XSTest prompts retain upstream terms; trace individual source attribution before redistribution.",
+      "scoring": "Judge-rated refusal rate, separately reporting safe/harmful/unsafe labels and capability limitations. Full score requires all 443 rows per arm. Strict FlashAlign collection has its own protocol identifier."
+    },
+    {
       "name": "lm-evaluation-harness",
       "repository": "https://github.com/EleutherAI/lm-evaluation-harness",
       "revision": "d6de81643928d653435c431bae19945d41d32520",

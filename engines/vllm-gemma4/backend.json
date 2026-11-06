@@ -226,5 +226,11 @@
       "text"
     ]
   },
-  "maximum_rank": 128
+  "maximum_rank": 128,
+  "profile_lifecycle": {
+    "schema": "flashalign.lifecycle-launch.v1",
+    "state_argument": "--profile-state-dir",
+    "socket_argument": "--profile-admin-socket"
+  },
+  "requires_shared_runtime": true
 }

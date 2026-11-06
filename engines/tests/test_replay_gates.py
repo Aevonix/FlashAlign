@@ -9,8 +9,9 @@ import json
 from pathlib import Path
 import sys
 import tempfile
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from flashalign_replay import ReplayStore
 
@@ -36,10 +37,15 @@ class ReplayGates(unittest.TestCase):
         for name in ['vllm', 'vllm-gemma4', 'sglang', 'sglang-qwen4']:
             file = 'core.py' if name.startswith('vllm') else 'gate.py'
             package = 'flashalign_vllm' if name.startswith('vllm') else 'flashalign_sglang'
-            module = load('replay_test_' + name.replace('-', '_'), ENGINES/name/package/file)
+            module_name = 'replay_test_' + name.replace('-', '_')
+            namespace = ModuleType(module_name)
+            namespace.__path__ = [str(ENGINES/name/package)]
+            sys.modules[module_name] = namespace
+            module = load(module_name + '.' + Path(file).stem, ENGINES/name/package/file)
             cls.gates.append((name, module.Gate))
-        load('profile_gguf', ENGINES/'llamacpp/profile_gguf.py')
-        cls.gates.append(('llamacpp', load('replay_test_llamacpp', ENGINES/'llamacpp/launcher.py').Gate))
+        with patch.object(sys, 'path', [str(ENGINES/'llamacpp'), *sys.path]):
+            load('profile_gguf', ENGINES/'llamacpp/profile_gguf.py')
+            cls.gates.append(('llamacpp', load('replay_test_llamacpp', ENGINES/'llamacpp/launcher.py').Gate))
 
     def test_vendored_implementations_match(self):
         bodies = [(ENGINES/path/'flashalign_replay.py').read_bytes() for path in VENDORS]

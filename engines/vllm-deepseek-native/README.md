@@ -1,18 +1,24 @@
 # DeepSeek native matrix backend
 
+The Docker wizard's full-model activation path is not yet qualified end to end.
+See [validation results](../../docs/validation.md#deepseek-native-profile) for
+the separate CPU lifecycle and native GPU checks.
+
 This backend runs the `deepseek41-flash1017-v1` starter with the pinned official DeepSeek V4.1 Flash 1017 checkpoint. Owner requests use the profile's immutable WO-B matrices at the declared layers. Off requests keep the original execution path. The profile is a separate format from compact output projections and accepts strength **1.0 only**.
 
 Use the FlashAlign wizard for installation. It downloads the profile payload into your deployment cache, verifies the model and profile, prepares the exact container image, and starts this launcher. The image is public and pinned by digest; a different image or engine revision is rejected. Standard Hugging Face cache snapshots are supported: only the selected model repository is mounted, retaining its relative blob links. Local materialized model directories also work. Absolute links and links escaping either layout are rejected before activation. Existing compact DeepSeek profiles use the separate `vllm-deepseek` backend.
 
 ## Requirements
 
-- Linux x86_64, Docker Engine and NVIDIA Container Toolkit.
+- Linux x86_64, Docker Engine and NVIDIA Container Toolkit, with readable unified
+  cgroup v2 accounting for the launcher. Missing or unresolvable accounting is
+  rejected before activation.
 - Four SM120 GPUs with at least 94 GiB total and 90 GiB free memory per GPU.
 - The exact model revision in `backend.json`, including its original quantization.
 - 221 GiB available host/cgroup memory before an unattended start. The container is limited to 224 GiB and the supervisor stops it if available host memory falls below 24 GiB. These are the launcher’s current memory limits.
 - Space for the model, the container image, compilation caches and the approximately 1.02 GiB native profile payload.
 
-The default keeps adaptive DSpark7, B12X, FP8 KV cache and the engine's graph path enabled. This pinned model uses FULL decode graphs and eager prefill within its `FULL_AND_PIECEWISE` configuration. Prefix caches are separated by effective profile, payload digest and strength. Switching between already loaded off and owner modes does not restart the engine. Loading a different artifact does.
+The default keeps adaptive DSpark7, B12X, FP8 KV cache and the engine's graph path enabled. This pinned model uses FULL decode graphs and eager prefill within its `FULL_AND_PIECEWISE` configuration. Prefix caches are separated by effective profile, payload digest and strength. Compatible profiles can be staged and activated through the local administration socket without restarting the engine. Changing the model or engine configuration still requires a restart.
 
 Text requests are validated. Image requests remain untested. Other GPU architectures, tensor-parallel sizes, expert/context parallelism, external KV transfer and LoRA are unsupported.
 
@@ -46,3 +52,6 @@ python -m pytest -q engines/vllm-deepseek-native/tests
 ```
 
 Tests cover artifact validation, row selection, authentication, cache isolation and container lifecycle. See [validation results](../../docs/validation.md#deepseek-native-profile) for GPU checks and the remaining Docker GPU/wizard test gap.
+
+See [profile updates](../vllm/LIFECYCLE.md) for generation loading, the local
+administration socket and the container's shared staging directory.

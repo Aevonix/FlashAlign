@@ -316,7 +316,7 @@ class EnginePythonSelection(unittest.TestCase):
         versions = {'/system/python': (3, 10, 16), '/local/python3.12': (3, 12, 10)}
         with (mock.patch('owner_mode.backend_setup.sys._base_executable', '/system/python'),
               mock.patch('owner_mode.backend_setup.sys.executable', '/system/python'),
-              mock.patch('owner_mode.backend_setup.shutil.which', side_effect=lambda name: '/local/'+name if name == 'python3.12' else None),
+              mock.patch('owner_mode.backend_setup.shutil.which', side_effect=lambda name, **_: '/local/'+name if name == 'python3.12' else None),
               mock.patch('owner_mode.backend_setup._python_version', side_effect=versions.get)):
             result = select_backend_python({}, self.metadata)
         self.assertEqual(result['executable'], '/local/python3.12')

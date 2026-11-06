@@ -1,0 +1,142 @@
+{
+  "schema": "flashalign.installed-wheel-smoke.v1",
+  "flashalign_revision": "e7d838449c1311cde0123b2964e6c367b2d3888e",
+  "tensorfold_revision": "a7ed78d1c16fc9745f7540c504ebf87289be5e9a",
+  "wheel_sha256": "3e9db98455d01ef433a2bebe0bfb6e14cbb0a1c27cdf729a6c9e2cadaec8f11d",
+  "request_settings": {
+    "temperature": 0,
+    "max_tokens": 512,
+    "enable_thinking": false
+  },
+  "scope": "Four serial synthetic requests per fresh installed-wheel deployment; setup, signed profile identity, separate cold/warm caches, active speculation and cleanup. No maximum-context input, throughput, answer-quality or broad reliability claim.",
+  "runs": [
+    {
+      "model": "Qwen3.8-27B",
+      "checkpoint": {
+        "id": "TensorFold/Qwen3.8-27B-MLX-4bit",
+        "revision": "22d8d538154e0e5b6f8dcb1fcc74a60a0798104c"
+      },
+      "format": "MLX 4-bit",
+      "hardware": "one NVIDIA DGX Spark",
+      "configured_context_tokens": 65536,
+      "configured_slots": 2,
+      "request_concurrency": 1,
+      "speculation": "DFlash",
+      "drafter_bits": 4,
+      "profile": "qwen38-27b-v1",
+      "profile_digest": "6755c106a67a3f0f2f03496b6a3b4f1a1f50613d21626d39f54a34c844c6fe3b",
+      "profile_strength": 1.0,
+      "requests": [
+        {
+          "mode": "off",
+          "finish_reason": "stop",
+          "prompt_tokens": 6204,
+          "completion_tokens": 66,
+          "cached_tokens": 0,
+          "drafted_tokens": 75,
+          "accepted_tokens": 61
+        },
+        {
+          "mode": "owner",
+          "finish_reason": "stop",
+          "prompt_tokens": 6204,
+          "completion_tokens": 66,
+          "cached_tokens": 0,
+          "drafted_tokens": 75,
+          "accepted_tokens": 60
+        },
+        {
+          "mode": "off",
+          "finish_reason": "stop",
+          "prompt_tokens": 6204,
+          "completion_tokens": 66,
+          "cached_tokens": 4096,
+          "drafted_tokens": 75,
+          "accepted_tokens": 61
+        },
+        {
+          "mode": "owner",
+          "finish_reason": "stop",
+          "prompt_tokens": 6204,
+          "completion_tokens": 66,
+          "cached_tokens": 4096,
+          "drafted_tokens": 90,
+          "accepted_tokens": 60
+        }
+      ],
+      "expected_profile_and_generation_verified": true,
+      "installed_files_verified": 375,
+      "installed_setup_assets_verified": 289,
+      "public_shutdown_passed": true,
+      "independent_cleanup": {
+        "all_witnessed_processes_gone": true,
+        "locks_released": true,
+        "gpu_compute_processes_remaining": 0
+      }
+    },
+    {
+      "model": "Gemma 4 26B A4B",
+      "checkpoint": {
+        "id": "mlx-community/gemma-4-26b-a4b-it-4bit",
+        "revision": "0d77464eeb233a2da68ebf9d7dc4edaac7db956d"
+      },
+      "format": "MLX 4-bit",
+      "hardware": "one NVIDIA DGX Spark",
+      "configured_context_tokens": 131072,
+      "configured_slots": 2,
+      "request_concurrency": 1,
+      "speculation": "DFlash",
+      "drafter_bits": 4,
+      "profile": "gemma4-26b-a4b-v1",
+      "profile_digest": "5b3a8c3fe7db7c0045d8d6674983eb98651713906cbd48da442e2d1942d108e1",
+      "profile_strength": 1.0,
+      "requests": [
+        {
+          "mode": "off",
+          "finish_reason": "stop",
+          "prompt_tokens": 1344,
+          "completion_tokens": 66,
+          "cached_tokens": 0,
+          "drafted_tokens": 91,
+          "accepted_tokens": 59
+        },
+        {
+          "mode": "owner",
+          "finish_reason": "stop",
+          "prompt_tokens": 1344,
+          "completion_tokens": 66,
+          "cached_tokens": 0,
+          "drafted_tokens": 62,
+          "accepted_tokens": 61
+        },
+        {
+          "mode": "off",
+          "finish_reason": "stop",
+          "prompt_tokens": 1344,
+          "completion_tokens": 66,
+          "cached_tokens": 1337,
+          "drafted_tokens": 64,
+          "accepted_tokens": 59
+        },
+        {
+          "mode": "owner",
+          "finish_reason": "stop",
+          "prompt_tokens": 1344,
+          "completion_tokens": 66,
+          "cached_tokens": 1337,
+          "drafted_tokens": 56,
+          "accepted_tokens": 56
+        }
+      ],
+      "expected_profile_and_generation_verified": true,
+      "installed_files_verified": 375,
+      "installed_setup_assets_verified": 289,
+      "public_shutdown_passed": true,
+      "independent_cleanup": {
+        "all_witnessed_processes_gone": true,
+        "locks_released": true,
+        "gpu_compute_processes_remaining": 0
+      }
+    }
+  ]
+}

@@ -94,11 +94,14 @@ class Recovery(unittest.TestCase):
     def test_interrupted_integration_copy_can_retry_without_overwriting_source(self):
         source=self.root/'kit';source.mkdir();(source/'first').write_text('first');(source/'second').write_text('second')
         target=self.root/'integration'
-        def fail(_source,destination,**_):
-            Path(destination).mkdir();(Path(destination)/'first').write_text('first');raise KeyboardInterrupt
-        with mock.patch.object(backend_setup.shutil,'copytree',side_effect=fail):
+        copy=backend_setup.shutil.copy2
+        def fail(source,destination,**kwargs):
+            copy(source,destination,**kwargs)
+            raise KeyboardInterrupt
+        with mock.patch.object(backend_setup.shutil,'copy2',side_effect=fail):
             with self.assertRaises(KeyboardInterrupt):backend_setup._copy_kit(source,target)
         self.assertFalse(target.exists())
+        self.assertEqual(list(self.root.glob('integration.new-*')),[])
         backend_setup._copy_kit(source,target)
         self.assertEqual((target/'second').read_text(),'second')
         self.assertEqual((source/'first').read_text(),'first')

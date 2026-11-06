@@ -1,0 +1,247 @@
+{
+  "comparison": {
+    "both_arms_profile_active": true,
+    "candidate_graph_owner": "FlashAlign 1.2 opt-in graph path",
+    "configured_context_tokens": 65536,
+    "engine": "SGLang 0.5.20",
+    "hardware": "Two NVIDIA RTX PRO 6000 Blackwell Max-Q GPUs; separate concurrent engines per pair",
+    "model": "Qwen/Qwen3.8-27B",
+    "profile": "qwen38-27b-v1",
+    "profile_strength": 1.0,
+    "released_eager_owner": "FlashAlign 1.1.1",
+    "request_concurrency_per_arm": 1,
+    "seed": 1729,
+    "speculation": "DFlash2, eight draft tokens",
+    "temperature": 0,
+    "thinking": false,
+    "weights": "BF16"
+  },
+  "criterion": {
+    "candidate_only_wins_offset_losses_for_gate": false,
+    "capability_difference_lower_bound": "Negative of the paired-loss probability upper bound",
+    "capability_loss_event": "Released eager answer correct and candidate graph answer incorrect",
+    "capability_pass_requires_upper_bound_below": 0.02,
+    "completion_loss_event": "Released eager completes and candidate graph fails completion",
+    "method": "Exact one-sided binomial inversion of paired loss probability",
+    "new_completion_failure_pass_requires_upper_bound_below": 0.01,
+    "paired_count_order": "Released eager success, candidate graph success"
+  },
+  "date": "2026-11-02",
+  "default_policy": {
+    "default_promotion_supported": false,
+    "eager_remains_default": true,
+    "graph_remains_opt_in": true
+  },
+  "design": {
+    "alpha_spending": [
+      0.01,
+      0.04
+    ],
+    "completed_paired_process_blocks": 10,
+    "fixed_maximum_metrics": [
+      "ifeval",
+      "mbpp"
+    ],
+    "original_attempts_per_arm": 2040,
+    "original_records": 4080,
+    "passing_metrics_stopped_at_first_look": [
+      "completion",
+      "gsm8k"
+    ],
+    "prespecified_looks": 2,
+    "response_regenerations": 0,
+    "third_look": false
+  },
+  "final_decision": {
+    "all_primary_gates_passed": false,
+    "gates": {
+      "completion": {
+        "A_success": 500,
+        "B_success": 500,
+        "accuracy_difference_lower_bound": null,
+        "alpha": 0.01,
+        "loss_probability_upper_bound": 0.009168055107232424,
+        "losses": 0,
+        "margin": 0.01,
+        "n": 500,
+        "paired_counts": {
+          "11": 500
+        },
+        "point_difference": 0.0,
+        "status": "passed",
+        "stopped_at_look": 1,
+        "wins": 0
+      },
+      "gsm8k": {
+        "A_success": 480,
+        "B_success": 482,
+        "accuracy_difference_lower_bound": -0.009168055107232424,
+        "alpha": 0.01,
+        "loss_probability_upper_bound": 0.009168055107232424,
+        "losses": 0,
+        "margin": 0.02,
+        "n": 500,
+        "paired_counts": {
+          "00": 18,
+          "01": 2,
+          "11": 480
+        },
+        "point_difference": 0.004,
+        "status": "passed",
+        "stopped_at_look": 1,
+        "wins": 2
+      },
+      "ifeval": {
+        "A_success": 438,
+        "B_success": 443,
+        "accuracy_difference_lower_bound": -0.02731635565439231,
+        "alpha": 0.04,
+        "loss_probability_upper_bound": 0.02731635565439231,
+        "losses": 8,
+        "margin": 0.02,
+        "n": 541,
+        "paired_counts": {
+          "00": 90,
+          "01": 13,
+          "10": 8,
+          "11": 430
+        },
+        "point_difference": 0.009242144177449169,
+        "status": "margin_not_established",
+        "stopped_at_look": 2,
+        "wins": 13
+      },
+      "mbpp": {
+        "A_success": 361,
+        "B_success": 361,
+        "accuracy_difference_lower_bound": -0.024381296406980488,
+        "alpha": 0.04,
+        "loss_probability_upper_bound": 0.024381296406980488,
+        "losses": 6,
+        "margin": 0.02,
+        "n": 499,
+        "paired_counts": {
+          "00": 132,
+          "01": 6,
+          "10": 6,
+          "11": 355
+        },
+        "point_difference": 0.0,
+        "status": "margin_not_established",
+        "stopped_at_look": 2,
+        "wins": 6
+      }
+    },
+    "look": 2,
+    "status": "margin_not_established"
+  },
+  "first_look": {
+    "gates": {
+      "completion": {
+        "A_success": 500,
+        "B_success": 500,
+        "accuracy_difference_lower_bound": null,
+        "alpha": 0.01,
+        "loss_probability_upper_bound": 0.009168055107232424,
+        "losses": 0,
+        "margin": 0.01,
+        "n": 500,
+        "paired_counts": {
+          "11": 500
+        },
+        "point_difference": 0.0,
+        "status": "passed",
+        "stopped_at_look": 1,
+        "wins": 0
+      },
+      "gsm8k": {
+        "A_success": 480,
+        "B_success": 482,
+        "accuracy_difference_lower_bound": -0.009168055107232424,
+        "alpha": 0.01,
+        "loss_probability_upper_bound": 0.009168055107232424,
+        "losses": 0,
+        "margin": 0.02,
+        "n": 500,
+        "paired_counts": {
+          "00": 18,
+          "01": 2,
+          "11": 480
+        },
+        "point_difference": 0.004,
+        "status": "passed",
+        "stopped_at_look": 1,
+        "wins": 2
+      },
+      "ifeval": {
+        "A_success": 197,
+        "B_success": 198,
+        "accuracy_difference_lower_bound": -0.05728928703805837,
+        "alpha": 0.01,
+        "loss_probability_upper_bound": 0.05728928703805837,
+        "losses": 6,
+        "margin": 0.02,
+        "n": 250,
+        "paired_counts": {
+          "00": 46,
+          "01": 7,
+          "10": 6,
+          "11": 191
+        },
+        "point_difference": 0.004,
+        "status": "margin_not_established",
+        "stopped_at_look": null,
+        "wins": 7
+      },
+      "mbpp": {
+        "A_success": 177,
+        "B_success": 179,
+        "accuracy_difference_lower_bound": -0.03319589661835498,
+        "alpha": 0.01,
+        "loss_probability_upper_bound": 0.03319589661835498,
+        "losses": 2,
+        "margin": 0.02,
+        "n": 250,
+        "paired_counts": {
+          "00": 69,
+          "01": 4,
+          "10": 2,
+          "11": 175
+        },
+        "point_difference": 0.008,
+        "status": "margin_not_established",
+        "stopped_at_look": null,
+        "wins": 4
+      }
+    },
+    "look": 1,
+    "status": "continue_prespecified_maximum"
+  },
+  "limits": [
+    "Fixed workload and declared conditional binomial working model.",
+    "Prompt independence is an assumption; benchmark families and process blocks may be correlated.",
+    "Historical model-training or profile-selection overlap cannot be excluded.",
+    "Frozen chat and MBPP setup adaptations do not assert identical unmodified leaderboard conditions.",
+    "One model, profile, engine and hardware configuration; no general capability parity or other-engine qualification.",
+    "The frozen prepared paths do not qualify every later source build.",
+    "No edited-checkpoint equivalence, full-context reasoning or distribution-free or cluster-robust coverage claim.",
+    "Timing and stock-versus-profile refusal results are separate experiments.",
+    "Only aggregate outcomes and method metadata are exported; prompts, answers and private collection receipts are omitted."
+  ],
+  "objective_scoring": {
+    "code_execution": "Fresh nonroot network-disabled, read-only, resource-bounded sandbox",
+    "completion": "Valid nonempty final protocol completion",
+    "gsm8k": "Strict numeric exact match with frozen chat collection adapter",
+    "ifeval": "Strict prompt accuracy; all required instructions must pass",
+    "llm_judge_used": false,
+    "mbpp": "One generated program per distinct prompt; source setup precedes reference assertions",
+    "mbpp_distinct_prompt_rule": "One duplicate source prompt excluded from independent primary units before outcomes"
+  },
+  "schema": "flashalign.paired-owner-quality.v1",
+  "scoring_infrastructure": {
+    "model_responses_regenerated": false,
+    "original_failed_offline_attempt_retained": true,
+    "permission_only_input_readability_correction": true,
+    "scoring_or_statistic_source_changed": false
+  }
+}

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import signal
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -308,27 +309,94 @@ class DirectGateway(unittest.TestCase):
         self.assertFalse((Path(stopped_new[0]['state'])/'running.json').exists())
         self.assertTrue((Path(previous['state'])/'running.json').exists())
 
-    def test_initial_identity_failure_keeps_a_recoverable_ownership_receipt(self):
-        original=direct_gateway.lifecycle.process_identity;calls=0
-        def identity(pid,**kwargs):
-            nonlocal calls
-            calls+=1
-            return None if calls==1 else original(pid,**kwargs)
-        with mock.patch.object(direct_gateway.lifecycle,'process_identity',side_effect=identity):
-            with self.assertRaisesRegex(SetupError,'cleanup is incomplete'):
+    def start_thread(self, target):
+        results=[]
+        def run():
+            try:results.append(target())
+            except BaseException as error:results.append(error)
+        thread=threading.Thread(target=run);thread.start()
+        return thread,results
+
+    def test_lost_spawn_ack_uses_shared_intent_cleanup(self):
+        units=direct_gateway.lifecycle._native_units
+        original=units.start
+        def lost_ack(request):
+            original(request)
+            raise OSError('simulated acknowledgement failure')
+        with mock.patch.object(units,'start',side_effect=lost_ack):
+            with self.assertRaisesRegex(SetupError,'launch failed'):
                 self.activate()
-        marker=Path(self.deployment['state'])/'running.json'
-        self.assertTrue(marker.exists())
-        self.assertTrue(read_private(marker)['startup_identity_unverified'])
-        # Recover only from the child's matching supervisor receipt and the
-        # real kernel birth identity. Never signal the fallback PID alone.
-        receipt=marker.parent/'supervisor-0.json';deadline=time.monotonic()+4
-        while time.monotonic()<deadline and not receipt.exists():time.sleep(.02)
-        saved=read_private(receipt);root=saved['supervisor']
-        self.assertEqual(original(root['pid']),root)
-        private_json(marker,{'processes':[root],'owned_members':[root],
-                             'supervisors':[{'process':root,'receipt':receipt.name}]})
-        self.assertEqual(stop_gateway(self.deployment)['status'],'stopped')
+        state=Path(self.deployment['state'])
+        attempt=direct_gateway.lifecycle._activation(state)
+        self.assertEqual(attempt['phase'],'stopped')
+        self.assertFalse((state/'running.json').exists())
+        self.assertTrue(all(row.get('all_children_reaped') and not row.get('supervisor_alive')
+                            for row in direct_gateway.lifecycle._unit_states(attempt)))
+
+    def test_concurrent_gateway_start_has_one_owned_command(self):
+        units=direct_gateway.lifecycle._native_units
+        original=units.start;entered=threading.Event();release=threading.Event()
+        def start(request):
+            entered.set()
+            if not release.wait(8):raise AssertionError('Missing fixture release')
+            return original(request)
+        thread=None
+        try:
+            with mock.patch.object(units,'start',side_effect=start) as starts:
+                thread,results=self.start_thread(lambda:activate_gateway(self.deployment,timeout=8))
+                self.assertTrue(entered.wait(5))
+                with self.assertRaisesRegex(SetupError,'pending'):
+                    activate_gateway(self.deployment,timeout=2)
+                release.set();thread.join(10)
+            self.assertFalse(thread.is_alive());self.assertEqual(starts.call_count,1)
+            self.assertEqual(results[0]['status'],'running')
+            self.assertEqual(self.request().headers['X-Owner-Mode-Effective'],'custom-owner')
+        finally:
+            release.set()
+            if thread is not None:thread.join(10)
+
+    def test_stop_interrupts_readiness_and_stale_success_cannot_replace_new_owner(self):
+        original=direct_gateway._ready_and_profile
+        entered=threading.Event();release=threading.Event();calls=[];thread=None
+        def readiness(*args):
+            result=original(*args);calls.append(1)
+            if len(calls)==1:
+                entered.set()
+                if not release.wait(10):raise AssertionError('Missing fixture release')
+            return result
+        try:
+            with mock.patch.object(direct_gateway,'_ready_and_profile',side_effect=readiness):
+                thread,results=self.start_thread(lambda:activate_gateway(self.deployment,timeout=15))
+                self.assertTrue(entered.wait(8))
+                state=Path(self.deployment['state'])
+                old=direct_gateway.lifecycle._activation(state)['nonce']
+                begin=time.monotonic()
+                self.assertEqual(stop_gateway(self.deployment)['status'],'stopped')
+                self.assertLess(time.monotonic()-begin,3)
+                newer=activate_gateway(self.deployment,timeout=8)
+                new=direct_gateway.lifecycle._activation(state)['nonce']
+                self.assertNotEqual(old,new)
+                release.set();thread.join(10)
+            self.assertIsInstance(results[0],SetupError)
+            self.assertEqual(direct_gateway.lifecycle._activation(state)['nonce'],new)
+            self.assertEqual(read_private(state/'deployment.json'),newer)
+            self.assertEqual(read_private(state/'running.json')['nonce'],new)
+            self.assertEqual(self.request().headers['X-Owner-Mode-Effective'],'custom-owner')
+        finally:
+            release.set()
+            if thread is not None:thread.join(10)
+
+    def test_shared_supervision_sources_are_in_the_verified_runtime(self):
+        config=read_private(self.deployment['config'])
+        for name in ('engine_setup.py','engine_supervisor.py','native_remote.py'):
+            self.assertIn(name,config['runtime_hashes'])
+            self.assertEqual(direct_gateway.lifecycle.digest(Path(self.deployment['runtime'])/name),
+                             config['runtime_hashes'][name])
+        path=Path(self.deployment['runtime'])/'native_remote.py'
+        path.write_text('# changed shared helper\n')
+        with self.assertRaisesRegex(SetupError,'runtime changed'):
+            self.activate()
+        self.assertFalse((Path(self.deployment['state'])/'activation.json').exists())
 
 
 if __name__=='__main__':unittest.main()

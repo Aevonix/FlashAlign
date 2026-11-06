@@ -2,5 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 from pathlib import Path
 import sys
+import types
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+if 'owner_mode' not in sys.modules:
+    module = types.ModuleType('owner_mode')
+    module.__path__ = [str(Path(__file__).resolve().parents[3] / 'hermes-owner-mode')]
+    sys.modules['owner_mode'] = module

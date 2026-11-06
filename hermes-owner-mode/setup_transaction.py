@@ -18,6 +18,7 @@ from .setup_runtime import SetupError
 
 _CURRENT = ContextVar('flashalign_setup_transaction', default=None)
 FILES = {'.hermes/config.yaml', '.openclaw/openclaw.json',
+         '.config/flashalign/client.json', '.config/flashalign/engine-client.json',
          '.config/owner-mode/approvals.json', '.config/owner-mode/upstream-api.key',
          '.config/owner-mode/openclaw-bridge.json', '.config/owner-mode/setup-result.json'}
 TREES = {'.hermes/plugins/owner-mode', '.openclaw/extensions/owner-mode'}

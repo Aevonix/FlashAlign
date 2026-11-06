@@ -31,6 +31,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--profile', type=Path, required=True)
     parser.add_argument('--key-file', type=Path, required=True)
+    parser.add_argument('--profile-state-dir', type=Path)
+    parser.add_argument('--profile-admin-socket', type=Path)
     parser.add_argument('--replay-file', type=Path, required=True)
     parser.add_argument('--canonical-model', choices=[MODEL], required=True)
     parser.add_argument('--allow-research', action='store_true', help=argparse.SUPPRESS)
@@ -41,7 +43,7 @@ def main(argv=None):
     native = args.native[1:] if args.native[:1] == ['--'] else args.native
     if native[:1] != ['serve']:
         parser.error('Pass the original native serve command after --')
-    if '--middleware' in native:
+    if any(x.split('=')[0] in ('--middleware', '--worker-extension-cls') for x in native):
         parser.error('The initial integration owns its one API middleware declaration')
     names = served_names(native)
     load_key(args.key_file)
@@ -54,6 +56,14 @@ def main(argv=None):
                 or directory.stat().st_mode & 0o077):
             parser.error('Native profiles require --native-receipts with a private absolute directory')
         os.environ['FLASHALIGN_NATIVE_RECEIPTS'] = str(directory.resolve())
+    if native_requested:
+        state = (args.profile_state_dir or args.key_file.resolve().parent / 'flashalign-runtime').resolve()
+        state.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if state.stat().st_uid != os.getuid() or state.stat().st_mode & 0o077:
+            parser.error('Profile state directory must be private to its owner')
+        socket = (args.profile_admin_socket or state / 'admin.sock').absolute()
+        os.environ.update(FLASHALIGN_PROFILE_STATE=str(state), FLASHALIGN_PROFILE_ADMIN_SOCKET=str(socket))
+        native.extend(['--worker-extension-cls', 'flashalign_native.lifecycle.WorkerExtension'])
     for profile in profiles.values():
         if profile.meta['model']['id'] != args.canonical_model:
             parser.error('The profile canonical model differs')

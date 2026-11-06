@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 from types import ModuleType
 import unittest
+from unittest.mock import AsyncMock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,7 +20,7 @@ def wrapper(path):
     package.__path__ = [str(path.parent)]
     sys.modules[name] = package
     core = ModuleType(name + '.core')
-    for field in ('Gate', 'FieldError', 'cache_key', 'load_key', 'load_profiles'):
+    for field in ('Gate', 'Selection', 'FieldError', 'cache_key', 'load_key', 'load_profiles'):
         setattr(core, field, ValueError if field == 'FieldError' else object())
     sys.modules[core.__name__] = core
     replay = ModuleType(name + '.flashalign_replay')
@@ -63,6 +64,7 @@ class ASGIBoundaries(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(reached, [])
                     self.assertEqual(sent, [{'type': 'websocket.close', 'code': 1008}])
 
+    @patch.dict('os.environ', {'FLASHALIGN_PROFILE_STATE': ''})
     async def test_lifespan_is_preserved_for_server_startup(self):
         for path in WRAPPERS:
             with self.subTest(wrapper=str(path.relative_to(ROOT))):
@@ -77,6 +79,31 @@ class ASGIBoundaries(unittest.IsolatedAsyncioTestCase):
                     sent.append(message)
                 middleware = object.__new__(wrapper(path))
                 middleware.app = app
+                middleware.lifecycle = None
                 await middleware({'type': 'lifespan'}, receive, send)
                 self.assertEqual(reached, ['lifespan'])
                 self.assertEqual(sent, [{'type': 'lifespan.startup.complete'}])
+
+    async def test_lifecycle_initialization_failure_prevents_successful_startup(self):
+        checked = 0
+        for path in WRAPPERS:
+            kind = wrapper(path)
+            if not hasattr(kind, 'initialize'):
+                continue
+            with self.subTest(wrapper=str(path.relative_to(ROOT))):
+                checked += 1
+                sent = []
+                async def app(scope, receive, send):
+                    await send({'type': 'lifespan.startup.complete'})
+                async def receive():
+                    raise AssertionError('Synthetic startup needs no input')
+                async def send(message):
+                    sent.append(message)
+                middleware = object.__new__(kind)
+                middleware.app = app
+                middleware.lifecycle = None
+                middleware.initialize = AsyncMock(side_effect=RuntimeError('Synthetic initialization failure'))
+                await middleware({'type': 'lifespan'}, receive, send)
+                middleware.initialize.assert_awaited_once()
+                self.assertEqual([item['type'] for item in sent], ['lifespan.startup.failed'])
+        self.assertGreaterEqual(checked, 3)

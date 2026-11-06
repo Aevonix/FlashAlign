@@ -329,7 +329,8 @@ class DeepseekV4DecoderLayer(nn.Module):
             else:
                 native_mode = descriptor.alignment_case
                 if (native_mode != 0 and
-                        descriptor.alignment_profile_digest != native.profile.digest):
+                        descriptor.alignment_profile_digest !=
+                        getattr(native, 'graph_digest', native.profile.digest)):
                     raise ValueError("Native graph descriptor profile digest mismatch")
             x = self.attn(
                 positions, x, None, global_kv_ready=global_kv_ready,

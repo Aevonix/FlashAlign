@@ -1,7 +1,7 @@
 {
   "models/deepseek_v4_1/nvidia/model.py": {
     "original_sha256": "dafb69b36e68c36ba8878c6033e1bc94439526c3d1d9c83edd7c153ad2ba88c8",
-    "overlay_sha256": "4f7bf68b84acc2ba86a2c01fee2da91d01ea4a983a67858bbaac0ba38e500356"
+    "overlay_sha256": "8cf0f3552cbd18e20feec01be84b0273db4d7811c2dd3205144e012dcd163e8c"
   },
   "models/deepseek_v4_1/common/engram.py": {
     "original_sha256": "efda07bdd54d947852cdf75095905033038cf2a4425d7b234d092a9253c7c811",
@@ -13,7 +13,7 @@
   },
   "flashalign_native_graph.py": {
     "original_sha256": null,
-    "overlay_sha256": "a7e3fd9378d7bc741722dd3ad79e38a9cd5883c407714f79dfda81dedd7a6db9"
+    "overlay_sha256": "ddefe8695765e5b414e151bb1c2ad602a2bbbe0a11f2b430dcc2e3c50b0d2942"
   },
   "forward_context.py": {
     "original_sha256": "0af788757c1c1a7f390c20f611b61f13192ef50667bd2f3ef79c903e6b29721f",
@@ -33,6 +33,6 @@
   },
   "models/deepseek_v4_1/attention.py": {
     "original_sha256": "a28bce174d1428bea450878d61f9036f96197a680284e276bf2f194ee0de854d",
-    "overlay_sha256": "d045d138b1fd12de260c162c5c909883d9c0fbbbe79677ddeb4251fc99fe2c5d"
+    "overlay_sha256": "588eff33d26f62628413dc6c71aaf1f2fbf543191bf5b138de61dfe0183e6239"
   }
 }

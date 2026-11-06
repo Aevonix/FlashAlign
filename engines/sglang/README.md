@@ -49,9 +49,10 @@ fallback disables it.
   is Qwen3.8-27B at the revision declared in its profile.
 - Standard projection profiles with embedding, attention and dense MLP output
   sites. Unsupported tensor sites or transforms stop startup.
-- Eager execution, with both prefill and decode CUDA graph backends disabled.
-  This restriction leaves DFlash2 speculation active. CUDA graphs and
-  `torch.compile` require a separate implementation and validation.
+- Eager execution by default. `--cuda-graphs` enables full decode and breakable
+  prefill graphs with a fused rank-one operator. Profiles outside the fused
+  kernel coverage use eager execution for that batch. DFlash2 remains active.
+  `torch.compile` composition is not supported.
 - Existing in-memory radix-cache behavior with a server-created namespace
   containing the profile digest and exact strength. Owner and standard requests
   cannot share a namespace. LoRA composition, session-cache reuse, HiCache and
@@ -100,3 +101,42 @@ checks, and [measured results](../../docs/benchmark-results.md) for timing sampl
 
 Upstream SGLang source retains its Apache 2.0 notices. FlashAlign runtime additions
 follow the surrounding FlashAlign repository's license.
+
+## Live profile updates
+
+Start with both `--lifecycle-state /private/flashalign/state` and
+`--admin-socket /private/flashalign/admin.sock` to enable live profile management.
+The socket parent must be an owned mode-0700 directory. The socket accepts only
+processes running as its owner; the request-signing key does not authorize admin
+operations.
+
+The local HTTP interface provides `GET /status` and `POST /operations`. Operations
+are `stage` (local `path`), `activate` or `rollback` (`alias`, `generation`,
+`expected_revision`), `deactivate` (`alias`, `expected_revision`), `retire`
+(`generation`), `recover`, and `evict_cache`.
+Each request resolves its alias to an immutable generation. Old requests and
+cache entries retain that generation after a switch. Retirement waits for all
+references and GPU work to finish. Explicit cache eviction requires an idle
+scheduler and keeps caching enabled afterward. Updates require acknowledgement
+from every tensor-parallel worker, including preparation of native draft runners
+where the model uses them.
+
+`GET /flashalign/capabilities` and `GET /flashalign/status` are read-only public
+metadata endpoints. Loaded generations and worker acknowledgements describe
+runtime state; they are not evidence of numerical or behavioral parity.
+
+## Graph execution
+
+Add `--cuda-graphs` to use full decode and breakable prefill CUDA graphs.
+`FLASHALIGN_GRAPH_PROFILE_SLOTS` bounds the simultaneously resident fast slots
+(default 8). `FLASHALIGN_GRAPH_MAX_ROWS` bounds the fixed row table (default
+65536). `FLASHALIGN_GRAPH_BANK_BUDGET` limits the planned tensor payload of
+these banks (default 64 MiB). An over-budget plan is rejected before the banks
+are created. CUDA allocator overhead and retained blocks are separate.
+
+Each slot belongs to one immutable generation. Higher-rank profiles, profiles
+with additional uncaptured writers, batches larger than the row table, and
+profiles exceeding the fast-slot capacity use the existing eager operator for
+the entire affected batch. Other batches can continue using graphs. Neither
+path changes the selected speculative decoding algorithm. Retired slots are
+reclaimed only after request/cache references and GPU work are complete.

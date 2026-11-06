@@ -71,6 +71,8 @@ def main():
     parser.add_argument('--model', required=True)
     parser.add_argument('--profile', action='append', required=True)
     parser.add_argument('--key-file', required=True)
+    parser.add_argument('--lifecycle-state', type=Path, help='Private durable profile state directory')
+    parser.add_argument('--admin-socket', type=Path, help='Owner-UID Unix administration socket')
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--state', type=Path, required=True)
     parser.add_argument('--stock-receipt', type=Path, required=True)
@@ -80,6 +82,12 @@ def main():
     parser.add_argument('--draft-algorithm', choices=('EAGLE', 'NEXTN'), default='EAGLE')
     parser.add_argument('--print-command', action='store_true')
     args, extra = parser.parse_known_args()
+    if bool(args.lifecycle_state) != bool(args.admin_socket):
+        parser.error('--lifecycle-state and --admin-socket must be supplied together')
+    if args.lifecycle_state:
+        args.lifecycle_state.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.environ['FLASHALIGN_LIFECYCLE_STATE'] = str(args.lifecycle_state.resolve())
+        os.environ['FLASHALIGN_ADMIN_SOCKET'] = str(args.admin_socket.absolute())
     if extra[:1] == ['--']:
         extra = extra[1:]
     try:
