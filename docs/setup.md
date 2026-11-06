@@ -41,6 +41,11 @@ bash ./install.sh
 ```
 
 The launcher creates a local Python environment and installs setup dependencies.
+If you installed a release wheel, use `flashalign setup` instead. It includes the
+same engine kits, starter profiles and OpenClaw adapter; no source checkout is
+needed. For example, `flashalign setup --detect` inspects available integrations
+and `flashalign setup --auto` starts the managed setup wizard.
+
 The wizard guides you through:
 
 1. **Harness:** Hermes, OpenClaw, or both. Detected installations are suggested.
@@ -50,7 +55,7 @@ The wizard guides you through:
    requests check standard mode and the selected profile.
 4. **Access mode:** Verified contacts (the default), or Always On. Verified
    contacts offers installed adapters and asks for the exact contact ID and
-   channel account. Telegram is opt-in; local terminal access also requires an
+   channel account. SMS and Telegram are opt-in; local terminal access also requires an
    explicitly authorized session. See [channels and terminal access](channels.md).
    Always On requires no contact.
 5. **Tool profiles:** choose whether tools inherit the profile by default in
@@ -201,7 +206,7 @@ mode retain Verified contacts behavior. Direct-engine client mode is saved in
 | No models found | API URL, endpoint reachability and model-list permissions |
 | Runtime requirement fails | Python or Node version in the compatibility report |
 | Approved contact uses standard mode in Verified contacts | Native account/contact IDs, direct-message support and signing key |
-| Engine reports profiles unavailable | Install a matching profile and restart that engine |
+| Engine reports profiles unavailable | Load a compatible profile through local administration; restart only if the engine lacks hot loading or needs a configuration change |
 | Child work uses standard mode in Verified contacts | Creating tool's flag and native child attribution |
 | Always On request fails | Configured profile, signing key, route state and effective-profile confirmation |
 | Configuration was interrupted | Restore the timestamped backups, then rerun setup |

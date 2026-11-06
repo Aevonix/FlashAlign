@@ -80,8 +80,11 @@ def validate(value, *, registry=DEFAULT_REGISTRY):
 
 class ApprovalStore:
     """Reread on authorization so revocation and tool changes need no restart."""
-    def __init__(self, path, *, registry=DEFAULT_REGISTRY):
+    def __init__(self, path, *, registry=None):
         self.path = Path(path).expanduser()
+        if registry is None:
+            from .channel_plugins import load_channel_registry
+            registry = load_channel_registry(self.path)
         self.registry = registry
 
     def read(self, *, require_existing=False):
@@ -150,6 +153,16 @@ class ApprovalStore:
                 if row["channel"] in removed:
                     row["id"] = secrets.token_hex(16)
             state["enabled_channels"] = sorted(selected)
+        return self.update(change)
+
+    def revoke_channels(self, channels):
+        """Revoke adapter grants even when its installed code is unavailable."""
+        channels = frozenset(adapter_id(channel) for channel in channels)
+        def change(state):
+            state["enabled_channels"] = sorted(set(state.get("enabled_channels", DEFAULT_ENABLED)) - channels)
+            for row in state["grants"]:
+                if row["channel"] in channels:
+                    row.update(id=secrets.token_hex(16), enabled=False)
         return self.update(change)
 
     def tool_enabled(self, name):

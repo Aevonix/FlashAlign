@@ -65,6 +65,10 @@ and checks the engine's effective profile response. It raises `ProfileNotActive`
 if the requested profile was not activated. `stream_chat` provides the same check
 before exposing streamed events.
 
+The client expires idle pooled connections after one second. Override this with
+`Client(..., keepalive_expiry=10.0)` when the server's connection lifetime is
+known. The client does not automatically retry a request after a transport error.
+
 ### Always On
 
 Use `--mode always_on` with engine-only setup, or set `"mode": "always_on"` in

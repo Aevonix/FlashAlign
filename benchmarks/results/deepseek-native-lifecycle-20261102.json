@@ -1,0 +1,86 @@
+{
+  "diagnostic_and_shutdown_run": {
+    "companion_runtime_records_validated": 16,
+    "corrected_offline_analysis": "passed",
+    "diagnostic_requests": "passed",
+    "failure": "The original diagnostic reader did not dispatch companion public runtime records by schema.",
+    "flashalign_commit": "5f2e7efacc67e2e28fad2e4190a742c45b7783c4",
+    "inference_operator_and_request_sources_unchanged_from_functional_run": true,
+    "intentional_stream_cancellations": 1,
+    "matching_mixed_generation_observations_across_all_ranks": 2,
+    "model_requests": 4,
+    "native_packing": {
+      "device_bytes_match_declared_profile_partitions": true,
+      "generations": 2,
+      "layers": 26,
+      "packing_records": 8,
+      "ranks": 4,
+      "stock_storage_preserved": true,
+      "tensor_partitions_per_generation": 208
+    },
+    "original_run_outcome": "failed",
+    "outer_cleanup_and_gpu_drain": "passed",
+    "real_managed_shutdown": "stopped"
+  },
+  "engine": {
+    "full_context_window_tested": false,
+    "gpu_architecture": "sm_120",
+    "name": "vLLM native DeepSeek integration",
+    "observed_graph_mode": "FULL_DECODE_ONLY",
+    "reported_context_limit": 1048576,
+    "speculative_method": "dspark",
+    "speculative_tokens": 7,
+    "tensor_parallel_size": 4,
+    "version": "0.1.dev21836+g6d66eed35.cu134"
+  },
+  "limits": [
+    "These are combined records from separate runs, not a retroactive pass of either original run.",
+    "Native packing and row binding do not establish output parity, refusal rate or task quality.",
+    "The diagnostic run was instrumented and provides no throughput or latency claim.",
+    "Host integration was exercised; Docker activation remains a separate qualification."
+  ],
+  "model": {
+    "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    "revision": "1bae0e1088993b9b82de08f59de5be5a34e42170"
+  },
+  "profile": {
+    "digest": "837ef1be4b808a95ebbb2c138f1a9cec598f0e3b4a89dd6751d1d1e232dbca9a",
+    "name": "deepseek41-flash1017-v1",
+    "strength": 1.0
+  },
+  "public_functional_run": {
+    "checks": [
+      "signed authentication and unsigned fallback",
+      "replay rejection",
+      "native fixed-strength rejection",
+      "off and owner speculative-token acceptance",
+      "off/owner cache separation and warm reuse",
+      "immutable request generation and profile identity",
+      "live old/new generation overlap",
+      "stale revision rejection",
+      "rollback",
+      "cancellation and drain",
+      "busy retirement rejection",
+      "cache eviction and retirement",
+      "alias deactivation and restoration"
+    ],
+    "failure": "Managed shutdown exceeded the original 15-second wait; the outer supervisor subsequently completed cleanup.",
+    "flashalign_commit": "01b6b4b553cc1a610b7c9019f8288428bb911ceb",
+    "functional_checks": "passed",
+    "intentional_stream_cancellations": 1,
+    "model_requests": 15,
+    "original_run_outcome": "failed",
+    "speculative_token_samples": {
+      "off": {
+        "accepted": 16,
+        "proposed": 19
+      },
+      "owner": {
+        "accepted": 22,
+        "proposed": 35
+      }
+    }
+  },
+  "schema": "flashalign.native-deepseek-compound-qualification.v1",
+  "status": "combined_evidence_available"
+}

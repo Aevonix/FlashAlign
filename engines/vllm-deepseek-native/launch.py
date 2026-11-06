@@ -20,7 +20,7 @@ import time
 
 from engine_config import DEFAULT_ARGUMENTS, DEFAULT_SPECULATION, ENVIRONMENT, IMAGE, MODEL_ID, MODEL_MOUNT
 from prepare import docker_image
-from supervisor import (available_memory, healthy, native_coverage, owned_container,
+from supervisor import (available_memory, docker_daemon_identity, healthy, native_coverage, owned_container,
                         private_directory, process_identity, resources, run, save, stop_owned)
 from flashalign_native.native_profile import NativeProfile
 from flashalign_native.protocol import load_key
@@ -44,6 +44,7 @@ def parser():
     p.add_argument('--startup-timeout', type=int, default=3600)
     p.add_argument('--allow-untested-memory', action='store_true')
     p.add_argument('--dry-run', action='store_true')
+    p.add_argument('--profile-admin-socket', type=Path)
     return p
 
 
@@ -170,8 +171,12 @@ def model_mount_plan(model):
 
 
 def container_command(args, run_dir, *, name, labels, model, key, replay, profile, devices, model_layout=None):
+    import owner_mode
+    owner_package = Path(next(iter(owner_mode.__path__))).resolve(strict=True)
+    lifecycle_state = run_dir.parent.parent / 'profiles'
+    profile_socket = getattr(args, 'profile_admin_socket', None) or lifecycle_state/'admin.sock'
     model_layout = model_layout or {'source': model, 'target': MODEL_MOUNT, 'model': MODEL_MOUNT}
-    command = ['docker', 'create', '--pull=never', '--init', '--restart=no', '--name', name,
+    command = ['docker', 'create', '--pull=never', '--init', '--restart=no', '--log-driver=none', '--name', name,
                '--user', str(os.getuid()) + ':' + str(os.getgid()),
                '--gpus', json.dumps('device=' + ','.join(devices)),
                '--ipc=private', '--shm-size=32g', '--memory=224g', '--memory-swap=224g',
@@ -181,12 +186,17 @@ def container_command(args, run_dir, *, name, labels, model, key, replay, profil
         command += ['--label', field + '=' + value]
     for source, target, readonly in ((model_layout['source'], model_layout['target'], True),
             (ROOT, '/fa-package', True), (profile, '/fa-profile', True),
+            (owner_package, '/fa-python/owner_mode', True),
+            (lifecycle_state, str(lifecycle_state), False),
             (key, '/fa-private/key', True), (replay.parent, '/fa-replay', False),
             (run_dir.parent.parent / 'cache', '/cache', False),
             (run_dir / 'receipts', '/fa-native-receipts', False),
             (run_dir / 'diagnostics', '/fa-diagnostics', False)):
         command += mount(source, target, readonly)
-    environment = {**ENVIRONMENT, 'FLASHALIGN_NATIVE_DIAGNOSTICS': '/fa-diagnostics'}
+    if profile_socket.parent != lifecycle_state:
+        command += mount(profile_socket.parent, str(profile_socket.parent), False)
+    environment = {**ENVIRONMENT, 'PYTHONPATH':'/fa-package:/fa-python',
+                   'FLASHALIGN_NATIVE_DIAGNOSTICS': '/fa-diagnostics'}
     # Only explicit engine tuning variables cross the container boundary. Do
     # not copy arbitrary host environment, credentials or provider tokens.
     for field in ('OMP_NUM_THREADS', 'B12X_COMPILE_WORKERS', 'CUDA_DEVICE_MAX_CONNECTIONS',
@@ -198,7 +208,9 @@ def container_command(args, run_dir, *, name, labels, model, key, replay, profil
     return command + [IMAGE, '/opt/venv/bin/python', '-m', 'flashalign_native',
         '--profile', '/fa-profile', '--key-file', '/fa-private/key',
         '--replay-file', '/fa-replay/' + replay.name, '--canonical-model', MODEL_ID,
-        '--native-receipts', '/fa-native-receipts', '--',
+        '--native-receipts', '/fa-native-receipts',
+        '--profile-state-dir', str(lifecycle_state),
+        '--profile-admin-socket', str(profile_socket), '--',
         'serve', model_layout['model'], '--host', '0.0.0.0', '--port', '8000',
         '--served-model-name', args.served_model_name,
         '--speculative-config', json.dumps(speculation(args.speculative_config, model, model_layout['model']), separators=(',', ':')),
@@ -236,6 +248,11 @@ def main(argv=None):
         raise ValueError('Invalid served model name')
     state = private_directory(args.state_dir)
     private_directory(state / 'cache')
+    private_directory(state / 'profiles')
+    private_directory(state / 'profiles' / 'incoming')
+    if args.profile_admin_socket is not None:
+        args.profile_admin_socket = args.profile_admin_socket.expanduser().absolute()
+        private_directory(args.profile_admin_socket.parent)
     profile = NativeProfile(args.profile)
     profile.validate_payload()
     model = args.model.expanduser().resolve(strict=True)
@@ -257,8 +274,7 @@ def main(argv=None):
     resource = resources(devices, allow_untested_memory=args.allow_untested_memory)
     with socket.socket() as test:
         test.bind(('127.0.0.1' if args.host == 'localhost' else args.host, args.port))
-    run_dir = private_directory(state / 'runs' / secrets.token_hex(12))
-    private_directory(run_dir / 'receipts'); private_directory(run_dir / 'diagnostics')
+    run_dir = state / 'runs' / secrets.token_hex(12)
     labels = {'io.aevonix.flashalign.deployment': hashlib.sha256(str(state).encode()).hexdigest(),
               'io.aevonix.flashalign.run': run_dir.name}
     name = 'flashalign-native-' + run_dir.name
@@ -268,16 +284,26 @@ def main(argv=None):
         print(json.dumps({'image': IMAGE, 'profile': profile.name, 'digest': profile.digest,
                           'devices': devices, 'resources': resource, 'starts_engine': False}))
         return 0
+    private_directory(state / 'runs')
+    private_directory(run_dir)
+    private_directory(run_dir / 'receipts'); private_directory(run_dir / 'diagnostics')
     record = None; guard = None
     def stop(*_):
         global STOP
         STOP = True
     signal.signal(signal.SIGTERM, stop); signal.signal(signal.SIGINT, stop)
     try:
-        container_id = run(command, timeout=90)
-        record = {'container_id': container_id, 'image_id': image['id'], 'labels': labels,
+        intent = {'schema': 'flashalign.container-intent.v1', 'container_name': name,
+                  'image_id': image['id'], 'labels': labels,
+                  'daemon_id': docker_daemon_identity(),
                   'parent_pid': os.getpid(), 'parent_start': process_identity(os.getpid()),
                   'started_unix': time.time(), 'profile_digest': profile.digest}
+        save(run_dir / 'container-intent.json', intent)
+        container_id = run(command, timeout=90)
+        record = {'container_id': container_id, 'image_id': image['id'], 'labels': labels,
+                  'daemon_id': intent['daemon_id'], 'parent_pid': intent['parent_pid'],
+                  'parent_start': intent['parent_start'],
+                  'started_unix': intent['started_unix'], 'profile_digest': profile.digest}
         save(run_dir / 'container.json', record)
         record_sha = hashlib.sha256((run_dir / 'container.json').read_bytes()).hexdigest()
         guard_log = os.open(run_dir / 'guard.log', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -296,7 +322,9 @@ def main(argv=None):
             raise RuntimeError('Container cleanup guard identity differs')
         run(['docker', 'start', container_id], timeout=60)
         ready = False; failures = 0; started = time.monotonic()
-        save(state / 'current.json', {'run': str(run_dir), **record})
+        control = {'admin_socket': str(args.profile_admin_socket or state / 'profiles' / 'admin.sock'),
+                   'admin_staging_directory': str(state / 'profiles' / 'incoming')}
+        save(state / 'current.json', {'run': str(run_dir), **record, **control})
         while not STOP:
             if guard.poll() is not None:
                 raise RuntimeError('Container cleanup guard exited')
@@ -306,7 +334,7 @@ def main(argv=None):
             if available_memory() < 24 * GIB:
                 raise RuntimeError('Host/cgroup memory fell below the runtime floor')
             try:
-                context = healthy(args.host, args.port, args.served_model_name, profile)
+                context = healthy(args.host, args.port, args.served_model_name, profile, require_profile=not ready)
                 coverage = native_coverage(run_dir / 'receipts', profile,
                                            started_unix=record['started_unix'])
                 check_live_worker_pids(record, coverage)
@@ -319,7 +347,7 @@ def main(argv=None):
                 if not ready:
                     data = {'ready': True, 'container_id': container_id, 'profile': profile.name,
                             'profile_digest': profile.digest, 'context_window': context,
-                            'native_coverage': coverage}
+                            'native_coverage': coverage, **control}
                     save(run_dir / 'ready.json', data)
                     print(json.dumps(data), flush=True)
                     ready = True

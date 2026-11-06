@@ -1,0 +1,32 @@
+--- analyze_original.py
++++ analyze.py
+@@ -48,7 +48,7 @@
+ import re
+ import stat
+ import statistics
+-from study_contract import execution_mode, required_check, stationarity as check_stationarity, ISOLATED, FRANCE, FRANCE_QUIET
++from study_contract import execution_mode, orders, required_check, stationarity as check_stationarity, ISOLATED, FRANCE, FRANCE_QUIET
+ 
+ 
+ SCHEMA = 'flashalign.private-performance-input.v1'
+@@ -319,6 +319,11 @@
+     except ValueError:
+         mode = ISOLATED
+         common.append('Unknown study execution mode')
++    try:
++        expected_orders = orders(document)
++    except (ValueError, TypeError):
++        expected_orders = None
++        common.append('Missing or invalid preregistered arm order')
+     if document.get('schema') != SCHEMA:
+         common.append('Input schema is missing or unsupported')
+     for key in ('manifest_sha256', 'protocol_sha256'):
+@@ -362,7 +367,7 @@
+         if type(block) is not int or block not in BLOCKS or arm not in ('A', 'B'):
+             common.append('Unexpected owner arm or process block')
+             continue
+-        expected_order = (1 if arm == 'A' else 2) if block != 2 else (2 if arm == 'A' else 1)
++        expected_order = expected_orders[block].index(arm) + 1 if expected_orders is not None else None
+         if type(row['order']) is not int or row['order'] != expected_order:
+             row['issues'].append('Process arm order differs from preregistration')
+             row['clean'] = False

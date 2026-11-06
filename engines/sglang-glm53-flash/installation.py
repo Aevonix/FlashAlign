@@ -20,8 +20,12 @@ def validate_prepared_source(source):
         raise ValueError('Prepared SGLang revision differs from this kit')
     final = {row['path']:row['after_sha256'] for row in receipt.get('files', [])}
     expected = {'python/sglang/srt/entrypoints/http_server.py',
+                'python/sglang/srt/entrypoints/openai/usage_processor.py',
                 'python/sglang/srt/model_executor/model_runner.py',
                 'python/sglang/srt/model_executor/forward_batch_info.py',
+                'python/sglang/srt/managers/io_struct.py',
+                'python/sglang/srt/managers/tokenizer_manager.py',
+                'python/sglang/srt/managers/scheduler.py',
                 'python/sglang/kernels/ops/attention/dsa/tilelang_kernel.py'}
     if set(final) != expected:
         raise ValueError('Prepared SGLang hook receipt is incomplete')

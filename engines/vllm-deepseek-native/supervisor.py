@@ -49,27 +49,69 @@ def process_identity(pid):
         return None
 
 
-def owned_container(record):
+def _remaining(deadline, maximum):
+    remaining = maximum if deadline is None else min(maximum, deadline-time.monotonic())
+    if remaining <= 0:
+        raise TimeoutError('Owned container cleanup deadline exceeded')
+    return remaining
+
+
+def docker_daemon_identity(*, deadline=None):
+    value = run(['docker', 'info', '--format', '{{.ID}}'], timeout=_remaining(deadline, 20))
+    if not value or len(value) > 256 or any(char.isspace() for char in value):
+        raise ValueError('Docker daemon identity is unavailable')
+    return value
+
+
+def owned_container(record, *, deadline=None):
+    if (not isinstance(record.get('container_id'), str)
+            or re.fullmatch(r'[0-9a-f]{64}', record['container_id']) is None
+            or not isinstance(record.get('image_id'), str)
+            or re.fullmatch(r'sha256:[0-9a-f]{64}', record['image_id']) is None
+            or not isinstance(record.get('labels'), dict)
+            or not isinstance(record.get('daemon_id'), str)
+            or docker_daemon_identity(deadline=deadline) != record['daemon_id']):
+        raise ValueError('Container daemon or identity is unverified')
     result = subprocess.run(['docker', 'inspect', '--format',
         '{"id":{{json .Id}},"image":{{json .Image}},"labels":{{json .Config.Labels}},"running":{{json .State.Running}}}',
-        record['container_id']], capture_output=True, text=True, timeout=20)
+        record['container_id']], capture_output=True, text=True, timeout=_remaining(deadline, 20))
     if result.returncode:
+        # Inspect errors include an unreachable daemon and denied access. Only
+        # a successful exact-ID query on the same daemon can establish absence.
+        listed = subprocess.run(['docker', 'container', 'ls', '--all', '--no-trunc',
+            '--filter', 'id='+record['container_id'], '--format', '{{.ID}}'],
+            capture_output=True, text=True, timeout=_remaining(deadline, 20))
+        if listed.returncode or listed.stdout.strip():
+            raise RuntimeError('Owned container state is unavailable')
+        if docker_daemon_identity(deadline=deadline) != record['daemon_id']:
+            raise ValueError('Container daemon changed during absence verification')
         return None
     data = json.loads(result.stdout)
-    if (data.get('id') != record['container_id'] or data.get('image') != record['image_id']
+    if (not isinstance(data, dict) or type(data.get('running')) is not bool
+            or not isinstance(data.get('labels'), dict)
+            or data.get('id') != record['container_id'] or data.get('image') != record['image_id']
             or any((data.get('labels') or {}).get(key) != value for key, value in record['labels'].items())):
         raise ValueError('Container identity or ownership labels differ')
     return data
 
 
-def stop_owned(record):
-    data = owned_container(record)
+def stop_owned(record, *, deadline=None):
+    inspect = lambda: owned_container(record) if deadline is None else owned_container(record, deadline=deadline)
+    data = inspect()
     if data is None or not data['running']:
         return
     # Docker sends SIGTERM first; its bounded fallback applies only to this
     # already identity-checked container. No host process name is signalled.
-    run(['docker', 'stop', '--time', '10', record['container_id']], timeout=25)
-    data = owned_container(record)
+    try:
+        run(['docker', 'stop', '--time', '10', record['container_id']], timeout=_remaining(deadline, 25))
+    except (OSError, RuntimeError, subprocess.SubprocessError):
+        # Another owned stop may have completed concurrently. Its verified
+        # result, never the failed CLI alone, decides whether cleanup succeeded.
+        data = inspect()
+        if data is not None and data['running']:
+            raise RuntimeError('Owned container stop failed')
+        return
+    data = inspect()
     if data is not None and data['running']:
         raise RuntimeError('Owned container did not stop')
 
@@ -85,25 +127,47 @@ def gpu_inventory():
     return rows
 
 
-def available_memory():
-    entries = dict(line.split(':', 1) for line in Path('/proc/meminfo').read_text().splitlines())
+def available_memory(proc=Path('/proc'), cgroup=Path('/sys/fs/cgroup')):
+    entries = dict(line.split(':', 1) for line in (proc / 'meminfo').read_text().splitlines())
     available = int(entries['MemAvailable'].split()[0]) * 1024
-    root = Path('/sys/fs/cgroup')
-    current = root
-    relative = next((line.split('::', 1)[1] for line in Path('/proc/self/cgroup').read_text().splitlines()
-                     if line.startswith('0::')), '')
-    candidate = (root / relative.lstrip('/')).resolve()
-    if candidate.is_relative_to(root) and candidate.exists():
-        current = candidate
+    try:
+        members = [line[3:] for line in (proc / 'self/cgroup').read_text().splitlines()
+                   if line.startswith('0::')]
+    except OSError as error:
+        raise ValueError('Unified cgroup v2 membership is unreadable') from error
+    if len(members) != 1:
+        raise ValueError('The native DeepSeek memory guard requires unified cgroup v2 accounting')
+    relative = Path(members[0])
+    if not relative.is_absolute() or '..' in relative.parts:
+        raise ValueError('Invalid unified cgroup v2 membership path')
+    try:
+        root = cgroup.resolve(strict=True)
+        current = (root / str(relative).lstrip('/')).resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ValueError('Unified cgroup v2 membership path is unavailable') from error
+    if (not (root / 'cgroup.controllers').is_file()
+            or not current.is_dir() or not current.is_relative_to(root)):
+        raise ValueError('A visible unified cgroup v2 hierarchy is required')
     while current.is_relative_to(root):
         maximum, used = current / 'memory.max', current / 'memory.current'
-        if maximum.exists() and used.exists() and maximum.read_text().strip() != 'max':
-            counts = dict(line.split() for line in (current / 'memory.stat').read_text().splitlines())
+        try:
+            limit_text = maximum.read_text().strip()
+        except FileNotFoundError:
+            limit_text = 'max'
+        except OSError as error:
+            raise ValueError('Unified cgroup v2 memory accounting is unreadable') from error
+        if limit_text != 'max':
+            try:
+                counts = dict(line.split() for line in (current / 'memory.stat').read_text().splitlines())
+                limit, usage = int(limit_text), int(used.read_text())
+            except (OSError, ValueError) as error:
+                raise ValueError('Unified cgroup v2 memory accounting is incomplete') from error
+            if limit < 0 or usage < 0:
+                raise ValueError('Invalid unified cgroup v2 memory accounting')
             reclaimable = min(int(counts.get('inactive_file', 0)), max(0, int(counts.get('file', 0))
                 - int(counts.get('shmem', 0)) - int(counts.get('unevictable', 0))
                 - int(counts.get('file_dirty', 0)) - int(counts.get('file_writeback', 0))))
-            limit = int(maximum.read_text())
-            available = min(available, max(0, limit - int(used.read_text())) + reclaimable)
+            available = min(available, max(0, limit - usage) + reclaimable)
         if current == root:
             break
         current = current.parent
@@ -198,7 +262,7 @@ def native_coverage(directory, profile, *, started_unix):
     return {'bindings': len(spec.layers) * 4, 'partitions': len(spec.tensors) * 4, 'workers': records}
 
 
-def healthy(host, port, served_model, profile):
+def healthy(host, port, served_model, profile, *, require_profile=True):
     host = '127.0.0.1' if host == '0.0.0.0' else host
     base = 'http://' + host + ':' + str(port)
     with urllib.request.urlopen(base + '/health', timeout=5) as response:
@@ -212,6 +276,8 @@ def healthy(host, port, served_model, profile):
         raise ValueError('Engine model or context differs')
     with urllib.request.urlopen(base + '/v1/owner-mode/profiles', timeout=5) as response:
         profiles = json.load(response)['data']
-    if len(profiles) != 1 or profiles[0].get('name') != profile.name or profiles[0].get('loaded') is not True:
+    if (not isinstance(profiles, list) or len(profiles) > 256
+            or any(not isinstance(row, dict) or row.get('loaded') is not True for row in profiles)
+            or (require_profile and (len(profiles) != 1 or profiles[0].get('name') != profile.name))):
         raise ValueError('Native profile is not loaded')
     return models[0]['max_model_len']

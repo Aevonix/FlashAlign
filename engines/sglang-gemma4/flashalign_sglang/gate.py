@@ -14,6 +14,7 @@ import re
 import stat
 import threading
 import time
+from .auth_contract import authenticate_header, read_signing_key
 
 
 AUTH = 'x-owner-mode-auth'
@@ -26,17 +27,7 @@ class FieldError(ValueError):
 
 
 def read_key(path):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
-            raise ValueError('FlashAlign key must be an owned private regular file')
-        value = os.read(fd, 33)
-    finally:
-        os.close(fd)
-    if len(value) != 32:
-        raise ValueError('FlashAlign key must have exactly 32 bytes')
-    return value
+    return read_signing_key(path)
 
 
 @dataclass(frozen=True)
@@ -54,19 +45,11 @@ class Gate:
         self.lock = threading.Lock()
 
     def authenticate(self, raw, headers):
-        if len(headers) != 1 or self.key is None:
-            return False
-        value = headers[0]
-        if not re.fullmatch(r'v1:[0-9]{10,12}:[0-9a-f]{32,128}:[0-9a-f]{64}', value):
-            return False
-        _, timestamp, nonce, mac = value.split(':')
         now = self.clock()
-        if abs(now-int(timestamp)) > 60:
+        auth = authenticate_header(self.key, raw, headers, now=now)
+        if auth is None:
             return False
-        message = timestamp+'\n'+nonce+'\n'+hashlib.sha256(raw).hexdigest()
-        expected = hmac.new(self.key,message.encode(),hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected,mac):
-            return False
+        nonce, timestamp = auth.nonce, auth.timestamp
         if self.replay_store is not None:
             return self.replay_store.consume(nonce, int(timestamp)+61, now=now)
         with self.lock:

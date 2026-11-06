@@ -14,6 +14,9 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 from owner_mode.contacts import ApprovalStore
+from owner_mode.channels import DEFAULT_REGISTRY
+from owner_mode.channel_plugins import (available_channel_adapters, disable_channel_adapter,
+                                        enable_channel_adapter)
 
 
 def main(argv=None):
@@ -34,10 +37,25 @@ def main(argv=None):
     p.add_argument("--set", dest="replace_channels", action="store_true",
                    help="Replace enabled channels with the listed installed adapter IDs")
     p.add_argument("adapters", nargs="*")
+    p = commands.add_parser("adapters", help="Explicitly enable or disable installed channel adapter entry points")
+    p.add_argument("action", choices=("list", "enable", "disable"))
+    p.add_argument("name", nargs="?")
     commands.add_parser("list")
     args = parser.parse_args(argv)
-    store = ApprovalStore(args.store)
-    if args.command in ("approve", "revoke"):
+    store = ApprovalStore(args.store, registry=DEFAULT_REGISTRY if args.command == "adapters" else None)
+    if args.command == "adapters":
+        if args.action == "list":
+            if args.name:
+                parser.error("Adapter list does not accept a name")
+        else:
+            if not args.name:
+                parser.error("Adapter enable/disable requires an installed entry-point name")
+            if args.action == "enable":
+                enable_channel_adapter(args.store, args.name)
+            else:
+                disable_channel_adapter(args.store, args.name)
+        state = {"plugins": available_channel_adapters(args.store)}
+    elif args.command in ("approve", "revoke"):
         state = store.set_contact(args.channel, args.account, args.contact, args.command == "approve")
     elif args.command == "tool":
         state = store.set_tool(args.name, args.state == "on")

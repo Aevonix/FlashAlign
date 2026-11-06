@@ -98,5 +98,10 @@
       "thinkingFormat": "qwen-chat-template"
     }
   },
-  "maximum_rank": 128
+  "maximum_rank": 128,
+  "profile_lifecycle": {
+    "schema": "flashalign.lifecycle-launch.v1",
+    "state_argument": "--lifecycle-state",
+    "socket_argument": "--admin-socket"
+  }
 }

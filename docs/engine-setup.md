@@ -48,7 +48,7 @@ a backend. GGUF files select llama.cpp. Choose another engine explicitly with
 | SGLang | [Pinned 0.5.20 projection integration](../engines/sglang-gemma4/README.md) | Gemma 4 26B A4B FP8, one GPU, NGRAM with three draft tokens |
 | vLLM | [Pinned native container and tensor operator](../engines/vllm-deepseek-native/README.md) | DeepSeek V4.1 Flash 1017 official FP8, four SM120 GPUs, adaptive DSpark7, FULL decode graphs and eager prefill |
 | llama.cpp | Upstream 0.8.0, commit `8642541`, source patch and profile converter | Qwen3.8-27B and Gemma 4 26B A4B Q8_0, one GPU; Qwen `draft-simple`, Gemma ngram or its official MTP draft |
-| TensorFold | Compiled 1.1.9 and 1.2.0 bundles for Linux x86_64 and aarch64 | Model, GPU, operator and draft requirements come from the selected bundle; see [TensorFold setup](native-tensorfold.md) |
+| TensorFold | Compiled 1.2.0 bundles for Linux x86_64 and aarch64 | Model, GPU, operator and draft requirements come from the selected bundle; see [TensorFold setup](native-tensorfold.md) |
 
 Each integration declares its supported model family, operator and serving
 format. See [validation](validation.md) for runtime test results and known
@@ -253,10 +253,15 @@ managed provider, while an unrelated provider with the same name is preserved.
 
 ## Prompt reuse
 
-The included engines reuse matching conversation prefixes in memory. Owner
+The included engines reuse eligible matching conversation prefixes in memory. Owner
 entries are separated by loaded profile and strength; normal-mode entries remain
-separate. Owner entries are never written to the engine's disk cache. Reloading
-the model or profiles starts a new engine with an empty in-memory cache.
+separate. Owner entries are never written to the engine's disk cache. Hot-loaded
+profiles have separate cache generations. Restarting the engine clears its
+in-memory cache.
+
+Reuse follows each engine's snapshot boundaries. A repeated short prompt can
+still report zero cached tokens; the pinned TensorFold Qwen path saves snapshots
+at 4,096-token boundaries.
 
 Prompt reuse consumes the engine's cache memory budget, independently of
 profile storage. The DeepSeek native profile also needs GPU storage for its
@@ -268,11 +273,15 @@ Managed activation requires Linux pidfd and child-subreaper support. Each
 engine command runs under a supervisor that tracks its workers by PID, user and
 process-start identity, including workers whose parent exits.
 
+Activation records its launch attempt before starting workers. Concurrent starts
+cannot create duplicate workers, and stopping a pending activation prevents its
+delayed commands from starting.
+
 If startup or verification fails, setup cleans up its verified workers and keeps
-the existing harness configuration. Incomplete cleanup preserves `running.json`
-and is reported for review. Setup does not stop unrelated processes or overwrite
-an existing engine. Logs and supervisor receipts stay in the private deployment
-directory.
+the existing harness configuration. If cleanup cannot be confirmed, it retains
+the activation and process records for recovery. Setup does not stop unrelated
+processes or overwrite an existing engine. Logs and supervisor receipts stay in
+the private deployment directory.
 
 ## Agent preparation and activation
 
@@ -373,4 +382,8 @@ bash ./install.sh --stop-engine /private/deployment.json
 ```
 
 The stop operation verifies recorded process identities and only signals
-workers created by this installer.
+workers created by this installer. Managed shutdown shares a 60-second budget
+across the deployment. Controllers stop first; worker stops then run in parallel.
+The deployment file can set `stop_timeout` to a finite value from 1 to 300 seconds.
+If cleanup cannot be confirmed within that budget, FlashAlign returns
+`incomplete` and retains the ownership records for recovery.

@@ -38,7 +38,7 @@ def native_profile_digest(runtime, parallel_config):
             raise ValueError("Native alignment graph path requires DP1/TP4/PP1/DCP1")
     if getattr(parallel_config, "prefill_context_parallel_size", 1) != 1:
         raise ValueError("Native alignment graph path does not support prefill CP")
-    digest = runtime.profile.digest
+    digest = getattr(runtime, 'graph_digest', runtime.profile.digest)
     validate_alignment_identity(OWNER, digest)
     return digest
 
@@ -83,7 +83,8 @@ def record_native_execution(runtime, input_batch, descriptor, *, dummy=False, is
     if runtime is None or dummy or is_profile:
         return
     validate_alignment_identity(descriptor.alignment_case,
-                                descriptor.alignment_profile_digest, runtime.profile.digest)
+                                descriptor.alignment_profile_digest,
+                                getattr(runtime, 'graph_digest', runtime.profile.digest))
     graph_mode = descriptor.cg_mode.name
     if graph_mode not in ("NONE", "FULL", "PIECEWISE"):
         raise ValueError("Unknown native diagnostic graph execution mode")

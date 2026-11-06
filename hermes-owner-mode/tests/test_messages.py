@@ -219,5 +219,53 @@ class MessageBindings(GateBase):
         self.authority.close()
         self.assertEqual(self.gateway._prepare_profile_scoped_inbound_message_text,original)
 
+    def test_replaced_renderer_is_rebound_without_reusing_old_content(self):
+        first = self.event('first', text='', kind='voice', media=['/synthetic/audio.ogg'])
+        self.begin(first, 'First synthetic transcript.')
+        self.assertEqual(self.send(self.body(last=first.rendered))[1]['effective'], 'owner-test')
+        async def replacement(event):
+            return event.rendered
+        self.gateway._prepare_profile_scoped_inbound_message_text = replacement
+        second = self.event('second', text='', kind='voice', media=['/synthetic/audio.ogg'])
+        self.begin(second, 'Second synthetic transcript.', sid='s2', tid='t2')
+        self.assertEqual(self.send(self.body(last=first.rendered), sid='s2', tid='t2')[1]['effective'], 'off')
+        self.assertEqual(self.send(self.body(last=second.rendered), sid='s2', tid='t2')[1]['effective'], 'owner-test')
+        wrapper = self.gateway._prepare_profile_scoped_inbound_message_text
+        self.authority.observer.attach(self.gateway)
+        self.assertIs(self.gateway._prepare_profile_scoped_inbound_message_text, wrapper)
+        self.assertEqual(len(self.authority.observer.renderers), 2)
+        self.authority.close()
+        self.assertIs(self.gateway._prepare_profile_scoped_inbound_message_text, replacement)
+
+    def test_replaced_timestamp_and_unowned_methods_survive_unload(self):
+        self.authority.observer.attach(self.gateway)
+        def timestamp(event, message_text):
+            return '[replacement timestamp] '+message_text, message_text, 2
+        self.gateway._hmwa_apply_message_timestamp = timestamp
+        event = self.event('new', text='', kind='voice', media=['/synthetic/audio.ogg'])
+        rendered = self.begin(event, 'Synthetic transcript.', timestamp=True)
+        self.assertEqual(self.send(self.body(last=rendered))[1]['effective'], 'owner-test')
+        external = object()
+        self.gateway._prepare_profile_scoped_inbound_message_text = external
+        self.authority.close()
+        self.assertIs(self.gateway._prepare_profile_scoped_inbound_message_text, external)
+        self.assertIs(self.gateway._hmwa_apply_message_timestamp, timestamp)
+
+    def test_host_decorator_observes_only_the_current_renderer(self):
+        self.authority.observer.attach(self.gateway)
+        previous = self.gateway._prepare_profile_scoped_inbound_message_text
+        async def replacement(event):
+            return await previous(event)
+        self.gateway._prepare_profile_scoped_inbound_message_text = replacement
+        event = self.event('decorated', text='', kind='voice', media=['/synthetic/audio.ogg'])
+        with mock.patch.object(self.authority, 'record_render', wraps=self.authority.record_render) as record:
+            content = self.begin(event, 'Synthetic decorated transcript.')
+            self.assertEqual(record.call_count, 1)
+            self.assertEqual(self.send(self.body(last=content))[1]['effective'], 'owner-test')
+            self.authority.observer.close()
+            self.assertIs(self.gateway._prepare_profile_scoped_inbound_message_text, replacement)
+            asyncio.run(replacement(event))
+            self.assertEqual(record.call_count, 1)
+
 
 if __name__=='__main__':unittest.main()

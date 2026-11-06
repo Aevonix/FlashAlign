@@ -3,6 +3,7 @@
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """Prepare and run an isolated TensorFold deployment from a checked engine bundle."""
 import hashlib
+import concurrent.futures
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -24,6 +25,9 @@ from .profiles import read_json, validate_profile, stage_profile, _compatible_mo
 from .setup_runtime import SetupError, check_engine, model_rows, remaining_startup_time
 from .model_metadata import (declared_openclaw_compat, declared_request_compatibility,
                              declared_openclaw_request_policy)
+from .runtime_environment import python_environment
+from . import engine_supervisor as _unit_supervisor
+from . import native_remote as _native_units
 
 _children = {}
 
@@ -178,7 +182,7 @@ def prepare_python_headers(python, state, *, install=False, environment=None):
     configured = environment.get('CPATH', os.environ.get('CPATH', ''))
     candidates = [*includes, *(Path(value) for value in configured.split(os.pathsep) if value)]
     def validate(cpath):
-        effective = {**os.environ, **environment, 'CPATH': cpath}
+        effective = {**os.environ, **python_environment(python, environment), 'CPATH': cpath}
         try:
             compiler = shlex.split(effective.get('CC', info.get('cc') or 'cc'))
             flags = shlex.split(info.get('cflags') or '')
@@ -369,12 +373,13 @@ def _supervisors_running(state, supervisors):
     return True
 
 
-def stop_engine(deployment):
+def _stop_legacy_engine(deployment, *, stop_deadline=None, retain_marker=False):
     """Stop verified descendants; keep subreapers alive until children are reaped."""
     if deployment.get("remote_units"):
         from .native_cluster import stop
         return stop(deployment)
     state = Path(deployment['state']); marker = state/'running.json'
+    stop_deadline = time.monotonic()+_native_units.stop_timeout(deployment.get('stop_timeout', 60)) if stop_deadline is None else stop_deadline
     if not marker.exists(): return {'status': 'stopped'}
     previous = read_json(marker); records = previous.get('processes', [])
     supervisors = previous.get('supervisors', [])
@@ -394,7 +399,7 @@ def stop_engine(deployment):
     private_json(marker, {**previous, 'owned_members': members})
     for signum in (signal.SIGTERM, signal.SIGKILL):
         grace = 35 if deployment.get('container_runtime') == 'docker' and signum == signal.SIGTERM else 5
-        sent = set(); deadline = time.monotonic()+grace
+        sent = set(); deadline = min(stop_deadline, time.monotonic()+grace)
         while True:
             live = capture()
             for member in live:
@@ -412,7 +417,7 @@ def stop_engine(deployment):
         process = _children.get(record.get('pid')) if isinstance(record, dict) else None
         if process is not None:
             try:
-                process.wait(timeout=5);_children.pop(record['pid'],None)
+                process.wait(timeout=max(.001, min(5, stop_deadline-time.monotonic())));_children.pop(record['pid'],None)
             except subprocess.TimeoutExpired: unverified = True
     remaining = capture() + [member for record in records if isinstance(record,dict) and type(record.get('pid')) is int for member in _group_members(record['pid'])]
     for descriptor in supervisors:
@@ -421,7 +426,8 @@ def stop_engine(deployment):
     if remaining or unverified:
         return {'status': 'incomplete', 'reason': 'Verified workers remain or process ownership could not be established',
                 'running_receipt': str(marker)}
-    marker.unlink()
+    if not retain_marker:
+        marker.unlink()
     return {'status': 'stopped'}
 
 
@@ -440,123 +446,449 @@ def prepare_engine(home, spec, profile_path, *, model_id, key_file=None):
     """Stage the selected engine without starting or restarting any service."""
     if not isinstance(spec, dict):
         raise SetupError('Engine setup must be an object')
-    if spec.get('kind', 'tensorfold') != 'tensorfold':
-        from .backend_setup import prepare_backend
-        return prepare_backend(home, spec, profile_path, model_id=model_id, key_file=key_file)
-    from .native_setup import prepare
-    return prepare(home, spec, profile_path, model_id=model_id, key_file=key_file)
+    from .backend_setup import prepare_backend
+    return prepare_backend(home, spec, profile_path, model_id=model_id, key_file=key_file)
 
 
 
 def check_engine_setup(home, spec, profile, *, model_id):
     """Read-only model, runtime, architecture and speculative-decoding checks."""
-    _require_pidfds()
-    if spec.get('kind', 'tensorfold') != 'tensorfold':
-        from .backend_setup import check_backend
-        return check_backend(home, spec, profile, model_id=model_id)
-    from .native_setup import check
-    return check(home, spec, profile, model_id=model_id)
+    from .engine_adapters import engine_adapters
+    adapter = engine_adapters().get(spec.get('kind', 'tensorfold'))
+    if adapter.requires_local_supervisor:
+        _require_pidfds()
+    from .backend_setup import check_backend
+    return check_backend(home, spec, profile, model_id=model_id)
 
+
+def _activation(state):
+    value = _unit_supervisor.read_unit_record(state/'activation.json')
+    if value is None:
+        return None
+    nonce = value.get('nonce')
+    if (type(value.get('version')) is not int or value['version'] != 1
+            or not isinstance(nonce, str) or len(nonce) != 32
+            or any(c not in '0123456789abcdef' for c in nonce)
+            or value.get('phase') not in ('starting', 'running', 'stopping', 'stopped')
+            or not isinstance(value.get('units'), list) or len(value['units']) > 64
+            or type(value.get('legacy', False)) is not bool
+            or not value['units'] and value.get('legacy') is not True
+            or value.get('units') != [str(state/'launches'/nonce/f'unit-{i}')
+                                     for i in range(len(value['units']))]):
+        raise SetupError('Invalid managed activation ownership record')
+    return value
+
+
+def _unit_states(attempt, previous=None):
+    expected = {row['unit']: row['process'] for row in (previous or {}).get('supervisors', [])
+                if previous.get('nonce') == attempt['nonce'] and 'unit' in row}
+    rows = []
+    for path in attempt['units']:
+        row = _native_units.state_of(path)
+        virgin = row == {'status': 'stopped', 'all_children_reaped': True}
+        if (not virgin and row.get('nonce') != attempt['nonce']
+                or path in expected and row.get('supervisor') != expected[path]):
+            raise SetupError('Managed unit ownership differs from its activation')
+        rows.append(row)
+    return rows
+
+
+def _units_running(rows):
+    return bool(rows) and all(row.get('status') == 'running'
+                              and row.get('supervisor_alive') is True
+                              and row.get('command_alive') is True for row in rows)
+
+
+def _running_record(attempt, rows, previous=None):
+    supervisors = [{'process': row['supervisor'], 'unit': path,
+                    'receipt': 'supervisor.json'}
+                   for path, row in zip(attempt['units'], rows) if row.get('supervisor')]
+    processes = [row['process'] for row in supervisors]
+    members = previous.get('owned_members', []) if previous and previous.get('nonce') == attempt['nonce'] else []
+    return {'version': 2, 'nonce': attempt['nonce'], 'processes': processes,
+            'supervisors': supervisors,
+            'owned_members': _capture_owned_members(processes, members)}
+
+
+def _publish_local(deployment, nonce, *, result=None):
+    """A health result may publish only to the same uncancelled attempt."""
+    state = Path(deployment['state'])
+    observed = _activation(state)
+    if observed is None or observed['nonce'] != nonce:
+        raise SetupError('Managed activation was stopped or replaced during startup')
+    # Unit locks may briefly wait for a spawning supervisor. Never hold the
+    # deployment lock across those waits or an engine readiness request.
+    previous = _unit_supervisor.read_unit_record(state/'running.json')
+    rows = _unit_states(observed, previous)
+    with _unit_supervisor.unit_lock(state):
+        current = _activation(state)
+        if current is None or current['nonce'] != nonce or current['phase'] not in ('starting', 'running'):
+            raise SetupError('Managed activation was stopped or replaced during startup')
+        if result is not None and not _units_running(rows):
+            raise SetupError('The managed command exited before activation completed')
+        previous = _unit_supervisor.read_unit_record(state/'running.json')
+        _unit_supervisor.save(state/'running.json', _running_record(current, rows, previous))
+        if result is not None:
+            _unit_supervisor.save(state/'activation.json', {**current, 'phase': 'running'})
+            _unit_supervisor.save(state/'deployment.json', result)
+        return rows
+
+
+def _remove_stopped_marker(state, current):
+    marker = _unit_supervisor.read_unit_record(state/'running.json')
+    if marker is None:
+        return
+    if marker.get('nonce') != current['nonce'] and not (current.get('legacy') and 'nonce' not in marker):
+        raise SetupError('Managed running receipt belongs to a different attempt')
+    (state/'running.json').unlink()
+    _sync_directory(state)
+
+
+def _sync_directory(state):
+    directory = os.open(state, os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def _new_local_attempt(deployment):
+    """Publish every possible unit before any command can be spawned."""
+    state = Path(deployment['state'])
+    with _unit_supervisor.unit_lock(state):
+        current = _activation(state)
+        if current is not None and current['phase'] != 'stopped':
+            if current['phase'] == 'running':
+                return current, False
+            raise SetupError('A managed activation is pending or still running; use its recorded shutdown command')
+        if current is not None:
+            _remove_stopped_marker(state, current)
+        legacy = _unit_supervisor.read_unit_record(state/'running.json')
+        if legacy is not None:
+            return {'legacy': legacy}, False
+        entries = deployment.get('commands')
+        if (not isinstance(entries, list) or not 1 <= len(entries) <= 64
+                or any(not isinstance(entry, dict) or not isinstance(entry.get('argv'), list)
+                       or not entry['argv'] or any(not isinstance(arg, str) for arg in entry['argv'])
+                       or not isinstance(entry.get('env'), dict)
+                       or any(not isinstance(key, str) or not isinstance(value, str)
+                              for key, value in entry['env'].items()) for entry in entries)):
+            raise SetupError('Invalid managed command declaration')
+        nonce = secrets.token_hex(16)
+        root = state/'launches'/nonce
+        root.mkdir(parents=True, mode=0o700)
+        source = Path(__file__).with_name('engine_supervisor.py').read_bytes()
+        units = []
+        for index, entry in enumerate(entries):
+            unit = root/f'unit-{index}'
+            unit.mkdir(mode=0o700)
+            environment = entry['env']
+            if entry['argv'][0] == deployment.get('python'):
+                environment = python_environment(deployment['python'], environment)
+            _unit_supervisor.save(unit/'unit.json', {'argv': entry['argv'], 'env': environment,
+                                                   'cwd': str(Path(deployment['source']).absolute())})
+            fd = os.open(unit/'engine_supervisor.py', os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW, 0o600)
+            with os.fdopen(fd, 'wb') as stream:
+                stream.write(source); stream.flush(); os.fsync(stream.fileno())
+            files = {name: {'bytes': (unit/name).stat().st_size, 'sha256': digest(unit/name)}
+                     for name in ('unit.json', 'engine_supervisor.py')}
+            _unit_supervisor.save(unit/'stage-receipt.json', {'files': files})
+            units.append(str(unit))
+        _sync_directory(root)
+        _sync_directory(root.parent)
+        current = {'version': 1, 'nonce': nonce, 'phase': 'starting', 'units': units}
+        _unit_supervisor.save(state/'activation.json', current)
+        return current, True
+
+
+def _external_cleanup_contract(deployment):
+    """Validate one optional cleanup helper from the immutable staged engine kit."""
+    spec = deployment.get('external_cleanup')
+    if spec is None:
+        if deployment.get('container_runtime') is not None:
+            raise SetupError('External engine cleanup is not declared; prepare this deployment again')
+        return None
+    if (not isinstance(spec, dict)
+            or set(spec) != {'schema', 'script', 'script_sha256', 'timeout_seconds'}
+            or spec.get('schema') != 'flashalign.external-cleanup.v1'
+            or not isinstance(spec.get('script'), str)
+            or Path(spec['script']).name != spec['script']
+            or spec['script'] in ('', '.', '..') or '\\' in spec['script']
+            or not isinstance(spec.get('script_sha256'), str)
+            or len(spec['script_sha256']) != 64
+            or any(c not in '0123456789abcdef' for c in spec['script_sha256'])):
+        raise SetupError('Invalid external engine cleanup declaration')
+    timeout = _native_units.stop_timeout(spec['timeout_seconds'])
+    if (not isinstance(deployment.get('source'), str)
+            or not isinstance(deployment.get('python'), str)
+            or not Path(deployment['python']).is_absolute()
+            or not isinstance(deployment.get('integration_files'), dict)):
+        raise SetupError('Invalid staged external engine cleanup configuration')
+    source = Path(deployment['source'])
+    script = source/spec['script']
+    if (not source.is_absolute() or source.is_symlink() or script.is_symlink()
+            or not script.is_file() or script.stat().st_uid != os.getuid()
+            or deployment.get('integration_files', {}).get(spec['script']) != spec['script_sha256']
+            or digest(script) != spec['script_sha256']):
+        raise SetupError('The staged external engine cleanup helper is unverified')
+    return {**spec, 'timeout_seconds': timeout, 'path': str(script)}
+
+
+def _verify_external_cleanup(deployment, contract, nonce, deadline):
+    """Run outside managed unit ancestry; never infer external cleanup from reaping."""
+    until = min(deadline, time.monotonic()+contract['timeout_seconds'])
+    if until-time.monotonic() <= 0:
+        return False
+    verified = False
+    unit = None
+    cleanup_nonce = secrets.token_hex(16)
+    try:
+        parent = _native_units.owned_directory(Path(deployment['state'])/'external-cleanup-units', create=True)
+        # A prior interrupted call retains its owned subreaper. Resolve it before
+        # starting another helper; never orphan a helper's Docker CLI children.
+        for previous in sorted(parent.iterdir()):
+            row = _native_units.state_of(previous, lock_timeout=max(.001, until-time.monotonic()))
+            if row.get('supervisor_alive') or row.get('all_children_reaped') is not True:
+                remaining = until-time.monotonic()
+                if remaining < 1 or _native_units.stop({'state': str(previous),
+                        'timeout_seconds': remaining}).get('status') != 'stopped':
+                    raise SetupError('Prior external cleanup remains unresolved')
+        now = time.monotonic()
+        work_until = until-min(10., max(.1, until-now-.1))
+        if work_until <= now:
+            raise SetupError('External cleanup has no remaining work budget')
+        unit = parent/cleanup_nonce
+        unit.mkdir(mode=0o700)
+        _unit_supervisor.save(unit/'unit.json', {'argv': [deployment['python'], '-B', contract['path'],
+            '--state-dir', deployment['state'], '--deadline-monotonic', str(work_until)],
+            'cwd': deployment['source'], 'env': python_environment(deployment['python'])})
+        source = Path(__file__).with_name('engine_supervisor.py').read_bytes()
+        fd = os.open(unit/'engine_supervisor.py', os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(source); stream.flush(); os.fsync(stream.fileno())
+        _unit_supervisor.save(unit/'stage-receipt.json', {'files': {
+            name: {'bytes': (unit/name).stat().st_size, 'sha256': digest(unit/name)}
+            for name in ('unit.json', 'engine_supervisor.py')}})
+        _native_units.start({'state': str(unit), 'nonce': cleanup_nonce})
+        while time.monotonic() < work_until:
+            row = _native_units.state_of(unit, lock_timeout=max(.001, work_until-time.monotonic()))
+            if row.get('all_children_reaped') is True and not row.get('supervisor_alive'):
+                if row.get('exit_code') == 0 and (unit/'engine.log').stat().st_size <= 65536:
+                    value = _unit_supervisor.read_unit_record(unit/'engine.log') or {}
+                    verified = (value.get('schema') == 'flashalign.external-cleanup.v1'
+                                and value.get('status') == 'stopped'
+                                and value.get('external_resources_stopped') is True)
+                break
+            time.sleep(min(.02, max(0, work_until-time.monotonic())))
+    except (OSError, ValueError, SetupError, subprocess.SubprocessError):
+        verified = False
+    finally:
+        if unit is not None:
+            remaining = until-time.monotonic()
+            try:
+                if remaining < 1:
+                    verified = False
+                else:
+                    stopped = _native_units.stop({'state': str(unit), 'nonce': cleanup_nonce,
+                                                 'timeout_seconds': remaining})
+                    verified = (verified and stopped.get('status') == 'stopped'
+                                and stopped.get('all_children_reaped') is True)
+            except (OSError, ValueError, subprocess.SubprocessError):
+                verified = False
+    _unit_supervisor.save(Path(deployment['state'])/'external-cleanup.json', {
+        'schema': 'flashalign.external-cleanup.v1', 'nonce': nonce,
+        'script_sha256': contract['script_sha256'],
+        'status': 'stopped' if verified else 'incomplete',
+        'external_resources_stopped': verified})
+    return verified
+
+
+def _stop_local_attempt(deployment, nonce=None):
+    state = Path(deployment['state'])
+    deadline = time.monotonic()+_native_units.stop_timeout(deployment.get('stop_timeout', 60))
+    with _unit_supervisor.unit_lock(state, timeout=max(.001, deadline-time.monotonic())):
+        current = _activation(state)
+        if nonce is not None and (current is None or current['nonce'] != nonce):
+            return {'status': 'stopped', 'superseded': True}
+        external = _external_cleanup_contract(deployment)
+        if current is None:
+            # Fence a legacy stop against a simultaneous new-style activation.
+            current = {'version': 1, 'nonce': secrets.token_hex(16), 'phase': 'stopping',
+                       'units': [], 'legacy': True}
+        elif current['phase'] == 'stopped' and external is None:
+            _remove_stopped_marker(state, current)
+            return {'status': 'stopped'}
+        _unit_supervisor.save(state/'activation.json', {**current, 'phase': 'stopping'})
+        recorded = _unit_supervisor.read_unit_record(state/'running.json')
+    # Leave room for the declared external-resource check inside the same total
+    # stop budget. Its subprocess must not be a child of the unit being reaped.
+    unit_deadline = deadline-external['timeout_seconds'] if external else deadline
+    if current.get('legacy'):
+        result = _stop_legacy_engine(deployment, stop_deadline=unit_deadline,
+                                     retain_marker=external is not None)
+    else:
+        def stop_unit(path):
+            remaining = unit_deadline-time.monotonic()
+            if remaining < 1:
+                return {'status': 'incomplete', 'reason': 'Deployment shutdown budget expired'}
+            outcome = _native_units.stop({'state': path, 'nonce': current['nonce'], 'timeout_seconds': remaining})
+            if outcome.get('status') == 'stopped' and outcome.get('all_children_reaped') is True:
+                owner = _native_units.state_of(path, lock_timeout=max(.001, unit_deadline-time.monotonic())).get('supervisor')
+                process = _children.get(owner['pid']) if owner else None
+                if process is not None and process.poll() is not None:
+                    process.wait(timeout=max(.001, min(1, unit_deadline-time.monotonic())))
+                    _children.pop(owner['pid'], None)
+            return outcome
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(32, max(1, len(current['units'])))) as pool:
+            outcomes = list(pool.map(stop_unit, current['units']))
+        if recorded is not None and recorded.get('nonce') == current['nonce']:
+            _stop_recorded_orphans(recorded, stop_deadline=unit_deadline)
+        result = {'status': 'stopped'} if all(row.get('status') == 'stopped'
+                    and row.get('all_children_reaped') is True for row in outcomes) else {
+                        'status': 'incomplete', 'reason': 'Managed unit cleanup is not confirmed'}
+    with _unit_supervisor.unit_lock(state, timeout=max(.001, deadline-time.monotonic())):
+        latest = _activation(state)
+        if latest is None or latest['nonce'] != current['nonce']:
+            return {'status': 'incomplete', 'reason': 'Managed activation ownership changed during cleanup'}
+        if (result['status'] == 'stopped' and external is not None
+                and not _verify_external_cleanup(deployment, external, current['nonce'], deadline)):
+            result = {'status': 'incomplete', 'reason': 'External engine cleanup is not confirmed'}
+        if result['status'] == 'stopped':
+            _unit_supervisor.save(state/'activation.json', {**latest, 'phase': 'stopped'})
+            _remove_stopped_marker(state, current)
+    return result
+
+
+def _stop_recorded_orphans(recorded, *, stop_deadline=None):
+    """Retain legacy recovery of witnessed children after an anchor crash.
+
+    This never establishes complete reaping. The unit protocol must still
+    report incomplete when its supervisor could not attest cleanup.
+    """
+    roots = recorded.get('processes', [])
+    if not roots or any(process_identity(row['pid']) == row for row in roots):
+        return
+    protected = {tuple(row[key] for key in ('pid', 'start', 'uid')) for row in roots}
+    members = recorded.get('owned_members', [])
+    for signum in (signal.SIGTERM, signal.SIGKILL):
+        deadline = min(time.monotonic()+5, stop_deadline) if stop_deadline is not None else time.monotonic()+5
+        while time.monotonic() < deadline:
+            members = _capture_owned_members(roots, members)
+            live = [row for row in members if process_identity(row['pid']) == row
+                    and tuple(row[key] for key in ('pid', 'start', 'uid')) not in protected]
+            if not live:
+                return
+            for row in live:
+                _signal_identity(row, signum)
+            time.sleep(.05)
+
+
+def stop_engine(deployment):
+    """Cancel known intents, including launches with no final running receipt."""
+    if deployment.get('remote_units'):
+        from .native_cluster import stop
+        return stop(deployment)
+    try:
+        return _stop_local_attempt(deployment)
+    except (OSError, ValueError, SetupError):
+        return {'status': 'incomplete', 'reason': 'Managed activation ownership or cleanup is unverified'}
+
+
+class ManagedNotReady(SetupError):
+    """A managed command is owned but its protocol is not ready yet."""
+
+
+def _engine_readiness(deployment, rows, deadline):
+    try:
+        models = model_rows(deployment['base_url'], timeout=min(5, remaining_startup_time(deadline)))
+    except SetupError as error:
+        raise ManagedNotReady(str(error)) from error
+    if not any(row['id'] == deployment['model'] for row in models):
+        raise SetupError('The managed engine did not serve the configured model')
+    from .lifecycle_setup import check_lifecycle
+    try:
+        lifecycle = check_lifecycle(deployment, timeout=min(5, remaining_startup_time(deadline)))
+    except SetupError as error:
+        raise ManagedNotReady(str(error)) from error
+    check = check_engine(deployment['base_url'], deployment['model'], deployment['profile'],
+                         deployment['key_file'], deadline=deadline)
+    return {'engine_check': check, **lifecycle}
+
+
+def _reuse_legacy(deployment, previous, deadline, readiness, result_base):
+    state = Path(deployment['state'])
+    if previous.get('supervisors') and not _supervisors_running(state, previous['supervisors']):
+        raise SetupError('Managed supervisor is not serving its recorded command; stop it before replacement')
+    rows = [_supervisor_state(state, row) for row in previous.get('supervisors', [])]
+    result = {**result_base, 'status': 'running', **readiness(deployment, rows, deadline)}
+    with _unit_supervisor.unit_lock(state):
+        if _activation(state) is not None or _unit_supervisor.read_unit_record(state/'running.json') != previous:
+            raise SetupError('Managed legacy activation changed during its health check')
+    return result
 
 
 def activate_engine(deployment, *, timeout=None):
-    """Start only this managed deployment, then verify its effective profile."""
+    """Start a serialized durable attempt without locking out a startup stop."""
     if deployment.get('runtime') == 'native' and deployment.get('hardware_verified') is not True:
         raise SetupError('Native activation requires a verified NVIDIA compute capability; prepare again on the model host')
-    if deployment.get("remote_units"):
+    if deployment.get('remote_units'):
         from .native_cluster import activate
         return activate(deployment, timeout=timeout)
+    return activate_managed_commands(deployment, readiness=_engine_readiness, timeout=timeout)
+
+
+def activate_managed_commands(deployment, *, readiness, timeout=None, result_base=None):
+    """Own local command lifetimes and delegate only protocol readiness.
+
+    The callback receives verified unit states and an absolute deadline. It
+    returns result fields, or raises ManagedNotReady for a bounded retry.
+    """
+    if deployment.get('install_dependencies') is not False:
+        raise SetupError('Install dependencies during preparation before activating the managed engine')
+    result_base = deployment if result_base is None else result_base
     timeout = deployment.get('startup_timeout', 900) if timeout is None else timeout
     _require_pidfds()
     deadline = time.monotonic() + timeout
-    state = Path(deployment['state'])
-    running = state/'running.json'
-    if running.exists():
-        previous = read_json(running)
-        try:
-            if previous.get('supervisors') and not _supervisors_running(state, previous['supervisors']):
-                raise SetupError('Managed supervisor is not serving its recorded command')
-            check = check_engine(deployment['base_url'], deployment['model'], deployment['profile'],
-                                 deployment['key_file'], deadline=deadline)
-            previous['owned_members'] = _capture_owned_members(previous.get('processes', []), previous.get('owned_members', []))
-            private_json(running, previous)
-            return {**deployment, 'status': 'running', 'engine_check': check}
-        except SetupError:
-            alive = []
-            for record in [*previous.get('processes', []), *previous.get('owned_members', [])]:
-                if isinstance(record, dict) and process_identity(record['pid']) == record:
-                    alive.append(record['pid'])
-            for record in previous.get('processes', []):
-                if isinstance(record, dict) and type(record.get('pid')) is int:
-                    alive.extend(member['pid'] for member in _group_members(record['pid']))
-            if alive:
-                raise SetupError('A managed engine may still be running; use its recorded shutdown command before replacing it')
-            if previous.get('supervisors') and any(not (_supervisor_state(state,row) or {}).get('all_children_reaped') for row in previous['supervisors']):
-                raise SetupError('Managed supervisor completion is unverified; preserve its running.json receipt')
-            running.unlink()
-    parsed = urlsplit(deployment['base_url'])
-    _check_available_port(parsed.port)
-    if deployment['install_dependencies']:
-        command = [deployment['python'], '-m', 'pip', 'install', *deployment['requirements']]
-        result = subprocess.run(command, capture_output=True, text=True)
-        if result.returncode:
-            raise SetupError('Engine dependency installation failed')
-    children = []
-    identities = []
-    supervisors = []
-    members = []
-    log_fd = os.open(state/'engine.log', os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    attempt, fresh = _new_local_attempt(deployment)
+    if 'legacy' in attempt:
+        return _reuse_legacy(deployment, attempt['legacy'], deadline, readiness, result_base)
     try:
-        with os.fdopen(log_fd, 'ab') as log:
-            for index, entry in enumerate(deployment['commands']):
-                receipt = 'supervisor-'+str(index)+'.json'
-                command = [sys.executable, str(Path(__file__).with_name('engine_supervisor.py')), '--state', str(state/receipt), '--', *entry['argv']]
-                process = subprocess.Popen(command, env={**os.environ, **entry['env']},
-                    cwd=deployment['source'], stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
-                children.append(process)
-                _children[process.pid] = process
-                identity = process_identity(process.pid, include_zombies=True)
-                if identity is None:
-                    identities.append({'pid': process.pid, 'start': None, 'uid': os.getuid()})
-                    private_json(running, {'processes': identities, 'owned_members': members, 'supervisors': supervisors})
-                    raise SetupError('The managed engine exited before startup could be recorded')
-                identities.append(identity)
-                supervisors.append({'process':identity, 'receipt':receipt})
-                members = _capture_owned_members(identities, members)
-                private_json(running, {'processes': identities, 'owned_members': members, 'supervisors': supervisors})
+        if fresh:
+            _check_available_port(urlsplit(deployment['base_url']).port)
+            for path in attempt['units']:
+                # A simultaneous stop installs a nonce tombstone even when this
+                # start has not reached the unit yet, fencing all delayed calls.
+                started = _native_units.start({'state': path, 'nonce': attempt['nonce']})
+                owner = started.get('supervisor')
+                if owner and owner['pid'] in _native_units._children:
+                    _children[owner['pid']] = _native_units._children[owner['pid']]
+                _publish_local(deployment, attempt['nonce'])
         while time.monotonic() < deadline:
-            members = _capture_owned_members(identities, members)
-            private_json(running, {'processes': identities, 'owned_members': members, 'supervisors': supervisors})
-            if any(process.poll() is not None for process in children):
-                raise SetupError('The managed engine exited during startup; inspect its private engine.log')
-            for descriptor in supervisors:
-                value=_supervisor_state(state,descriptor)
-                if value and value.get('command') and process_identity(value['command']['pid'])!=value['command']:
-                    raise SetupError('The managed engine exited during startup; inspect its private engine.log')
-            try:
-                models = model_rows(deployment['base_url'], timeout=min(5, remaining_startup_time(deadline)))
-            except SetupError:
-                time.sleep(min(.5, max(0, deadline - time.monotonic())))
+            rows = _publish_local(deployment, attempt['nonce'])
+            if any(row.get('all_children_reaped') is True
+                   or row.get('status') in ('stopping', 'stopped', 'cleanup_incomplete')
+                   or row.get('command') and not row.get('command_alive') for row in rows):
+                raise SetupError('The managed engine exited during startup; inspect its private unit log')
+            if not _units_running(rows):
+                time.sleep(min(.05, max(0, deadline-time.monotonic())))
                 continue
-            if not any(model['id'] == deployment['model'] for model in models):
-                raise SetupError('The managed engine did not serve the configured model')
-            if not _supervisors_running(state, supervisors):
-                time.sleep(min(.05, max(0, deadline-time.monotonic())));continue
-            check = check_engine(deployment['base_url'], deployment['model'], deployment['profile'],
-                                 deployment['key_file'], deadline=deadline)
-            if not _supervisors_running(state, supervisors):
-                raise SetupError('The managed command exited before activation completed')
-            members = _capture_owned_members(identities, members)
-            private_json(running, {'processes': identities, 'owned_members': members, 'supervisors': supervisors})
-            result = {**deployment, 'status': 'running', 'engine_check': check}
-            private_json(state/'deployment.json', result)
+            try:
+                fields = readiness(deployment, rows, deadline)
+            except ManagedNotReady:
+                time.sleep(min(.05, max(0, deadline-time.monotonic())))
+                continue
+            result = {**result_base, 'status': 'running', **fields}
+            _publish_local(deployment, attempt['nonce'], result=result)
             return result
         raise SetupError('Engine startup timed out before profile activation was confirmed')
     except BaseException as error:
-        if identities:
-            members = _capture_owned_members(identities, members)
-            private_json(running, {'processes': identities, 'owned_members': members, 'supervisors': supervisors})
-            stopped = stop_engine(deployment)
-            if stopped['status'] != 'stopped':
-                raise SetupError('Engine startup failed and cleanup is incomplete; preserve and inspect its running.json receipt') from error
+        if not fresh:
+            # A transient health failure cannot tear down an earlier owner's
+            # healthy deployment. Only this call's fresh attempt is unwound.
+            raise
+        stopped = _stop_local_attempt(deployment, attempt['nonce'])
+        if stopped['status'] != 'stopped':
+            raise SetupError('Engine startup failed and cleanup is incomplete; preserve its activation receipt') from error
+        if isinstance(error, (OSError, ValueError)) and not isinstance(error, SetupError):
+            raise SetupError('Managed engine launch failed; inspect its private unit receipts') from error
         raise

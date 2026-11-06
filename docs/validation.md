@@ -1,15 +1,133 @@
 # Release validation
 
+The [testing policy](testing.md) separates shared regression coverage from
+change-scoped compatibility qualification. Releases do not rerun every model,
+engine, quantization and hardware combination; the records below retain the
+scope and limits of each check.
+An unresolved backend failure remains a limitation of that deployment path;
+passing shared regressions does not establish that the path works.
+
 The five starter profiles are experimental. This page records runtime,
 authorization and answer-quality checks for each tested configuration. Full
-edited-checkpoint equivalence and broad refusal-rate benchmarks are not established.
+edited-checkpoint equivalence and broad capability retention are not established.
+The [automated Qwen FR443 result](qwen-fr443-results.md) and
+[Qwen/SGLang timing study](qwen-sglang-timing.md) have separate scopes and limits.
+
+Earlier model runs qualify their recorded static-profile builds. The v1.2
+runtime checks are listed separately below.
+
+## Qwen graph answer-quality confirmation
+
+A fixed released-eager versus opt-in-graph Owner Mode comparison passed
+completion and GSM8K, but did not establish every prespecified capability
+gate. IFEval and MBPP did not establish their conservative 2-percentage-point
+bounds at the fixed maximum. Both arms had the same profile active; eager remains
+the default. [Results and limits](qwen-sglang-quality.md),
+[aggregate evidence](../benchmarks/results/qwen-sglang-quality-20261102.json).
+
+## FlashAlign 1.2 lifecycle checks
+
+The core suite passed 1,083 tests on both Python 3.10 and 3.12. These include
+duplicate plugin loads, reload and unload ownership, concurrent verification,
+and request-bound identity diagnostics. Separate software
+checks cover shared engine gates, SGLang's lifecycle protocol and graph contract,
+projection generations and native DeepSeek contracts. The installed-wheel check
+matched the Python runtime modules and all 290 bundled setup assets against
+source. From outside the checkout it discovered the engine kits and starter
+profiles, copied each kit, ran the setup wizard's detection command and checked
+its resume command.
+These are software checks, separate from the live engine results below.
+
+An offline 1.1.1 → 1.2.0 → 1.1.1 package cycle preserved the signing key,
+contact approvals, client configuration, replay namespace and existing
+deployment files. Preparation passed at each step, and rollback removed the
+new modules and CLI. This used synthetic deployment fixtures; it does not
+establish live engine migration or replay-journal compatibility.
+[Package results](../benchmarks/results/package-upgrade-20261102.json).
+
+A fresh Qwen TensorFold installation on Linux x86_64 verified all 375 installed
+wheel files, four built-in request checks and eight manual requests. DFlash
+remained active. Stock and profile requests each reused 4,096 tokens from a
+6,768-token input, with no reuse across modes. Public shutdown and GPU release
+passed. [Installed-wizard results](../benchmarks/results/qwen-tensorfold-x86-installed-20261102.json).
+
+| Runtime | Models and speculative methods | Live checks |
+| --- | --- | --- |
+| SGLang 0.5.20 | Qwen3.8-27B BF16, DFLASH | Twelve transport/cache/cancellation cases and 42 sampled forward attestations passed, including graph and eager prefill, speculative verification and mixed standard/profile rows. A separate run passed 1,000 requests across 100 activation/rollback cycles, with 200 observed live swaps and 100 observations of concurrent generations. |
+| SGLang 0.5.20 | Gemma 4 26B A4B FP8 compressed tensors, BF16 compute, NGRAM, one DGX Spark | Profile activation, generation/digest checks, cache isolation, cancellation and retirement passed. A separate run passed 1,000 requests across 100 cycles, with 200 observed live swaps and 100 observations of concurrent generations. |
+| SGLang 0.5.20 | GLM 5.3 Flash, official FP8, EAGLE, four SM120 GPUs | Fourteen transport checks, separate cold/warm caches, cancellation and profile lifecycle checks passed. The stress run completed 1,000 requests and 100 cycles with no failed requests, 200 live swaps and 100 observations of concurrent generations. Both modes accepted speculative tokens. The original generation was restored, both process trees were reaped and all four GPUs drained. [Results](../benchmarks/results/glm-flash-sglang-lifecycle-20261102.json). |
+| vLLM 0.32.0 | Qwen3.8-27B BF16, ngram | Full-model checks passed for profile loading, activation, stale-revision rejection, rollback, generation/digest headers, separate cold/warm caches, active-stream cancellation, busy retirement, eviction and replacement allocation. All 129 configured sites were exercised. A separate run passed 1,000 requests and 100 update cycles, with 200 observed live swaps, 100 observations of concurrent generations, and no wrong-generation responses or request retries. |
+| vLLM 0.32.0 | Gemma 4 26B A4B FP8 compressed tensors, ngram | Eleven bounded inference checks, four authorization checks and one cancelled stream passed. All 50 configured sites were exercised. Separate cold/warm caches, distinct profile payloads, activation, stale-revision rejection, rollback, overlapping generations, eviction, retirement and replacement allocation were checked. Draft proposals and acceptances were observed in both modes. |
+| Native vLLM `0.1.dev21836+g6d66eed35.cu134` | DeepSeek V4.1 Flash 1017, official FP8, DSpark, four SM120 GPUs | Fifteen request checks covered authorization, replay rejection, separate caches, speculation, live activation, cancellation and retirement. Four later diagnostic requests checked two profile generations. Eight packing records covered all four ranks, and two mixed-generation observations matched across ranks. Managed shutdown and GPU drain passed. [Combined record](../benchmarks/results/deepseek-native-lifecycle-20261102.json). |
+| llama.cpp, upstream `8642541b255bfb5dc39cd351a178be09013a55d6` | Qwen3.8-27B Q8_0 with an external draft; Gemma 4 26B A4B Q8_0 with ngram and MTP | Both models passed profile loading, activation, rollback, stale-revision rejection, generation/digest checks, cache isolation, cancellation and retirement. Gemma ngram also passed 1,000 requests and 100 live switches between distinct profile generations. |
+| TensorFold 1.2, native CUDA integration | Qwen3.8-27B, MLX-format 4-bit, DFlash | Fresh managed installation passed 1,102 alias updates without an engine restart. An old-generation request remained active across transaction-history rollover while a request using a distinct generation completed. Stock and two profile generations had separate cold/warm caches; each warm request reused 4,096 of 5,120 prompt tokens. Retirement, replacement allocation, tool routing and shutdown passed with speculative decoding active. An earlier run passed 1,000 requests and 100 update cycles. |
+| TensorFold 1.2, native CUDA integration | Gemma 4 26B A4B, MLX-format 4-bit, DFlash, one DGX Spark | Activation, stale-revision rejection, rollback, retirement and replacement allocation passed. Stock and two distinct profile generations each had separate cold/warm caches; a repeated 3,322-token prompt reused 3,315 tokens. Concurrent generations, client disconnect and request draining were checked. Seven additional requests finished normally, and three authorization checks passed. Draft proposals and acceptances were recorded in both modes. |
+| TensorFold 1.2, native CUDA integration | GLM 5.3 Flash, NVIDIA NVFP4, native MTP, four DGX Sparks | Profile activation, stale-revision rejection, rollback, retirement, separate caches and stream cancellation passed. Both modes reused 2,048 tokens from a 2,561-token prompt. Separate simultaneous stock/profile streams passed. The stress run completed 1,000 requests and 100 update cycles, with 200 live swaps, 100 concurrent-generation observations and no failed requests. All four ranks agreed on the final state and were reaped. |
+| TensorFold 1.2, native CUDA integration | GLM 5.3 Full, EXL3 2.75-bpw, native MTP, four DGX Sparks | The managed 8,192-token, two-slot configuration passed focused authentication/cache checks, simultaneous 512-token stock/profile streams and separate 6,148-input-token requests. It completed 1,000 requests and 100 update cycles, with 200 live swaps, 100 concurrent-generation observations and no failed requests. The original generation was restored and all four ranks shut down cleanly. |
+
+Separate six-request checks passed for the GLM Full and Flash 65,536-token
+presets with two configured slots and native MTP. Each mode reused 12,032 of
+12,053 input tokens on Full, and 10,240 of 12,050 on Flash. Both modes accepted
+a 32,768-token output allowance, and all four ranks shut down cleanly. These
+runs did not test full-window inputs or generate 32,768 output tokens.
+[Full results](../benchmarks/results/glm-full-tensorfold-context-20261102.json),
+[Flash results](../benchmarks/results/glm-flash-tensorfold-context-20261102.json).
+
+The Qwen, Gemma vLLM and llama.cpp runs used one RTX PRO 6000 Blackwell Max-Q per model;
+the Gemma SGLang and TensorFold runs used one DGX Spark. The Qwen SGLang
+attestations check sampled output rows against the runtime operator and require
+sampled standard rows to remain byte-identical. They do not measure fit to an
+edited checkpoint. The llama.cpp runs check full-model lifecycle behavior;
+they do not add numerical GPU-site attestations.
+
+Speculative decoding remained active. These checks establish neither refusal
+rates nor model-quality equivalence or representative throughput. Single-worker
+results do not qualify distributed updates. The four-rank GLM Flash and Full
+stress runs check normal operation. Separate Full recovery checks are recorded
+below; they do not qualify Flash recovery.
+
+An earlier vLLM stress run stopped on a connection error after 791 successful
+requests. The completed follow-up used a one-second client idle-connection
+expiry; the earlier run used five seconds. Both results are retained. This
+does not establish resilience to every transport failure.
+
+The native DeepSeek record combines two runs. The first exceeded its shutdown
+wait; the later run required an offline correction to its diagnostic reader.
+Both original outcomes are retained in the linked record. These checks do not
+establish output parity, answer quality, full-context operation or Docker GPU
+activation.
+
+### GLM Full distributed recovery
+
+Separate bounded runs checked TensorFold's four-rank GLM Full recovery with
+an 8,192-token context, two slots, an 8 GiB prompt cache and native MTP depth 4.
+Six fault cases passed: asymmetric artifact-transfer rejection, bridge loss
+before and after a durable decision, lost commit and resume acknowledgements,
+and retired-generation tombstone recovery. That cohort later failed a
+test-harness history-accounting assertion and remains a failed overall run.
+
+A later continuation used 1,019 distinct aborted native transactions to fill
+history, with all four ranks acknowledging each abort and resume. It checked
+history rollover after a lost reply, stale-epoch rejection and intentional
+worker loss. A fresh whole-cohort restart then restored the durable alias,
+generation and profile digests, rejected old-boot control and served an owner
+request using the restored generation. Independent cleanup checks found all
+recorded processes gone, GPU compute inventories empty and leases released.
+
+The [combined recovery record](../benchmarks/results/glm-full-tensorfold-recovery-20261102.json)
+pins the source, model, profiles, settings and limits for each scope. Earlier
+failed or incomplete attempts remain so. Aborted transactions are not successful
+activations; this evidence does not establish replay persistence across process
+restarts, 64K operation, answer quality or performance.
 
 ## Model and engine coverage
+
+The following table records earlier static-profile builds.
 
 | Starter | Tested runtime | Evidence and current limits |
 | --- | --- | --- |
 | DeepSeek V4.1 Flash 1017 | Native vLLM, pinned image libraries, official FP8, four SM120 GPUs | Eight public-package protocol/cache checks passed. All 104 layer/rank bindings matched, and mixed owner/off FULL graph execution was verified on all four workers. Docker CPU checks passed separately; full Docker GPU/wizard activation was not tested. |
-| DeepSeek V4.1 Flash 1017 | TensorFold 1.2.0, declared EXL3 3.5-bpw base, four SM120 GPUs | 780 operator comparisons and 15 HTTP checks passed. Both modes retained DSpark and separate RAM session reuse; stream cancellation released slots. The actual bundle passed four-rank wizard preparation and full-size profile staging. JSON Schema and guided output are unsupported in both modes. See the [qualification details](#deepseek-native-profile-on-tensorfold-120). |
+| DeepSeek V4.1 Flash 1017 | TensorFold 1.2.0, declared EXL3 3.5-bpw base, four SM120 GPUs | 780 operator comparisons and a fresh 27-request managed installation and lifecycle check passed. Both modes retained DSpark and separate RAM caches. Profile swaps, mixed streams, cancellation, 60K inputs and shutdown passed. See the [qualification details](#deepseek-native-profile-on-tensorfold-120). |
 | GLM 5.3 Full | TensorFold 1.1.9, EXL3 2.75-bpw, four DGX Sparks | Four-host wizard activation and 18 model cases passed, including deterministic arithmetic, concurrent requests, cache reuse and automatic tool calls. Invalid and replayed signatures were rejected. Configured context 8,192, two concurrent sequences, native MTP depth 4. A 2,423-token prompt reused 2,304 tokens independently in stock and owner mode; returning to stock retained its own cache and output hash. Forced tools, JSON Schema and images are unsupported. |
 | GLM 5.3 Flash | SGLang 0.5.20, four SM120 GPUs | All 60 target/MTP sites checked with EAGLE and a 65,536-token context. Both modes completed 59,042-token inputs. Eight Verified/Always On Hermes and OpenClaw protocol phases passed; image-answer limits remain. |
 | GLM 5.3 Flash | TensorFold 1.1.9, NVIDIA NVFP4, four DGX Sparks | Four-host wizard activation, 23 runtime/auth/cache/concurrency/harness-hook cases, and four JSON Schema/required-tool cases passed. Context 8,192, two concurrent sequences, fixed native MTP active. |
@@ -238,10 +356,31 @@ Fresh dependency installations and wizard activation were checked for Qwen on
 vLLM and SGLang with BF16 weights. A fresh llama.cpp build passed wizard
 activation with Q8_0 weights. The TensorFold wizard passed on Qwen MLX
 with one DGX Spark, GLM Flash NVFP4 with four Sparks, and GLM Full EXL3 with
-four Sparks. Qwen EXL3 passed device checks on x86; a full x86 wizard deployment
-was not tested. Standard and signed-profile requests completed with the
+four Sparks. Qwen EXL3 passed device checks on x86. A separate fresh x86_64
+managed installation with the pinned MLX-format 4-bit Qwen checkpoint passed
+bounded wizard, signed-request and cache checks, as recorded above.
+Standard and signed-profile requests completed with the
 declared speculative decoding active, followed by clean shutdown. Other
-model/engine installation combinations remain untested.
+installation coverage is limited to the combinations recorded here.
+
+Fresh installs of a 1.2.0 candidate wheel passed the public setup command on one
+DGX Spark per model, using TensorFold source `a7ed78d1c16fc9745f7540c504ebf87289be5e9a`.
+All 375 installed files matched the wheel, including 289 setup assets. Each run
+completed four standard/profile requests with the expected profile identity,
+generation and digest. DFlash remained active and accepted draft tokens on every
+request.
+
+| Model | Configured context / slots | Input tokens | Cold cached tokens, standard / profile | Repeated cached tokens, standard / profile |
+| --- | --- | ---: | --- | --- |
+| Qwen3.8-27B | 65,536 / 2 | 6,204 | 0 / 0 | 4,096 / 4,096 |
+| Gemma 4 26B A4B | 131,072 / 2 | 1,344 | 0 / 0 | 1,337 / 1,337 |
+
+Public shutdown and independent cleanup checks confirmed that the workers exited
+and GPU reservations were released. These are installation, routing and cache
+checks, not maximum-context input, throughput or answer-quality tests. The
+earlier Qwen lifecycle run above separately covered administration, tool routing
+and live profile updates. The [aggregate record](../benchmarks/results/tensorfold-installed-wheel-v120.json)
+contains the exact build, profile and checkpoint pins and per-request counts.
 
 Gemma's llama.cpp setup passed a fresh wizard check, preparation and activation
 with the default ngram method and a 2 GiB prompt cache. Post-activation checks
@@ -255,26 +394,28 @@ pinned by size, SHA-256 digest and complete file inventory.
 
 ## DeepSeek native profile on TensorFold 1.2.0
 
-The unchanged native Keys profile passed operator and runtime checks on four
-RTX PRO 6000 GPUs with the pinned LibertAIDAI EXL3 3.5-bpw base. The run used a
-65,536-token context, two slots and active DSpark.
+The native Keys profile passed operator and runtime checks on four RTX PRO
+6000 GPUs with the pinned LibertAIDAI EXL3 3.5-bpw base, a 65,536-token context,
+two slots and active DSpark.
 
 The operator checks covered 60 cases at layers 10, 22 and 35 across all four
 logical tensor-parallel partitions, including mixed rows and changing graph
 masks. All 780 comparisons passed. The largest sampled relative L2 error to
 the independent FP64 reference was about 0.168%, within the checked rounding bound.
 This measures the matrix operator; cross-engine full-model equivalence is unverified.
+See the [operator validation record](../benchmarks/results/deepseek-tensorfold-native-qualification-20261101.json).
 
-Fifteen HTTP checks passed their expected outcomes, including signed requests,
-unsigned and replayed requests, invalid profiles and strengths, repeated cache
-use and concurrent stock/profile requests. Both modes proposed speculative
-tokens. Cancelled streams in both modes released their slots; subsequent
-requests succeeded, and all four ranks shut down cleanly. Repeated stock and
-profile sessions each resumed an 8,720-token prefix
-from RAM. These family cache hits appear in the runtime log, not the OpenAI
-cached-token field. JSON-schema requests were rejected in both modes, as the
-current TensorFold DeepSeek backend does not support them.
+A fresh managed installation using TensorFold source `b505ce273d3c` passed a
+27-request sequence covering signed requests, replay and invalid-key handling,
+profile activation, rollback, retirement, overlapping generations, mixed
+stock/profile streams and cancellation. OpenAI usage reported 1,376 reused
+prefix tokens in stock, owner and alternate-profile requests. The stock cache
+also remained usable after an owner-profile switch. All four ranks shut down
+and released their GPU locks.
 
-The [qualification record](../benchmarks/results/deepseek-tensorfold-native-qualification-20261101.json)
-contains exact model, profile and engine pins. Refusal rate, answer quality and
-throughput were not measured in this run.
+Both modes completed requests with 60,004 input tokens and two output tokens.
+This checks those inputs within the configured window. It does not measure
+full-window capacity, refusal rate, answer quality or throughput. The
+[installation and lifecycle record](../benchmarks/results/deepseek-tensorfold-installed-20261102.json)
+contains the exact pins and results. JSON Schema and guided output remain
+unsupported on this backend.

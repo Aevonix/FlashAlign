@@ -17,6 +17,7 @@ from safetensors.torch import load_file
 
 from .gate import Gate, PREFIX, read_key
 from .flashalign_replay import deployment_replay_store
+from .lifecycle_support import profile_digest
 
 _active = ContextVar('flashalign_sglang_forward',default=None)
 MODEL = {'id': 'RedHatAI/gemma-4-26B-A4B-it-FP8-dynamic', 'revision': 'ed35d7abe5d940da41b4ff06eb482feb0be8cb44'}
@@ -75,7 +76,7 @@ def load_profile(directory):
         sites[(layer,kind)]={'q':q,'scale':float(strength),'tensor':site.get('tensor')};used.add(key)
     if set(sites)!=set(EXPECTED) or used!=set(tensors):
         raise ValueError('Missing or unexpected FlashAlign tensors')
-    return Profile(name,hashlib.sha256(raw+tensor_file.read_bytes()).hexdigest(),meta['model'],hidden,sites)
+    return Profile(name,profile_digest(raw, tensor_file.read_bytes()),meta['model'],hidden,sites)
 
 
 @lru_cache(maxsize=1)
@@ -211,18 +212,37 @@ def install(runner):
                 raise ValueError('FlashAlign profile width does not match loaded module')
             operator['q']=operator['q'].to(runner.device)
             positions[module_name]=(layer,kind)
-    handles=[]
-    for name,site in positions.items():
-        def hook(module,inputs,output,site=site):
-            active=_active.get()
-            if active is None:return output
-            current,batch=active
-            if current is not runner:return output
-            first=output[0] if isinstance(output,tuple) else output
-            modified=project(first,batch,site,profiles,gate)
-            return (modified,*output[1:]) if isinstance(output,tuple) else modified
-        handles.append(modules[name].register_forward_hook(hook))
+    handles=list(getattr(runner, "flashalign_handles", ()))
+    installed=getattr(runner, "flashalign_installed_sites", {})
+    previous_handles = len(handles)
+    previous_sites = dict(installed)
+    try:
+        for name,site in positions.items():
+            if name in installed:
+                if installed[name] != site: raise ValueError("Conflicting FlashAlign installed site")
+                continue
+            def hook(module,inputs,output,site=site):
+                active=_active.get()
+                if active is None:return output
+                current,batch=active
+                if current is not runner:return output
+                first=output[0] if isinstance(output,tuple) else output
+                modified=project(first,batch,site,profiles,gate)
+                return (modified,*output[1:]) if isinstance(output,tuple) else modified
+            handles.append(modules[name].register_forward_hook(hook))
+            installed[name] = site
+    except BaseException:
+        for handle in reversed(handles[previous_handles:]):
+            if isinstance(handle, tuple):
+                module, original = handle
+                setattr(module, original.__name__, original)
+            else:
+                handle.remove()
+        installed.clear()
+        installed.update(previous_sites)
+        raise
     runner.flashalign_handles=handles
+    runner.flashalign_installed_sites = installed
     diagnostic=os.environ.get('FLASHALIGN_DIAGNOSTIC_FILE')
     if diagnostic:
         with open(diagnostic,'a') as stream:

@@ -14,7 +14,7 @@ import hashlib
 from .planning import ExecutionClass
 
 
-def install_native_weights(attention, profile, payload, rank):
+def install_native_weights(attention, profile, payload, rank, *, generation_id=None):
     """Create a second immutable packed binding without modifying stock storage."""
     import torch
     from b12x.gemm._shared.wo_mxfp8 import pack_fp8_block_scaled_weight_mxfp8
@@ -24,7 +24,20 @@ def install_native_weights(attention, profile, payload, rank):
         raise ValueError("Native WO-B attention has no valid layer identity")
     if layer not in profile.layers:
         return None
-    if hasattr(attention, "_flashalign_native_weights"):
+    generations = getattr(attention, '_flashalign_native_generations', {})
+    if generation_id is not None and generation_id in generations:
+        installed = generations[generation_id]
+        if installed[0] != profile.digest or installed[1] is not attention._wo_projection_weights:
+            raise ValueError('Native generation identity changed')
+        return installed[3]
+    legacy = getattr(attention, '_flashalign_native_install', None)
+    if generation_id is not None and legacy is not None and legacy[0] == profile.digest:
+        if legacy[1] is not attention._wo_projection_weights:
+            raise ValueError('Native stock binding changed')
+        generations[generation_id] = (profile.digest, legacy[1], attention._flashalign_native_weights, legacy[2])
+        attention._flashalign_native_generations = generations
+        return legacy[2]
+    if generation_id is None and hasattr(attention, "_flashalign_native_weights"):
         installed = getattr(attention, "_flashalign_native_install", None)
         if (installed is None or installed[0] != profile.digest
                 or installed[1] is not attention._wo_projection_weights):
@@ -88,13 +101,39 @@ def install_native_weights(attention, profile, payload, rank):
             raise RuntimeError("Native installation changed stock storage")
     if attention._wo_projection_weights is not stock:
         raise RuntimeError("Native installation changed the stock packed binding")
-    attention._flashalign_native_weights = alternate
     receipt = {"layer": layer, "tp_rank": rank, "profile_digest": profile.digest,
                "shared_stock_wo_a": True, "packed_values_exact": True,
                "packed_row_and_mma_scales_exact": True, "stock_storage_unchanged": True,
                "tensors": tensor_receipts}
-    attention._flashalign_native_install = (profile.digest, stock, receipt)
+    if generation_id is None:
+        attention._flashalign_native_weights = alternate
+        attention._flashalign_native_install = (profile.digest, stock, receipt)
+    else:
+        generations[generation_id] = (profile.digest, stock, alternate, receipt)
+        attention._flashalign_native_generations = generations
     return receipt
+
+
+def run_native_generations(binding, state, alternates, mode, owner_rows, row_indices, stream,
+                           *, operations=None, single_generation=False):
+    """Apply each immutable packed matrix only to its generation's rows."""
+    if mode not in (0, 1, 2):
+        raise ValueError('Invalid native execution class')
+    if mode == ExecutionClass.OFF:
+        return state.run_inv_rope(binding, stream=stream)
+    if not alternates or owner_rows is None:
+        raise ValueError('Native generation bindings or rows are missing')
+    if single_generation and len(alternates) == 1 and mode == ExecutionClass.OWNER:
+        return run_native_wo(binding, state, alternates[0][1], mode, owner_rows, row_indices, stream)
+    operations = operations or _TorchOperations()
+    result = state.run_inv_rope(binding, stream=stream)
+    for slot, alternate in alternates:
+        if alternate.wo_a is not binding.weights.wo_a:
+            raise ValueError('Native generation must share immutable stock WO-A')
+        masked = operations.mask_tmp(binding.tmp, owner_rows, row_indices, slot=slot)
+        edited = operations.run_b(state, binding, alternate, masked, stream)
+        operations.scatter_owner(binding.output, edited, owner_rows, row_indices, slot=slot)
+    return result
 
 
 def run_native_wo(binding, state, alternate, mode, owner_rows, row_indices, stream,
@@ -127,14 +166,14 @@ def run_native_wo(binding, state, alternate, mode, owner_rows, row_indices, stre
 
 
 class _TorchOperations:
-    def mask_tmp(self, source, owner_rows, row_indices):
+    def mask_tmp(self, source, owner_rows, row_indices, *, slot=1):
         import torch
         from .gpu_kernels import mask_tmp
         if source.ndim != 3 or source.dtype != torch.bfloat16:
             raise ValueError("Unexpected common WO-A intermediate")
         masked = torch.empty_strided(source.shape, source.stride(),
                                      dtype=source.dtype, device=source.device)
-        mask_tmp(source, masked, owner_rows, row_indices)
+        mask_tmp(source, masked, owner_rows, row_indices, slot=slot)
         return masked
 
     def run_b(self, state, binding, alternate, masked, stream):
@@ -159,6 +198,6 @@ class _TorchOperations:
                                  out=output, alpha=None, stream=stream)
         return output
 
-    def scatter_owner(self, output, edited, owner_rows, row_indices):
+    def scatter_owner(self, output, edited, owner_rows, row_indices, *, slot=1):
         from .gpu_kernels import scatter_owner
-        scatter_owner(output, edited, owner_rows, row_indices)
+        scatter_owner(output, edited, owner_rows, row_indices, slot=slot)

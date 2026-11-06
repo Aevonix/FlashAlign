@@ -21,6 +21,7 @@ from . import native_cluster
 from .native_remote import member_path, owned_directory, cuda_inventory, prepare_replay_directory
 from .profiles import read_json, validate_profile, stage_profile, _compatible_models, ProfileError, NATIVE_FORMAT, profile_fingerprint
 from .setup_runtime import SetupError
+from .native_lifecycle import declaration as control_declaration, addresses as control_addresses, prepare_runner, runner_files
 
 
 def checkpoint_matches(info, profile, manifest=None):
@@ -53,6 +54,7 @@ def _local_inventory(model_path, devices):
     except (OSError, ValueError, subprocess.TimeoutExpired):
         free_devices = []
     return {'platform': host_platform(), 'home': str(Path.home()), 'model_path': str(path), 'config': config,
+            'python': os.sys.executable, 'python_version': list(os.sys.version_info[:3]),
             'cuda_architectures': architectures,
             'devices': devices if devices is not None else free_devices,
             'network_interfaces': sorted(p.name for p in Path('/sys/class/net').iterdir()),
@@ -152,6 +154,12 @@ def check(home, spec, profile, *, model_id):
     if any(row['platform'] != first['platform'] for row in hosts):
         raise SetupError('All ranks in one native deployment must use the same bundle architecture')
     root, manifest = check_bundle(spec.get('bundle', ''), first['config'], profile, platform_id=first['platform'])
+    if control_declaration(manifest):
+        for node in hosts:
+            version = node.get('python_version', [])
+            if (not isinstance(version, list) or len(version) < 2
+                    or any(type(n) is not int for n in version) or tuple(version[:2]) < (3, 10)):
+                raise SetupError('Native profile control requires Python 3.10 or newer on every model host')
     environment = checked_environment(spec, manifest)
     startup = startup_timeout(spec, manifest)
     hardware_verified = True
@@ -255,10 +263,15 @@ def startup_timeout(spec, manifest):
 
 def command(runtime, profile, key, node, checked, spec, model_id, port, master, master_port, *, replay_directory=None):
     manifest, draft = checked['manifest'], checked['drafting']
+    controlled = control_declaration(manifest) is not None
     world, rank = len(checked['hosts']), node['rank']
     argv = [str(runtime/manifest['binary']), 'serve', node['model_path'], '--name', model_id,
             '--host', spec.get('host', '127.0.0.1' if node['host'] == 'local' or spec.get('api_transport', 'ssh') == 'ssh' else '0.0.0.0'), '--port', str(port),
-            *checked['arguments'], '--owner-profile', str(profile)]
+            *checked['arguments']]
+    if controlled:
+        argv += ['--owner-control-socket', str(control_addresses(runtime.parent)['native'])]
+    else:
+        argv += ['--owner-profile', str(profile)]
     env = checked_environment(spec, manifest)
     env['LD_LIBRARY_PATH'] = str(runtime/'lib') + (os.pathsep+env['LD_LIBRARY_PATH'] if env.get('LD_LIBRARY_PATH') else '')
     env['CUDA_VISIBLE_DEVICES'] = node['device']
@@ -281,9 +294,11 @@ def command(runtime, profile, key, node, checked, spec, model_id, port, master, 
         if bool(source) == bool(directory):
             raise SetupError('DeepSeek requires either engram_source or engram_dir on every native host')
         env['TF_DSV41_ENGRAM_SAFETENSORS' if source else 'TF_DSV41_ENGRAM_DIR'] = str(source or directory)
-        if rank:
+        if controlled:
+            argv += ['--tp', str(world), '--rank', str(rank)]
+        elif rank:
             argv = [str(runtime/manifest['follower_binary']), 'follow', node['model_path'], str(assets), '--owner-profile', str(profile)]
-    if rank == 0 or transport == 'glm_env':
+    if rank == 0 or transport == 'glm_env' and not controlled:
         argv += ['--owner-key-file', str(key)]
     if rank == 0 and manifest.get('durable_owner_replay', False):
         if replay_directory is None:
@@ -361,20 +376,36 @@ def prepare(home, spec, profile_path, *, model_id, key_file=None):
         supplied = Path(key_file).expanduser()
         if supplied.exists():
             reject_untracked_replay_key(home, read_key(supplied))
-    identity = hashlib.sha256((sha256(bundle/'manifest.json')+profile_fingerprint(profile)+
-                              model_id+json.dumps(spec, sort_keys=True)).encode()).hexdigest()[:20]
-    state = Path(home)/'.config/owner-mode/engines'/identity
+    plan_identity = hashlib.sha256((sha256(bundle/'manifest.json')+profile_fingerprint(profile)+
+                                   model_id+json.dumps(spec, sort_keys=True)).encode()).hexdigest()[:20]
+    hosts = checked['hosts']
+    remote = any(row['host'] != 'local' for row in hosts)
+    controlled = control_declaration(manifest) is not None
+    supervisor = Path(__file__).with_name('engine_supervisor.py').read_bytes()
+    control_helpers = runner_files() if controlled else {}
+    forward = (Path(__file__).with_name('native_socket_forward.py').read_bytes()
+               if controlled and remote else None)
+    helpers = {'engine_supervisor.py': (supervisor, False), **control_helpers}
+    if forward is not None:
+        helpers['native_socket_forward.py'] = (forward, False)
+    helper_hashes = {name: hashlib.sha256(data).hexdigest()
+                     for name, (data, _) in helpers.items()}
+    identity = hashlib.sha256((plan_identity+'\n'+json.dumps(helper_hashes, sort_keys=True)).encode()).hexdigest()[:20]
+    states = Path(home)/'.config/owner-mode/engines'
+    state = states/identity
     try:
         owned_directory(state, create=True)
+        if key_file is None:
+            owned_directory(states/plan_identity, create=True)
     except ValueError as error:
         raise SetupError(str(error)) from error
-    key = Path(key_file).expanduser().resolve() if key_file else state/'engine.key'
+    # Keep the existing logical plan's key location across helper upgrades.
+    # Staged files have a separate immutable, content-bound identity.
+    key = Path(key_file).expanduser().resolve() if key_file else states/plan_identity/'engine.key'
     ensure_key(key)
     key_material = read_key(key)
     staged_profile = state/'profile'
     stage_profile(profile['path'], staged_profile)
-    hosts = checked['hosts']
-    remote = any(row['host'] != 'local' for row in hosts)
     previous = read_json(state/'deployment.json') if (state/'deployment.json').is_file() else {}
     network_file = state/'network.json'
     network = read_json(network_file) if network_file.is_file() else {}
@@ -393,7 +424,7 @@ def prepare(home, spec, profile_path, *, model_id, key_file=None):
             raise SetupError('Provide a reachable IPv4 master_address for a multi-host native deployment') from error
     commands, units = [], []
     replay_directory = None
-    supervisor = Path(__file__).with_name('engine_supervisor.py').read_bytes()
+    leader_control = None
     for node in hosts:
         remote_state = (state/('rank-'+str(node['rank'])) if node['host'] == 'local' else
                         Path(node.get('home', node['home']))/'.config/owner-mode/native-ranks'/(identity+'r'+str(node['rank'])))
@@ -412,7 +443,14 @@ def prepare(home, spec, profile_path, *, model_id, key_file=None):
                                     model_id, port, master, master_port, replay_directory=replay)
         files = {'runtime/manifest.json': (bundle/'manifest.json', False),
                  'engine_supervisor.py': (supervisor, False)}
-        if '--owner-key-file' in argv:
+        engine_argv = argv
+        if control_declaration(manifest) and node['rank'] == 0:
+            argv, control_files, paths = prepare_runner(manifest, remote_state, argv,
+                staged_profile if shared_profile else remote_state/'profile',
+                python=node.get('python', 'python3'), timeout=checked['startup_timeout'], helpers=control_helpers)
+            files.update(control_files)
+            leader_control = {'host': node['host'], 'paths': paths, 'ssh_config': spec.get('ssh_config')}
+        if '--owner-key-file' in engine_argv:
             files['engine.key'] = (key_material, False)
         for name, info in manifest['files'].items():
             files['runtime/'+name] = (bundle/name, info.get('executable', False))
@@ -458,18 +496,40 @@ def prepare(home, spec, profile_path, *, model_id, key_file=None):
     remote_url = f'http://{leader}:{port}/v1'
     controller_units = []
     if forward_port is not None:
-        from .native_cluster import ssh_options
         tunnel_id = hashlib.sha256((identity+'tunnel').encode()).hexdigest()[:20]
         parent = state/'tunnels'
-        argv = ['ssh', *ssh_options(spec.get('ssh_config')), '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
-                '-o', 'ForwardAgent=no', '-o', 'ExitOnForwardFailure=yes', '-o', 'ServerAliveInterval=15',
-                '-o', 'ServerAliveCountMax=3', '-N', '-L', f'127.0.0.1:{forward_port}:127.0.0.1:{port}', hosts[0]['host']]
+        argv = ['ssh', *native_cluster.owned_forward_options(spec.get('ssh_config')),
+                '-N', '-L', f'127.0.0.1:{forward_port}:127.0.0.1:{port}', hosts[0]['host']]
         files = {'engine_supervisor.py': (supervisor, False),
                  'unit.json': ((json.dumps({'argv': argv, 'env': {}})+'\n').encode(), False)}
         records = {name: {'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data), 'executable': exe}
                    for name, (data, exe) in files.items()}
         native_cluster.rpc('local', 'stage', payload=native_cluster.archive(files), parent=str(parent), id=tunnel_id, files=records)
         controller_units.append({'host': 'local', 'state': str(parent/tunnel_id), 'kind': 'ssh_forward'})
+    admin_fields = {}
+    if leader_control is not None:
+        paths = leader_control['paths']
+        admin_fields['profile_lifecycle'] = {'schema': 'flashalign.lifecycle-launch.v1', 'status': 'prepared'}
+        if leader_control['host'] == 'local':
+            admin_fields.update(admin_socket=str(paths['admin']), admin_staging_directory=str(paths['incoming']))
+        else:
+            address = control_addresses(state)['admin']
+            owned_directory(address.parent, create=True)
+            tunnel_id = hashlib.sha256((identity+'admin-tunnel').encode()).hexdigest()[:20]
+            parent = state/'tunnels'
+            forward_path = parent/tunnel_id/'native_socket_forward.py'
+            ssh = ['ssh', *native_cluster.owned_forward_options(spec.get('ssh_config')),
+                   '-o', 'StreamLocalBindMask=0177', '-o', 'StreamLocalBindUnlink=no',
+                   '-N', '-L', str(address)+':'+str(paths['admin']), leader_control['host']]
+            argv = [os.sys.executable, '-I', '-B', str(forward_path), str(address), *ssh]
+            files = {'engine_supervisor.py': (supervisor, False),
+                     'native_socket_forward.py': (forward, False),
+                     'unit.json': ((json.dumps({'argv': argv, 'env': {}})+'\n').encode(), False)}
+            records = native_cluster.file_records(files)
+            native_cluster.rpc('local', 'stage', payload=native_cluster.archive(files), parent=str(parent), id=tunnel_id, files=records)
+            controller_units.append({'host': 'local', 'state': str(parent/tunnel_id), 'kind': 'ssh_admin_forward'})
+            admin_fields.update(admin_socket=str(address), admin_remote={'host': leader_control['host'],
+                'staging_directory': str(paths['incoming']), 'ssh_config': leader_control['ssh_config']})
     result = {'version': 2, 'kind': 'tensorfold', 'runtime': 'native', 'state': str(state), 'source': str(state),
               'commands': commands, 'base_url': f'http://127.0.0.1:{forward_port}/v1' if forward_port else remote_url, 'model': model_id,
               'profile': profile['name'], 'profile_path': str(staged_profile), 'key_file': str(key),
@@ -478,6 +538,7 @@ def prepare(home, spec, profile_path, *, model_id, key_file=None):
               'bundle_sha256': sha256(bundle/'manifest.json'), 'drafting': checked['drafting'],
               'hardware_verified': checked['hardware_verified'], 'startup_timeout': checked['startup_timeout'],
               'status': 'prepared', 'install_dependencies': False, 'requirements': [], 'python': os.sys.executable}
+    result.update(admin_fields)
     if replay_directory is not None:
         result['owner_replay'] = {'directory': str(replay_directory), 'durable': True}
     if remote:

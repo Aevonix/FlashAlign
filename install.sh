@@ -16,4 +16,5 @@ if "$setup_banner"; then
   printf 'Preparing Aevonix FlashAlign setup...\n'
 fi
 "$setup_env/bin/python" -m pip install --quiet --disable-pip-version-check -r "$package_root/hermes-owner-mode/requirements-setup.txt"
+"$setup_env/bin/python" -m pip install --quiet --disable-pip-version-check "$package_root"
 exec "$setup_env/bin/python" "$package_root/hermes-owner-mode/setup.py" "$@"

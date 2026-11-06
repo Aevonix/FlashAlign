@@ -5,16 +5,22 @@
     "LICENSE": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
     "LICENSE.llama.cpp": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d",
     "NOTICE.md": "c8a365bb3b0f9da0a3269abbe62f924a23628a11409e2b6f8d0aee006f5d7a7a",
-    "README.md": "93da8f3bbfe755250ddada7551c09069cdf16eb334cff8c168faa0c28cdc4b1d",
-    "backend.json": "97dd095e397a883247d2f9c07ae0edc395e147ea4623024004506a6508ca9ca3",
-    "flashalign.patch": "f468b7db9b07e54cca2c6bc178fe77a4a0d1e8e3ce5e8465d0324bb5f91e59aa",
+    "README.md": "ba57d74d1cac4525374cab2c0bbce592a7aab9e695de6992e8a79640a3303893",
+    "auth_contract.py": "9b58c136bde7e622c8456bfe5dd01a29314a06dd9bcade57fcb6bd8d3077d84b",
+    "backend.json": "15c6f0ad777e14f663d9995d8deb23982dc47f9eeb34a27f4f31f40dc3126483",
+    "flashalign.patch": "b1f1f07df47bd4d1a1ddb61e6d523cd83122465937c6202cfd15039081f0b26d",
+    "flashalign_admin_server.py": "402cab113e50c9272c4f311d0a74c16d16387650d7e3d64d0beb11da9c12d567",
+    "flashalign_lifecycle.py": "777fb6b6bcfcac3b2befcbf8ff0447f885a2aa42027edf8568c557918469da8d",
     "flashalign_replay.py": "6e2730a89fc4d70636bf3b139c5ab5eb8d7b205483ac28684aa529df6f565162",
-    "install.py": "9d1b42e0d25bcd862f1c52f39e8e89bebbbf123b0b2f6a25fb586f4aa2e501b4",
-    "launcher.py": "2ab306ac12d7635af422776d29fea674c54682adccf00827745250d0bfcb19aa",
-    "patch.json": "08a83baec7103decef830cc48857597f973cc90e88358c03416951acc8e6fd9c",
-    "profile_gguf.py": "719cd7876c755751a1ecb0b6179145d88f6e6948ee1a98bb8d5221d28259e4af",
+    "install.py": "a05721e2040d13b383cd012df2c882a1d1a7aa3b4f307de3056412df7955ef27",
+    "launcher.py": "183f91dd39dd85ce257c1d12a3759dbd38355aa2b805018796634328f62f84a5",
+    "lifecycle.py": "c01fed8e947fd088cb97cc3e5f895663a74b045515b29cb1b0bd5fe8a809466c",
+    "patch.json": "7ea3a0a2b7d756a36d7ffeeb247a86ded0347a9e094865b357b72ca7110725e0",
+    "profile_gguf.py": "240c8fa2b8e82ceb5c8333a0cc4674ca1e80c915a0788b0ec0af8e922cdac321",
     "requirements.txt": "98ded5c9f84709b88f264219238780e800cfb996507de721b533e6fcadfda2e7",
-    "tests/test_backend.py": "a4b29aa51322d1d31ed4056726e63cc199223f178dcaf525bf7015fc8bc937e0"
+    "tests/test_backend.py": "fe2a38fc5b4eab0aafa03cb636fc919f1980a3d62859bc9cc06fac85ee4f8fcd",
+    "tests/test_lifecycle.py": "650834d29006b7e71ec2e8a4a3e8a8c3280029b9d8e403b61fca676dca9ffd97",
+    "tests/tiny_gemma.py": "8f5de435db66b3d22c18dbc44bcd3448528d7968b1e12387ba7b3d912d102234"
   },
   "source_revision": "8642541b255bfb5dc39cd351a178be09013a55d6",
   "validation_previous_revision": {
@@ -28,8 +34,8 @@
   },
   "validation": {
     "python_tests": {
-      "passed": 17,
-      "total": 17
+      "passed": 24,
+      "total": 24
     },
     "native_cpu": "v0.8.0 server build and GGML arithmetic, cache, context-shift and speculation regression passed",
     "native_gpu": "Gemma 50 executed sites, stock bypass, runtime/auth/cache/context/wizard tests passed; Qwen direct and 64K regression passed",
@@ -47,6 +53,8 @@
         "total": 32
       }
     },
-    "scope": "Small qualification fixtures; native agent answer-quality limitations are documented separately."
+    "scope": "Small qualification fixtures; native agent answer-quality limitations are documented separately.",
+    "lifecycle_cpu": "Real native tiny untrained Gemma process: off/on, UDS stage/activate/rollback/deactivate, generation cache isolation, busy retirement rejection, quiescent eviction/release, restart recovery; ngram remains active.",
+    "lifecycle_gpu": "Fresh native build: Qwen Q8_0 with external draft and Gemma Q8_0 with ngram/MTP passed full-model profile loading, live switching, cache isolation, cancellation, retirement and rollback; Gemma ngram passed 1000 requests/100 live switches. No numerical GPU-site or broad quality claim."
   }
 }

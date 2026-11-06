@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Build a pinned native runtime archive from exact binaries and a Git source commit."""
 import argparse
+import ast
 import gzip
 import hashlib
 import io
@@ -124,6 +125,22 @@ def main():
               'platform':args.platform,'cuda_architectures':args.cuda_architecture,'binary':'bin/'+args.binary.name,
               'source_archive':str(source.relative_to(args.output)),
               'source_license_notice':'sources/FLASHALIGN-LICENSE.md'}
+    control=caps.get('profile_control')
+    if control is not None:
+        name=control.get('bridge') if isinstance(control,dict) else None
+        if (not isinstance(name,str) or not name.startswith('bin/') or Path(name).name!=name[4:]
+                or not name.endswith('.py') or (args.output/name).exists()):
+            p.error('profile control must name a separate Python bridge in bin/')
+        with tarfile.open(fileobj=io.BytesIO(archive),mode='r:') as source_tar:
+            try:bridge=source_tar.extractfile('tools/flashalign_admin.py').read()
+            except (KeyError,AttributeError):p.error('pinned source does not contain its profile-control bridge')
+        tree=ast.parse(bridge)
+        schemas=[node.value.value for node in tree.body if isinstance(node,ast.Assign)
+                 and any(isinstance(target,ast.Name) and target.id=='SCHEMA' for target in node.targets)
+                 and isinstance(node.value,ast.Constant) and isinstance(node.value.value,str)]
+        if schemas != [control.get('protocol')]:
+            p.error('profile control protocol differs from the pinned bridge')
+        (args.output/name).write_bytes(bridge)
     if transform_path:manifest['binary_transform_receipt']=str(transform_path.relative_to(args.output))
     if auxiliary_records:manifest['auxiliary_sources']=auxiliary_records
     if args.follower_binary:manifest['follower_binary']='bin/'+args.follower_binary.name

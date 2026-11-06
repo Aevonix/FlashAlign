@@ -123,16 +123,18 @@ checkpoints. Gemma setup defaults to ngram speculation and can preserve its
 official MTP draft. Other GGUF files need a matching compatibility declaration.
 See the [llama.cpp guide](../engines/llamacpp/README.md).
 
-The four compact starters have TensorFold 1.1.9 paths, with model-specific
-builds and presets. The DeepSeek native starter has pinned vLLM and TensorFold
-1.2.0 paths. TensorFold bundles support Linux x86_64 or aarch64 and declare the
-required GPU architecture and rank count. Setup checks those requirements.
-The following hardware was used to test the bundled configurations:
+The four compact starters and the DeepSeek native starter have pinned
+TensorFold 1.2.0 paths, with model-specific builds and presets. DeepSeek also
+has a pinned native vLLM path. TensorFold bundles declare the supported Linux
+CPU architecture, GPU architecture and rank count. Setup checks those
+requirements. The catalog targets are listed below; [validation](validation.md)
+records the runtime versions and scope of completed tests separately:
 
-| Model | Checkpoint format | Tested hardware |
+| Model | Checkpoint format | Hardware target |
 | --- | --- | --- |
 | DeepSeek V4.1 Flash 1017, TensorFold 1.2.0 | Declared LibertAIDAI EXL3 3.5-bpw base | Four RTX PRO 6000 GPUs, Linux x86_64, SM120 |
 | Qwen3.8-27B | MLX-format 4-bit | One DGX Spark, Linux aarch64, SM121 |
+| Qwen3.8-27B | MLX-format 4-bit | One RTX PRO 6000, Linux x86_64, SM120 |
 | Qwen3.8-27B | EXL3 2.0-bpw | One RTX PRO 6000, Linux x86_64, SM120 |
 | Gemma 4 26B A4B | MLX-format 4-bit | One DGX Spark, Linux aarch64, SM121 |
 | GLM 5.3 Flash | NVIDIA NVFP4 | Four DGX Sparks, Linux aarch64, SM121 |
@@ -159,13 +161,14 @@ SM120 GPUs. Its base quantization and arithmetic differ from the FP8 vLLM path.
 Both current DeepSeek packages enforce this four-GPU layout.
 
 The DeepSeek TensorFold preset has a 65,536-token context and a 131,072-token
-pool. JSON Schema and guided output are unsupported. Older output-projection
-profiles use their matching TensorFold or vLLM packages; those packages cannot
-load the native starter. The older TensorFold preset supports automatic DSML
-tool calls; forced tool selection and image input are unsupported.
+pool. It supports automatic DSML tool calls. Forced tool selection, JSON Schema,
+guided output and image input are unsupported.
 
-GLM Full's TensorFold preset uses an 8,192-token context, two concurrent
-sequences and native MTP depth 4. It supports automatic tool calls. Forced tool
+Older output-projection profiles use their matching TensorFold or vLLM packages;
+those packages cannot load the native starter.
+
+Both GLM TensorFold presets use a 65,536-token context and two concurrent
+sequences. GLM Full uses native MTP depth 4. It supports automatic tool calls. Forced tool
 selection, JSON Schema and image input are unsupported on this path.
 
 Before changing harness routing, the wizard checks model and profile

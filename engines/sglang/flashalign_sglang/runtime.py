@@ -17,6 +17,7 @@ from safetensors.torch import load_file
 
 from .gate import Gate, PREFIX, read_key
 from .flashalign_replay import deployment_replay_store
+from .lifecycle_support import profile_digest
 
 _active = ContextVar('flashalign_sglang_forward',default=None)
 
@@ -64,7 +65,7 @@ def load_profile(directory):
         sites[(layer,kind)]={'q':q,'scale':float(strength),'tensor':site.get('tensor')};used.add(key)
     if not sites or used!=set(tensors):
         raise ValueError('Missing or unexpected FlashAlign tensors')
-    return Profile(name,hashlib.sha256(raw+tensor_file.read_bytes()).hexdigest(),meta['model'],hidden,sites)
+    return Profile(name,profile_digest(raw, tensor_file.read_bytes()),meta['model'],hidden,sites)
 
 
 @lru_cache(maxsize=1)
@@ -88,7 +89,11 @@ def check_server_args(args):
     for field in ('tp_size','pp_size','dp_size','dcp_size','attn_cp_size','nnodes','tokenizer_worker_num'):
         if getattr(args,field,1)!=1:
             raise ValueError('FlashAlign SGLang currently requires one model and HTTP worker, TP/PP/DP/CP=1')
-    if not getattr(args,'disable_cuda_graph',False):
+    graph_enabled = os.environ.get('FLASHALIGN_CUDA_GRAPHS') == '1'
+    if graph_enabled:
+        from .graph_capability import check_graph_capabilities
+        check_graph_capabilities(args, profiles)
+    if not graph_enabled and not getattr(args,'disable_cuda_graph',False):
         decode=getattr(args,'disable_decode_cuda_graph',False) or getattr(args,'cuda_graph_backend_decode',None)=='disabled'
         prefill=getattr(args,'disable_prefill_cuda_graph',False) or getattr(args,'cuda_graph_backend_prefill',None)=='disabled'
         if not (decode and prefill):
@@ -193,18 +198,49 @@ def install(runner):
                 raise ValueError('FlashAlign profile width does not match loaded module')
             operator['q']=operator['q'].to(runner.device)
             positions[module_name]=(layer,kind)
-    handles=[]
-    for name,site in positions.items():
-        def hook(module,inputs,output,site=site):
-            active=_active.get()
-            if active is None:return output
-            current,batch=active
-            if current is not runner:return output
-            first=output[0] if isinstance(output,tuple) else output
-            modified=project(first,batch,site,profiles,gate)
-            return (modified,*output[1:]) if isinstance(output,tuple) else modified
-        handles.append(modules[name].register_forward_hook(hook))
+    graph = getattr(runner, 'flashalign_graph', None)
+    if graph is None and os.environ.get('FLASHALIGN_CUDA_GRAPHS') == '1':
+        from .graph_adapter import GraphAdapter
+        from .graph_capability import check_graph_capabilities
+        from sglang.srt.runtime_context import get_exec
+        check_graph_capabilities(runner.server_args, profiles, config=get_exec().graph.cuda_graph_config)
+        graph = GraphAdapter(runner, profiles, gate, positions)
+        runner.flashalign_graph = graph
+    handles=list(getattr(runner, "flashalign_handles", ()))
+    installed=getattr(runner, "flashalign_installed_sites", {})
+    previous_handles = len(handles)
+    previous_sites = dict(installed)
+    try:
+        for name,site in positions.items():
+            if name in installed:
+                if installed[name] != site: raise ValueError("Conflicting FlashAlign installed site")
+                continue
+            def hook(module,inputs,output,site=site):
+                if graph is not None:
+                    first=output[0] if isinstance(output,tuple) else output
+                    modified=graph.project(first,site)
+                    return (modified,*output[1:]) if isinstance(output,tuple) else modified
+                active=_active.get()
+                if active is None:return output
+                current,batch=active
+                if current is not runner:return output
+                first=output[0] if isinstance(output,tuple) else output
+                modified=project(first,batch,site,profiles,gate)
+                return (modified,*output[1:]) if isinstance(output,tuple) else modified
+            handles.append(modules[name].register_forward_hook(hook))
+            installed[name] = site
+    except BaseException:
+        for handle in reversed(handles[previous_handles:]):
+            if isinstance(handle, tuple):
+                module, original = handle
+                setattr(module, original.__name__, original)
+            else:
+                handle.remove()
+        installed.clear()
+        installed.update(previous_sites)
+        raise
     runner.flashalign_handles=handles
+    runner.flashalign_installed_sites = installed
 
 
 def owner_forward(function):
@@ -213,6 +249,19 @@ def owner_forward(function):
         if not getattr(self,'flashalign_handles',None):
             return function(self,forward_batch,*args,**kwargs)
         token=_active.set((self,forward_batch))
-        try:return function(self,forward_batch,*args,**kwargs)
-        finally:_active.reset(token)
+        try:
+            graph = getattr(self, 'flashalign_graph', None)
+            if graph is None:
+                return function(self,forward_batch,*args,**kwargs)
+            with graph.submission(forward_batch) as observed:
+                previous = getattr(forward_batch, 'flashalign_force_eager', False)
+                forward_batch.flashalign_force_eager = observed.force_eager
+                try:
+                    result = function(self,forward_batch,*args,**kwargs)
+                    observed.can_run_graph = bool(getattr(result, 'can_run_graph', False))
+                    return result
+                finally:
+                    forward_batch.flashalign_force_eager = previous
+        finally:
+            _active.reset(token)
     return wrapped

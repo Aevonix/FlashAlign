@@ -3,8 +3,10 @@
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """Local engine planning: format checks, speculative continuity and private staging."""
 import json
+import os
 from pathlib import Path
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -14,7 +16,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from test_setup import make_profile, wizard
-from owner_mode.backend_setup import KIT_ROOT, _physical_devices_by_process, _prepare_runtime, active_speculation, check_backend, prepare_backend
+from owner_mode.backend_setup import KIT_ROOT, _physical_devices_by_process, _prepare_runtime, _requirement_pin, _runtime_pin, active_speculation, check_backend, prepare_backend
 from owner_mode.model_metadata import inspect_model
 from owner_mode.profiles import validate_profile
 from owner_mode.setup_runtime import SetupError
@@ -453,11 +455,11 @@ class BackendPlanning(unittest.TestCase):
     def test_pip_build_artifacts_do_not_change_the_staged_runtime(self):
         kit, state = self.root/'kit', self.root/'state'
         kit.mkdir();state.mkdir()
-        (kit/'requirements.txt').write_text('')
+        (kit/'requirements.txt').write_text('vllm==0.32.0\n')
         (kit/'pyproject.toml').write_text('[project]\nname="fixture"\nversion="1"\n')
         (state/'venv/bin').mkdir(parents=True)
         (state/'venv/bin/python').touch()
-        def build(command, _log):
+        def build(command, _log, **_kwargs):
             if command[-2] == '--no-deps':
                 source = Path(command[-1])
                 (source/'build').mkdir()
@@ -467,6 +469,43 @@ class BackendPlanning(unittest.TestCase):
             _prepare_runtime('vllm', {'install_dependencies': True}, kit, state)
         self.assertEqual({p.name for p in kit.iterdir()}, {'requirements.txt', 'pyproject.toml'})
         self.assertFalse(list(state.glob('package-build-*')))
+
+    def test_prepared_runtime_finds_tools_beside_its_selected_python(self):
+        runtime_bin = self.root/'runtime with spaces/bin'
+        runtime_bin.mkdir(parents=True)
+        python = runtime_bin/'python'
+        python.symlink_to(sys.executable)
+        tool = runtime_bin/'runtime-tool'
+        tool.write_text('#!/bin/sh\nprintf selected')
+        tool.chmod(0o755)
+        remainder = self.root/'operator-bin'; remainder.mkdir()
+        spec = {**self.spec, 'environment': {'PATH': str(remainder), 'SETTING': 'kept'}}
+        with (mock.patch('owner_mode.backend_setup._prepare_runtime', return_value={
+                'python': str(python), 'build_environment': {'PATH': '/unused-build-path'}}),
+              mock.patch('owner_mode.backend_setup.active_speculation', return_value=None)):
+            deployment = prepare_backend(self.home, spec, self.profile, model_id='bench')
+        environment = deployment['commands'][0]['env']
+        output = subprocess.check_output([str(python), '-c',
+            "import subprocess; print(subprocess.check_output(['runtime-tool'],text=True))"],
+            env={**os.environ, **environment}, text=True).strip()
+        self.assertEqual(output, 'selected')
+        self.assertEqual(environment['PATH'], str(runtime_bin)+os.pathsep+str(remainder))
+        self.assertEqual(environment['SETTING'], 'kept')
+
+    def test_runtime_version_is_taken_from_each_kits_exact_pin(self):
+        kit = self.root/'future-kit'
+        kit.mkdir()
+        for version in ('0.32.0', '1.17.4rc2+vendor'):
+            (kit/'requirements.txt').write_text('vllm=='+version+'\n')
+            self.assertEqual(_runtime_pin(kit, {'requirements': ['vllm=='+version]}, 'vllm'), version)
+        (kit/'requirements.txt').write_text('vllm==1.17.4\n')
+        with self.assertRaisesRegex(SetupError, 'disagree'):
+            _runtime_pin(kit, {'requirements': ['vllm==0.32.0']}, 'vllm')
+
+    def test_runtime_pin_rejects_ambiguous_and_unbounded_versions(self):
+        for lines in ([], ['vllm>=1'], ['vllm==1.*'], ['vllm==1', 'vllm==1'], ['vllm @ https://example.org/build.whl']):
+            with self.subTest(lines=lines), self.assertRaises(SetupError):
+                _requirement_pin('vllm', lines)
 
 
 if __name__ == '__main__':

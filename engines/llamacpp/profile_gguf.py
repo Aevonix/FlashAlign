@@ -10,11 +10,28 @@ import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 import sys
+import stat
 
 import numpy as np
+
+
+def read_snapshot(path, limit):
+    """Read one bounded regular-file snapshot without following special files."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, 'rb') as stream:
+        before = os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode) or before.st_size > limit:
+            raise ValueError('Profile file is not a bounded regular file')
+        raw = stream.read(limit+1)
+        after = os.fstat(stream.fileno())
+    identity = lambda value: (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+    if len(raw) > limit or len(raw) != before.st_size or identity(before) != identity(after):
+        raise ValueError('Profile file changed while being read')
+    return raw
 
 
 def read_profile(path):
@@ -25,7 +42,7 @@ def read_profile(path):
             result[key]=value
         return result
     root=Path(path)
-    raw=(root/'profile.json').read_bytes()
+    raw=read_snapshot(root/'profile.json',4*1024*1024)
     if len(raw)>4*1024*1024: raise ValueError('Profile metadata too large')
     meta=json.loads(raw,object_pairs_hook=unique)
     if meta.get('transform','projection')!='projection' or meta.get('requires',[])!=[]:
@@ -37,11 +54,11 @@ def read_profile(path):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}',name): raise ValueError('Invalid profile name')
     hidden=meta.get('hidden_size')
     if type(hidden) is not int or not 1<=hidden<=16384: raise ValueError('Invalid hidden width')
-    data=(root/'profile.safetensors').read_bytes()
+    data=read_snapshot(root/'profile.safetensors',256*1024*1024)
     if not 10<=len(data)<=256*1024*1024: raise ValueError('Invalid profile size')
     hashes=root/'sha256.json'
     if hashes.exists():
-        expected=json.loads(hashes.read_text())
+        expected=json.loads(read_snapshot(hashes,4*1024*1024),object_pairs_hook=unique)
         for filename,content in [('profile.json',raw),('profile.safetensors',data)]:
             if expected.get(filename)!=hashlib.sha256(content).hexdigest():
                 raise ValueError('Profile checksum mismatch')

@@ -11,6 +11,7 @@ import secrets
 import stat
 import tempfile
 import time
+from .auth_contract import read_signing_key
 
 
 def ensure_key(path):
@@ -56,18 +57,7 @@ def ensure_key(path):
 
 
 def read_key(path):
-    fd = os.open(os.path.expanduser(str(path)), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    try:
-        info = os.fstat(fd)
-        if (not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600
-                or info.st_uid != os.getuid() or info.st_nlink != 1):
-            raise ValueError("invalid key file permissions")
-        key = os.read(fd, 33)
-        if len(key) != 32:
-            raise ValueError("invalid key size")
-        return key
-    finally:
-        os.close(fd)
+    return read_signing_key(path)
 
 
 def read_api_key(path):

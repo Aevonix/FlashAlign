@@ -17,6 +17,7 @@ import time
 
 from .content import proof_matches
 from .channels import DEFAULT_ENABLED, DEFAULT_REGISTRY
+from .request_capabilities import DEFAULT_REQUEST_CAPABILITIES, RequestCapabilities, STRUCTURAL_FIELDS
 
 CHANNELS = frozenset(DEFAULT_ENABLED) | DEFAULT_REGISTRY.ids("custom_authority")
 TICKET_HEADER = "X-Owner-Mode-Ticket"
@@ -63,6 +64,45 @@ class VerifiedTurn:
     content_parts: int = 0
 
 
+IDENTITY_REASONS = frozenset({
+    "pending", "verified", "no_context", "no_turn", "missing_session", "missing_turn",
+    "invalid_user_message", "child_not_adopted", "missing_channel", "channel_not_allowed",
+    "channel_disabled", "authority_unavailable", "authority_rejected", "authority_exception",
+    "invalid_identity_result", "proof_mismatch", "proof_inactive", "non_owner_steer",
+    "no_session_context", "no_channel", "non_owner_channel", "no_sender", "turn_unbound",
+    "turn_route_mismatch", "no_ingress_record", "replay", "stale", "text_mismatch",
+    "source_refused", "no_source", "owner_handles_unavailable", "sender_mismatch",
+    "internal_event", "not_native_adapter", "group_chat", "own_account_echo", "forwarded",
+    "reply_quoted", "not_plain_text", "incomplete_event", "not_authorized", "exception",
+    "render_rejected", "render_unbound", "approval_changed",
+})
+
+
+def safe_identity_reason(value):
+    """Only package-defined diagnostic words may reach an audit record."""
+    return value if type(value) is str and value in IDENTITY_REASONS else "authority_rejected"
+
+
+def _identity_result_verifier(authority):
+    """Use optional diagnostics only when they do not bypass a legacy override."""
+    if authority is None or "verify_turn" in getattr(authority, "__dict__", {}):
+        return None
+    classes = type(authority).__mro__
+    verify_owner = next((cls for cls in classes if "verify_turn" in cls.__dict__), None)
+    result_owner = next((cls for cls in classes if "verify_turn_result" in cls.__dict__), None)
+    if result_owner is None or verify_owner is not None and result_owner is not verify_owner:
+        return None
+    method = getattr(authority, "verify_turn_result", None)
+    return method if callable(method) else None
+
+
+@dataclass(frozen=True)
+class IdentityResult:
+    """Optional per-call diagnostic result; only its proof can authorize a turn."""
+    proof: VerifiedTurn | None
+    reason: str
+
+
 @dataclass
 class Turn:
     proof: VerifiedTurn | None
@@ -73,6 +113,7 @@ class Turn:
     anchored: bool = False
     steered: bool = False  # a child turn steered from outside owner work (see steered); off for good
     tool_path: tuple[str, ...] = ()
+    identity_reason: str = "pending"
 
 
 TRUST_DEFAULTS = {"system_prompt": "pinned", "tools": "pinned", "turn_context": "none", "history": "none"}
@@ -94,7 +135,8 @@ class Policy:
     def __init__(self, *, trusted_system_hashes=(), trusted_tools_hashes=(),
                  authority=None, clock=time.monotonic, ticket_ttl=5,
                  trust=None, allowed_channels=None, tool_policy=None,
-                 registry=DEFAULT_REGISTRY, channel_policy=None):
+                 registry=DEFAULT_REGISTRY, channel_policy=None,
+                 request_capabilities=DEFAULT_REQUEST_CAPABILITIES):
         self.lock = threading.RLock()
         self.authority = authority
         self.tool_policy = tool_policy
@@ -106,6 +148,9 @@ class Policy:
         self.channels = frozenset(c for c in (CHANNELS if allowed_channels is None else allowed_channels)
                                   if registry.get(c) is not None)
         self.channel_policy = channel_policy
+        if not isinstance(request_capabilities, RequestCapabilities):
+            raise ValueError('A trusted request capability registry is required')
+        self.request_capabilities = request_capabilities
         self.turns = OrderedDict()
         self.tickets = OrderedDict()
         self.contexts = OrderedDict()
@@ -121,43 +166,67 @@ class Policy:
             self.turns[key] = pending
             while len(self.turns) > 4096:
                 self.turns.popitem(last=False)
+        def reject(reason):
+            with self.lock:
+                if self.turns.get(key) is pending:
+                    pending.identity_reason = safe_identity_reason(reason)
         try:
             if not session_id:
-                return
-            if not turn_id or not isinstance(user_message, (str, list)):
-                return
+                return reject("missing_session")
+            if not turn_id:
+                return reject("missing_turn")
+            if not isinstance(user_message, (str, list)):
+                return reject("invalid_user_message")
             if parent_session_id:
                 # A delegated child is owner work only when adopt() saw it created during an owner turn.
                 with self.lock:
                     adopted = self.children.get(session_id)
                     if adopted and adopted[0] == parent_session_id and self.turns.get(key) is pending:
                         pending.proof, pending.anchored, pending.tool_path = adopted[1], True, adopted[3]
+                        pending.identity_reason = "verified"
                         return
-                return
+                return reject("child_not_adopted")
             platform = context.get("platform")
-            if (not isinstance(platform, str) or platform.lower() not in self.channels
-                    or not self._channel_enabled(platform.lower())):
-                # Only installed, configured adapters may provide an authority
-                # proof. A request's platform label cannot register an adapter.
-                return
+            # Only installed, configured adapters may provide an authority
+            # proof. A request's platform label cannot register an adapter.
+            if not isinstance(platform, str) or not platform:
+                return reject("missing_channel")
+            if platform.lower() not in self.channels:
+                return reject("channel_not_allowed")
+            if not self._channel_enabled(platform.lower()):
+                return reject("channel_disabled")
             asked = time.monotonic()
+            reason = "authority_rejected" if self.authority else "authority_unavailable"
             try:
-                proof = self.authority.verify_turn(session_id=session_id, turn_id=turn_id,
-                                                   user_message=user_message, **context) if self.authority else None
+                verify_result = _identity_result_verifier(self.authority)
+                if callable(verify_result):
+                    result = verify_result(session_id=session_id, turn_id=turn_id,
+                                           user_message=user_message, **context)
+                    if type(result) is not IdentityResult:
+                        return reject("invalid_identity_result")
+                    proof, reason = result.proof, safe_identity_reason(result.reason)
+                    if reason in {"pending", "verified", "no_context"}:
+                        reason = "authority_rejected"
+                else:
+                    proof = self.authority.verify_turn(session_id=session_id, turn_id=turn_id,
+                                                       user_message=user_message, **context) if self.authority else None
             finally:
                 with self.lock:
                     if self.turns.get(key) is pending:
                         pending.identity_ms = int((time.monotonic() - asked) * 1000)
+            if proof is None:
+                return reject(reason)
             if (not isinstance(proof, VerifiedTurn) or proof.session_id != session_id or proof.turn_id != turn_id
                     or proof.channel not in self.channels or not self._proof_matches(user_message, proof)
                     or proof.channel != platform.lower()):
-                return
+                return reject("proof_mismatch")
             with self.lock:
                 if self.turns.get(key) is pending:
                     pending.proof = proof
+                    pending.identity_reason = "verified"
         except Exception:
             # The pending turn has no proof. A later turn must authenticate afresh.
-            return
+            return reject("authority_exception")
 
     def inherits(self, tool_name):
         if not isinstance(tool_name, str) or not tool_name or tool_name != tool_name.strip():
@@ -263,12 +332,7 @@ class Policy:
                 return {}
             return dict(info)
 
-    ALLOWED_KEYS = frozenset({"model", "messages", "tools", "tool_choice", "parallel_tool_calls", "temperature",
-                              "top_p", "max_tokens", "max_completion_tokens", "max_output_tokens", "stream",
-                              "stream_options", "stop",
-                              "frequency_penalty", "presence_penalty", "seed", "n", "response_format",
-                              "owner_mode", "owner_mode_scale", "reasoning_effort", "top_k", "min_p",
-                              "chat_template_kwargs"})
+    ALLOWED_KEYS = frozenset(STRUCTURAL_FIELDS | DEFAULT_REQUEST_CAPABILITIES.rules.keys())
 
     def _owner_words(self, content, own_text):
         """Exactly the owner's words, or (trusted host context) the words with host text joined at blank lines."""
@@ -294,21 +358,9 @@ class Policy:
 
         A turn's first call must end with his words. Once anchored (a call of the turn passed that, or a child
         adopted from an owner turn) the tool loop's rows may follow them, so every row is checked for shape alone."""
-        if not isinstance(body, dict) or set(body) - self.ALLOWED_KEYS:
-            return "unknown_request_field"
-        if body.get("n", 1) != 1:
-            return "n_not_1"
-        if "stream" in body and type(body["stream"]) is not bool:
-            return "bad_stream"
-        options = body.get("stream_options", {})
-        if (not isinstance(options, dict) or set(options) - {"include_usage"}
-                or ("include_usage" in options and type(options["include_usage"]) is not bool)):
-            return "bad_stream_options"
-        template = body.get("chat_template_kwargs", {})
-        if (not isinstance(template, dict) or set(template) - {"enable_thinking", "reasoning_effort"}
-                or ("enable_thinking" in template and type(template["enable_thinking"]) is not bool)
-                or template.get("reasoning_effort", "low") not in {"none", "low", "medium", "high", "xhigh", "max"}):
-            return "bad_chat_template_kwargs"
+        reason = self.request_capabilities.check(body)
+        if reason:
+            return reason
         messages = body.get("messages")
         if not isinstance(messages, list) or not messages:
             return "no_messages"
@@ -327,11 +379,6 @@ class Policy:
                 return reason
         if body.get("tools") and self.trust["tools"] != "host" and digest(body["tools"]) not in self.tools:
             return "tools_unpinned"
-        # These can carry free text. Accept only plain selectors and no schema injection.
-        if body.get("response_format") not in (None, {"type": "text"}):
-            return "response_format"
-        if body.get("tool_choice") not in (None, "auto", "none", "required"):
-            return "tool_choice"
         return ""
 
     def _row(self, message):
@@ -378,6 +425,21 @@ class Policy:
         with self.lock:
             turn = self._turn(session_id, turn_id)
             return turn.identity_ms if turn else None
+
+    def identity_reason(self, session_id, turn_id, *, verified=None):
+        """Fixed code for this turn, optionally using an already-checked owner state.
+
+        Diagnostics never re-run an authority or grant authorization.
+        """
+        with self.lock:
+            turn = self._turn(session_id, turn_id)
+            if turn is None:
+                return "no_turn"
+            if turn.steered:
+                return "non_owner_steer"
+            if turn.proof is not None:
+                return "proof_inactive" if verified is False else "verified"
+            return safe_identity_reason(turn.identity_reason)
 
     def is_owner_work(self, session_id, turn_id):
         """Whether this turn has an owner proof; used only for audit metadata."""

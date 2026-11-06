@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from .auth import read_api_key, read_key, sign
-from .policy import TICKET_HEADER, CONTEXT_HEADER, canonical, strict_json
+from .policy import TICKET_HEADER, CONTEXT_HEADER, canonical, strict_json, safe_identity_reason
 from .model_metadata import compatible_request, checked_request_compatibility
 
 
@@ -117,9 +117,11 @@ class ProviderProxy:
                 pass  # Default logging can expose request data.
 
             def do_GET(self):
-                # Read-only model listing passthrough (health checks, metadata probes). No body, no owner mode.
+                # Read-only discovery and status share the configured model route.
                 path = self.path.split("/")
-                if len(path) != 4 or path[2:] != ["v1", "models"] or path[1] not in proxy.routes:
+                allowed = {('v1', 'models'), ('v1', 'owner-mode', 'profiles'),
+                           ('v1', 'flashalign', 'status'), ('v1', 'flashalign', 'capabilities')}
+                if len(path) < 4 or tuple(path[2:]) not in allowed or path[1] not in proxy.routes:
                     self.send_error(404)
                     return
                 try:
@@ -128,14 +130,23 @@ class ProviderProxy:
                         headers["Authorization"] = self.headers["Authorization"]
                     if proxy.routes[path[1]].get('api_key_file'):
                         headers['Authorization'] = 'Bearer ' + read_api_key(proxy.routes[path[1]]['api_key_file'])
-                    upstream = proxy.routes[path[1]]["upstream"].rstrip("/") + "/models"
-                    with httpx.Client(timeout=httpx.Timeout(30, connect=10), follow_redirects=False) as client:
-                        response = client.get(upstream, headers=headers)
-                    self.send_response(response.status_code)
-                    self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
-                    self.send_header("Content-Length", str(len(response.content)))
+                    upstream = proxy.routes[path[1]]["upstream"].rstrip("/") + '/' + '/'.join(path[3:])
+                    with httpx.Client(timeout=httpx.Timeout(10, connect=5), follow_redirects=False) as client:
+                        with client.stream('GET', upstream, headers=headers) as response:
+                            chunks, size = [], 0
+                            for chunk in response.iter_bytes():
+                                size += len(chunk)
+                                if size > 1024 * 1024:
+                                    raise ValueError('Oversized discovery response')
+                                chunks.append(chunk)
+                            content = b''.join(chunks)
+                            status = response.status_code
+                            content_type = response.headers.get('Content-Type', 'application/json')
+                    self.send_response(status)
+                    self.send_header("Content-Type", content_type)
+                    self.send_header("Content-Length", str(len(content)))
                     self.end_headers()
-                    self.wfile.write(response.content)
+                    self.wfile.write(content)
                 except (BrokenPipeError, ConnectionResetError):
                     return
                 except Exception:
@@ -213,11 +224,18 @@ class ProviderProxy:
                                 info["decision"] = "always_on_unconfirmed"
                                 status = 502
                                 raise ValueError("Always On profile was not confirmed")
+                            from .client import response_metadata
+                            identity = response_metadata(response, actual)
                             self.send_response(response.status_code)
                             self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
                             # This is the engine's decision, never an optimistic client decision.
                             # "none" in logs = the engine sent no header (it does not implement owner mode).
                             self.send_header("X-Owner-Mode-Effective", "off" if actual == "none" else actual)
+                            for name, field in (('X-FlashAlign-Profile-Digest', 'profile_digest'),
+                                                ('X-FlashAlign-Model-Digest', 'model_digest'),
+                                                ('X-FlashAlign-Generation', 'generation')):
+                                if field in identity:
+                                    self.send_header(name, identity[field])
                             if buffered is not None:
                                 self.send_header("Content-Length", str(len(buffered)))
                             self.end_headers()
@@ -268,8 +286,10 @@ class ProviderProxy:
             # caller-controlled reason. Identity is used for routing, not logging.
             row = {"route": route, "platform": "", "owner_verified": False,
                    "activation_mode": "verified",
-                   "decision": "no_middleware_context", "identity_ms": None}
+                   "decision": "no_middleware_context", "identity_ms": None,
+                   "identity_reason": "no_context"}
             row.update({k: v for k, v in (info or {}).items() if k in row})
+            row["identity_reason"] = safe_identity_reason(row["identity_reason"])
             row.update({"owner_mode_sent": requested,
                         "owner_mode_scale_sent": self.scales.get(route) if requested != "off" else None,
                         "effective": effective, "status": status, "ms": ms})

@@ -75,7 +75,7 @@ class DescendantCleanup(unittest.TestCase):
                 self.assertIn(leaf['pid'],[r['pid'] for r in record['owned_members']])
                 self.assertEqual(stop_engine(deployment)['status'],'stopped')
                 self.assertIsNone(process_identity(leaf['pid']))
-                supervisor=json.loads((root/'state/supervisor-0.json').read_text())
+                supervisor=json.loads(next((root/'state/launches').glob('*/unit-0/supervisor.json')).read_text())
                 self.assertTrue(supervisor['all_children_reaped'])
                 with socket.socket() as probe:
                     probe.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);probe.bind(('127.0.0.1',leaf['port']))
@@ -87,7 +87,7 @@ class DescendantCleanup(unittest.TestCase):
         self.assertTrue(ready.exists());leaf=json.loads(ready.read_text())
         self.assertIsNone(process_identity(leaf['pid']))
         self.assertFalse((root/'state/running.json').exists())
-        self.assertTrue(json.loads((root/'state/supervisor-0.json').read_text())['all_children_reaped'])
+        self.assertTrue(json.loads(next((root/'state/launches').glob('*/unit-0/supervisor.json')).read_text())['all_children_reaped'])
 
     def test_thread_spawned_new_session_is_tracked_without_global_scan(self):
         root=self.root();deployment,ready=self.fixture(root,'threaded')
@@ -101,7 +101,7 @@ class DescendantCleanup(unittest.TestCase):
             self.assertIn(leaf['pid'],[row['pid'] for row in record['owned_members']])
             self.assertEqual(stop_engine(deployment)['status'],'stopped')
         self.assertIsNone(process_identity(leaf['pid']))
-        self.assertTrue(json.loads((root/'state/supervisor-0.json').read_text())['all_children_reaped'])
+        self.assertTrue(json.loads(next((root/'state/launches').glob('*/unit-0/supervisor.json')).read_text())['all_children_reaped'])
 
     def test_unavailable_task_children_uses_verified_ancestry_fallback(self):
         record=engine_supervisor.identity(os.getpid(),True)

@@ -1,0 +1,111 @@
+{
+  "copyright": "Aevonix Inc.",
+  "evidence_digests": {
+    "first_case_ledger": "7e4ca1f8241c828c7cd157bd69bd805deead8c51119db3d56bc5958571b2d907",
+    "focused_aggregate": "4e5fadecdd7c7e629403bd4b6701e82e5256cc000139e83b3211f6fd3786b122",
+    "recovery_aggregate": "04fd85860407a4623bc7914ea02ee53ab7d3c19aae7f750bc062d7bdf89d84d5",
+    "recovery_manifest": "5c3496aa173e1a9597dfc61e14d7ac148bddc26924d302348465bbd4455f77d8"
+  },
+  "license": "AGPL-3.0-only",
+  "limitations": [
+    "Earlier failed or incomplete cohorts remain failed or incomplete; this is not one uninterrupted all-pass run.",
+    "History fill used real aborted transactions, not 1019 successful activations.",
+    "Process-restart replay persistence was not tested.",
+    "This evidence covers the listed 8192-context configuration; it makes no 64K, quality, or performance claim."
+  ],
+  "limits_per_cohort_seconds": {
+    "cohort_seconds": 3600,
+    "heartbeat_seconds": 30,
+    "native_service_seconds": 3000,
+    "ready_seconds": 1200,
+    "reserve_seconds": 180
+  },
+  "model": {
+    "id": "Mia-AiLab/GLM-5.3-EXL3-2.75bpw-TensorFold",
+    "native_identity": "796bbfc71ed4ccaa6fe76a3161f128c09de6a1dca617abac26f4e23974156ef2",
+    "revision": "cf1fee8923b770b0c47f7a032e1b0f30a57c626a"
+  },
+  "phases": [
+    {
+      "cases": [
+        {
+          "name": "Asymmetric artifact-transfer rejection and recovery",
+          "passed": true
+        },
+        {
+          "name": "Bridge loss before a durable decision",
+          "passed": true
+        },
+        {
+          "name": "Bridge loss after a durable decision",
+          "passed": true
+        },
+        {
+          "name": "Lost commit acknowledgement",
+          "passed": true
+        },
+        {
+          "name": "Lost resume acknowledgement",
+          "passed": true
+        },
+        {
+          "name": "Retired-generation tombstone recovery",
+          "passed": true
+        }
+      ],
+      "cleanup_passed": true,
+      "overall_cohort_passed": false,
+      "qualification": "A later test-harness history-accounting assertion failed. These six results remain partial evidence.",
+      "scope": "Original six fault cases"
+    },
+    {
+      "aborted_transactions": 1019,
+      "cleanup_passed": true,
+      "epoch_after": 1,
+      "epoch_before": 0,
+      "observations": [
+        "Four-rank abort/resume acknowledgements and counters",
+        "Lost history-advance reply, bridge restart, and stale-epoch rejection",
+        "Four-rank prepare acknowledgements before intentional worker loss",
+        "Affected update and owner stream failed without stock fallback"
+      ],
+      "passed": true,
+      "per_rank_history_used_after_fill": 1020,
+      "per_rank_history_used_before": 1,
+      "scope": "Separate history and worker-loss continuation",
+      "successful_activation_count_claimed": false
+    },
+    {
+      "cleanup_passed": true,
+      "observations": [
+        "New native boot identity",
+        "Restored exact durable alias and profile digests",
+        "Stale old-boot control rejected without mutation",
+        "Owner request returned the restored generation and digest"
+      ],
+      "passed": true,
+      "scope": "Fresh whole-cohort recovery from the retained journal"
+    }
+  ],
+  "profiles": {
+    "alternate_digest": "5de40ea41b5945a92fb330e9fd4850dafe86ca1ef40a0fb3e595bece61f9de8e",
+    "alternate_scope": "Compatible synthetic lifecycle-test variant; no quality claim",
+    "name": "glm53-full-v1",
+    "original_digest": "1d12c82cdd48a0f25488271cb82a4b3fdfed013df88abe683cd04471211cf6d0"
+  },
+  "schema": "flashalign.native-recovery-aggregate.v1",
+  "scope": "Compound functional recovery evidence from separate bounded cohorts",
+  "settings": {
+    "context": 8192,
+    "mtp_drafts": 4,
+    "parallel": 2,
+    "prompt_cache_gib": 8,
+    "tensor_parallel_ranks": 4
+  },
+  "source": {
+    "native_binary_sha256": "a2f25ef5a1242000de19eac29637ce1d520943b88a5033e6aeb1528e97732622",
+    "native_bridge_sha256": "3350a6295372cf5be43be8d4d2983aad3f31df525c77f92cfb280e7b767868dc",
+    "sdk_commit": "01b6b4b553cc1a610b7c9019f8288428bb911ceb",
+    "tensorfold_commit": "a7ed78d1c16fc9745f7540c504ebf87289be5e9a"
+  }
+}

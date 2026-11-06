@@ -17,6 +17,11 @@
   "runtime": "docker",
   "prepare": "prepare.py",
   "launch": "launch.py",
+  "external_cleanup": {
+    "schema": "flashalign.external-cleanup.v1",
+    "script": "cleanup.py",
+    "timeout_seconds": 35
+  },
   "model_types": [
     "deepseek_v41",
     "deepseek_v41_text"
@@ -156,5 +161,12 @@
     "gpu_environment": "host process using pinned image libraries; Docker GPU activation not tested",
     "image_requests_tested": false
   },
-  "startup_timeout": 3600
+  "startup_timeout": 3600,
+  "profile_lifecycle": {
+    "schema": "flashalign.lifecycle-launch.v1",
+    "source_argument": "--state-dir",
+    "subdirectory": "profiles",
+    "socket_argument": "--profile-admin-socket"
+  },
+  "requires_shared_runtime": true
 }

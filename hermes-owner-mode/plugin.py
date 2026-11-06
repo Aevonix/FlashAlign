@@ -4,6 +4,7 @@
 """Hermes integration via supported middleware and hooks; no core patching."""
 from copy import deepcopy
 from contextvars import ContextVar
+from functools import wraps
 import inspect
 import importlib.util
 import json
@@ -13,6 +14,7 @@ from pathlib import Path
 import sys
 import threading
 import time
+from types import SimpleNamespace
 
 from .policy import Policy, TICKET_HEADER, CONTEXT_HEADER, VerifiedTurn, flatten_request
 from .proxy import ProviderProxy
@@ -111,6 +113,8 @@ class Runtime:
                     result["extra_headers"][TICKET_HEADER] = ticket
                 info = {"session": str(session_id), "platform": str(platform or ""), "owner_verified": verified,
                         "decision": reason,
+                        "identity_reason": self.policy.identity_reason(
+                            session_id, turn_id, verified=verified and reason != "owner_unverified"),
                         "identity_ms": self.policy.identity_ms(session_id, turn_id)}
                 # The context ticket binds the final body, so it is minted after every edit above.
                 result["extra_headers"][CONTEXT_HEADER] = self.policy.context_ticket(
@@ -151,83 +155,195 @@ def serving_process(expected, argv=None):
     return isinstance(expected, list) and list(argv[1:1 + len(expected)]) == [str(x) for x in expected]
 
 
-_POLICY = None  # the serving process's Policy, published by register() once the proxy is up
+_POLICY = None  # Compatibility mirror; authorization reads the process registry below.
+_PROCESS_STATE_PREFIX = "_aevonix_flashalign_registration_v1_"
+
+
+def _process_state(*, create=False):
+    # Separate PID keys also avoid acquiring a lock inherited across fork. A
+    # profile-local import or a module reload still finds this same process key.
+    pid = os.getpid()
+    name = _PROCESS_STATE_PREFIX + str(pid)
+    state = sys.modules.get(name)
+    if state is None and create:
+        state = sys.modules.setdefault(name, SimpleNamespace(
+            pid=pid, lock=threading.RLock(), owner=None))
+    return state
+
+
+def _registration_active(state, owner):
+    if state is None or state.pid != os.getpid():
+        return False
+    with state.lock:
+        return state.owner is owner and owner.active
 
 
 def owner_turn(session_id="", turn_id="", tool_name=""):
-    """The one interface other plugins read (see the public owner_turn contract): True only while this exact turn is one
-    the owner verified himself; False in a process that does not serve owner mode. Never raises."""
-    policy = _POLICY
-    return bool(policy is not None and policy.owner_turn(session_id, turn_id, tool_name))
+    """Report only this process's active owner's personally verified turn."""
+    try:
+        state = _process_state()
+        if state is None or state.pid != os.getpid():
+            return False
+        with state.lock:
+            owner = state.owner
+            if owner is None or not owner.active:
+                return False
+            return bool(owner.runtime.policy.owner_turn(session_id, turn_id, tool_name))
+    except Exception:
+        return False
 
 
-def _unpublish():
+def _guard_callback(state, owner, callback, *, kind="hook"):
+    @wraps(callback)
+    def guarded(*args, **kwargs):
+        if _registration_active(state, owner):
+            try:
+                return callback(*args, **kwargs)
+            finally:
+                if not _registration_active(state, owner):
+                    _clear_policy(owner)
+        if kind == "prepare":
+            raise RuntimeError("FlashAlign registration is inactive")
+        if kind == "request":
+            request = args[0] if args else kwargs["request"]
+            # An old middleware must not erase a live owner's signed headers.
+            return {"request": request, "source": "owner-mode"}
+        if kind == "tool":
+            value = args[0] if args else kwargs["args"]
+            next_call = args[1] if len(args) > 1 else kwargs["next_call"]
+            return next_call(value)
+        return None
+    return guarded
+
+
+def _clear_policy(owner):
+    if owner.runtime is None:
+        return
+    policy = owner.runtime.policy
+    with policy.lock:
+        policy.authority = None
+        for table in (policy.turns, policy.tickets, policy.contexts,
+                      policy.context_infos, policy.children):
+            table.clear()
+
+
+def _retire_registration(state, owner):
     global _POLICY
-    _POLICY = None
+    if state.pid != os.getpid():
+        return  # Never close resources inherited from another process.
+    with state.lock:
+        if owner.closed or owner.closing:
+            return
+        owner.active, owner.closing = False, True
+        if owner.runtime is not None and _POLICY is owner.runtime.policy:
+            _POLICY = None
+        if owner.terminal is not None and getattr(owner.terminal, "runtime", None) is owner.runtime:
+            owner.terminal.runtime = None
+    _clear_policy(owner)
+    failed = False
+    for resource in (owner.proxy, owner.authority):
+        close = getattr(resource, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                failed = True
+    with state.lock:
+        owner.closing = False
+        if not failed:
+            owner.closed = True
+            if state.owner is owner:
+                state.owner = None
+        # Keep the inactive claim on cleanup failure. A later unload can retry;
+        # a second live proxy must not be started while resource state is unknown.
+    if failed:
+        try:
+            logger.warning("FlashAlign plugin cleanup incomplete")
+        except Exception:
+            pass
 
 
 def register(ctx):
     global _POLICY
-    from hermes_constants import get_hermes_home
-    approvals = ApprovalStore(ctx.get_config("approvals_file", "") or
-                              Path(get_hermes_home()) / "owner-mode" / "approvals.json")
-    from .terminal import current_binding, TerminalAuthority
-    terminal = current_binding(approvals.path)
-    if terminal is None and not serving_process(ctx.get_config("serve_argv", None)):
-        return None
-    try:
-        adapter = ctx.get_config("identity_adapter", "")
-        authority = (TerminalAuthority(terminal, VerifiedTurn) if terminal is not None else
-                     load_authority(adapter, ctx.get_config("identity_settings", {})) if adapter
-                     else NativeAuthority(approvals.path, VerifiedTurn))
-    except Exception as error:
-        authority = None
+    state = _process_state(create=True)
+    with state.lock:
+        if state.owner is not None:
+            return None
+        from hermes_constants import get_hermes_home
+        approvals = ApprovalStore(ctx.get_config("approvals_file", "") or
+                                  Path(get_hermes_home()) / "owner-mode" / "approvals.json")
+        from .terminal import current_binding, TerminalAuthority
+        terminal = current_binding(approvals.path)
+        if terminal is None and not serving_process(ctx.get_config("serve_argv", None)):
+            return None
+        owner = SimpleNamespace(active=False, closed=False, closing=False,
+                                runtime=None, proxy=None, authority=None, terminal=terminal)
+        state.owner = owner
         try:
-            logger.warning("FlashAlign identity authority unavailable (%s)", type(error).__name__)
-        except Exception:
-            pass  # Diagnostics must not change the unavailable-authority behavior.
-    registry = getattr(authority, 'registry', approvals.registry)
-    approvals = ApprovalStore(approvals.path, registry=registry)
-    audit = None
-    try:
-        audit = AuditLog(ctx.get_config("audit_log", "") or Path(get_hermes_home()) / "logs" / "owner-mode.log")
-    except Exception:
-        audit = None
-    channels = ctx.get_config("allowed_channels", None)
-    if not isinstance(channels, list):
-        channels = list(registry.ids())
-    if terminal is not None and approvals.channel_enabled('local-terminal'):
-        channels = [*channels, 'local-terminal']
-    def channel_enabled(channel):
-        value = approvals.read()
-        if (adapter and 'enabled_channels' not in value and channel in channels
-                and registry.supports(channel, 'custom_authority')):
-            return value['enabled']
-        return approvals.channel_enabled(channel)
-    policy = Policy(trusted_system_hashes=ctx.get_config("trusted_system_sha256", []),
-                    trusted_tools_hashes=ctx.get_config("trusted_tools_sha256", []), authority=authority,
-                    trust=ctx.get_config("trust", None),
-                    tool_policy=approvals.tool_enabled,
-                    registry=registry,
-                    channel_policy=channel_enabled,
-                    **({"allowed_channels": channels} if isinstance(channels, list) else {}))
-    proxy = ProviderProxy(policy, ctx.get_config("routes", {}), ctx.get_config("key_file", ""),
-                          port=0 if terminal is not None else ctx.get_config("port", 0), audit=audit, approvals=approvals)
-    runtime = Runtime(policy, proxy)
-    if callable(getattr(authority, 'close', None)):
-        ctx.on_unload(authority.close)
-    ctx.register_hook("pre_llm_call", runtime.begin)
-    ctx.register_hook("post_llm_call", policy.end)
-    if authority and callable(getattr(authority, "hear", None)):
-        ctx.register_hook("pre_gateway_dispatch", authority.hear)
-    ctx.register_hook("subagent_start", runtime.adopt)  # captures the creating tool's scope
-    ctx.register_hook("pre_tool_call", policy.steered)  # delegate_task steer: only owner work steers owner work
-    ctx.register_middleware("llm_request", runtime.request)
-    ctx.register_middleware("tool_execution", runtime.execute_tool)
-    ctx.on_unload(proxy.close)
-    proxy.start()
-    if terminal is not None:
-        terminal.runtime = runtime
-    _POLICY = policy
-    ctx.on_unload(_unpublish)  # an unloaded plugin answers no owner_turn
-    return runtime
+            try:
+                adapter = ctx.get_config("identity_adapter", "")
+                authority = (TerminalAuthority(terminal, VerifiedTurn) if terminal is not None else
+                             load_authority(adapter, ctx.get_config("identity_settings", {})) if adapter
+                             else NativeAuthority(approvals.path, VerifiedTurn))
+            except Exception as error:
+                authority = None
+                try:
+                    logger.warning("FlashAlign identity authority unavailable (%s)", type(error).__name__)
+                except Exception:
+                    pass
+            owner.authority = authority
+            registry = getattr(authority, 'registry', approvals.registry)
+            approvals = ApprovalStore(approvals.path, registry=registry)
+            audit = None
+            try:
+                audit = AuditLog(ctx.get_config("audit_log", "") or Path(get_hermes_home()) / "logs" / "owner-mode.log")
+            except Exception:
+                audit = None
+            channels = ctx.get_config("allowed_channels", None)
+            if not isinstance(channels, list):
+                channels = list(registry.ids())
+            if terminal is not None and approvals.channel_enabled('local-terminal'):
+                channels = [*channels, 'local-terminal']
+            def channel_enabled(channel):
+                value = approvals.read()
+                if (adapter and 'enabled_channels' not in value and channel in channels
+                        and registry.supports(channel, 'custom_authority')):
+                    return value['enabled']
+                return approvals.channel_enabled(channel)
+            policy = Policy(trusted_system_hashes=ctx.get_config("trusted_system_sha256", []),
+                            trusted_tools_hashes=ctx.get_config("trusted_tools_sha256", []), authority=authority,
+                            trust=ctx.get_config("trust", None),
+                            tool_policy=approvals.tool_enabled,
+                            registry=registry,
+                            channel_policy=channel_enabled,
+                            **({"allowed_channels": channels} if isinstance(channels, list) else {}))
+            owner.proxy = proxy = ProviderProxy(policy, ctx.get_config("routes", {}), ctx.get_config("key_file", ""),
+                                  port=0 if terminal is not None else ctx.get_config("port", 0), audit=audit, approvals=approvals)
+            owner.runtime = runtime = Runtime(policy, proxy)
+            proxy.prepare = _guard_callback(state, owner, proxy.prepare, kind="prepare")
+            for name in ("begin", "adopt"):
+                setattr(runtime, name, _guard_callback(state, owner, getattr(runtime, name)))
+            for name in ("end", "steered"):
+                setattr(policy, name, _guard_callback(state, owner, getattr(policy, name)))
+            runtime.request = _guard_callback(state, owner, runtime.request, kind="request")
+            runtime.execute_tool = _guard_callback(state, owner, runtime.execute_tool, kind="tool")
+            ctx.on_unload(lambda: _retire_registration(state, owner))
+            ctx.register_hook("pre_llm_call", runtime.begin)
+            ctx.register_hook("post_llm_call", policy.end)
+            if authority and callable(getattr(authority, "hear", None)):
+                ctx.register_hook("pre_gateway_dispatch", _guard_callback(state, owner, authority.hear))
+            ctx.register_hook("subagent_start", runtime.adopt)
+            ctx.register_hook("pre_tool_call", policy.steered)
+            ctx.register_middleware("llm_request", runtime.request)
+            ctx.register_middleware("tool_execution", runtime.execute_tool)
+            proxy.start()
+            if state.owner is not owner or owner.closed:
+                raise RuntimeError("FlashAlign registration withdrawn during startup")
+            if terminal is not None:
+                terminal.runtime = runtime
+            owner.active = True
+            _POLICY = policy
+            return runtime
+        except BaseException:
+            _retire_registration(state, owner)
+            raise

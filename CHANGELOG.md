@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.2.0
+
+- Keep one active Hermes plugin registration per process across duplicate loads and reloads.
+- Include fixed identity-verification reasons in each request's audit record.
+- Profile staging, activation, rollback and retirement through local administration.
+- Immutable generations and worker recovery contracts for serving adapters.
+- Status, doctor and terminal dashboard commands.
+- Pinned FR443 collection, durable semantic judging and evidence exports.
+- Distinguish a busy evaluation lock from invalid evaluation data.
+- Qwen FR443 results and a paired SGLang timing study with reproducible data.
+- Artifact-bound profile evaluation and controlled calibration sweeps.
+- Shared request authentication and extensible engine, model, channel and profile registries.
+- Complete runtime installation for managed engines and harnesses.
+- Include engine kits, starter profiles and harness assets in the Python package.
+- Check container memory limits before starting native DeepSeek.
+- Automatic native profile-control startup and SSH profile staging for remote TensorFold deployments.
+- Preserve saved profile state across restarts, including an empty inventory or deactivated aliases.
+- Keep managed SSH forwards attached to their supervisor when SSH multiplexing is enabled.
+- Record managed launch attempts before starting workers and preserve ownership through interrupted starts.
+- Preserve the active Hermes policy and refresh message observers across plugin reloads and host renderer replacements.
+- Share one configurable shutdown deadline across managed engine workers.
+- Verify external engine resources are stopped before confirming managed shutdown.
+- Report reused prefix tokens in the DeepSeek TensorFold runtime.
+- Handle atomic status-file replacement without interrupting a managed engine.
+
 ## 1.0.0
 
 Initial Aevonix FlashAlign release:

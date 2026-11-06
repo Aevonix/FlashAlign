@@ -149,6 +149,8 @@ def validate_manifest(manifest, *, platform_id=None):
     if (not isinstance(methods, list) or not methods or
             any(x not in ('mtp', 'dflash', 'dspark', 'ngram') for x in methods)):
         raise SetupError('Native runtime must declare supported speculative methods')
+    from .native_lifecycle import declaration
+    declaration(manifest)
     return manifest
 
 

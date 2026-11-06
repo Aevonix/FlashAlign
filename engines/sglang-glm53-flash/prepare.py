@@ -11,6 +11,7 @@ from kernel_schedule import PATH as KERNEL_PATH, apply_schedule_patch
 
 PIN='94602c9c2b7cbdb8efd5c52802dac6a1c180089e'
 ROOT=Path(__file__).resolve().parent
+from lifecycle_patches import apply_lifecycle_patches, copy_lifecycle
 
 
 def main():
@@ -54,6 +55,7 @@ def main():
     kernel_before=kernel_path.read_bytes()
     kernel_path.write_bytes(apply_schedule_patch(kernel_before))
     edits.append({'path':KERNEL_PATH,'before_sha256':hashlib.sha256(kernel_before).hexdigest(),'after_sha256':hashlib.sha256(kernel_path.read_bytes()).hexdigest()})
+    apply_lifecycle_patches(edit)
     shutil.copytree(ROOT/'flashalign_sglang',out/'python/sglang/srt/flashalign',ignore=shutil.ignore_patterns('__pycache__'))
     for data in ('expected-sites.json','model-metadata.json'):
         shutil.copyfile(ROOT/data,out/'python/sglang/srt'/data)
@@ -62,6 +64,9 @@ def main():
     receipt['flashalign_code_sha256']={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((ROOT/'flashalign_sglang').glob('*.py'))}
     receipt['flashalign_data_sha256']={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
                                      for name in ('expected-sites.json','model-metadata.json')}
+    receipt['lifecycle_code_sha256'] = copy_lifecycle(out/'python/sglang/srt/flashalign')
+    receipt['flashalign_code_sha256'] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                                        for p in sorted((out/'python/sglang/srt/flashalign').glob('*.py'))}
     (out/'flashalign-build.json').write_text(json.dumps(receipt,indent=2)+'\n')
     print(json.dumps({'source':str(out),'commit':PIN,'edits':len(edits)}))
 

@@ -85,7 +85,9 @@ def attach(runner, profiles):
     profile = next(iter(profiles.values()))
     if getattr(profile, 'is_native_wo', False):
         from .native_attach import attach_native
-        return attach_native(runner, profile)
+        attach_native(runner, profile)
+        from .generations import install_generations
+        return install_generations(runner, profiles)
     validate_profile_contract(profile)
     model = runner.model
     base = model.language_model.model
@@ -153,7 +155,14 @@ def register():
             extra = getattr(request.sampling_params, 'extra_args', None) or {}
             name = extra.get('_flashalign_profile')
             if name is not None:
-                profile = self._flashalign_profiles.get(name)
+                generation = extra.get('_flashalign_generation')
+                if generation is not None:
+                    registry = getattr(self, '_flashalign_lifecycle', None)
+                    if registry is None:
+                        raise ValueError('Worker does not support native generations')
+                    profile = registry.resolve(generation, extra.get('_flashalign_digest')).profile
+                else:
+                    profile = self._flashalign_profiles.get(name)
                 scale = extra.get('_flashalign_scale')
                 if profile is None or profile.digest != extra.get('_flashalign_digest'):
                     raise ValueError('Worker profile identity mismatch')
@@ -162,7 +171,7 @@ def register():
                 if getattr(profile, 'is_native_wo', False):
                     from .native_profile import validate_native_selection
                     validate_native_selection(profile, scale)
-                self._flashalign_selections[request.req_id] = Selection(name, profile.digest, float(scale))
+                self._flashalign_selections[request.req_id] = Selection(name, profile.digest, float(scale), generation)
             for feature in request.mm_features:
                 if feature.data is not None and 'types' in feature.data:
                     self._flashalign_mm_types[feature.identifier] = feature.data['types'].data.detach().clone().flatten()

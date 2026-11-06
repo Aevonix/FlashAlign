@@ -19,6 +19,7 @@ from types import MappingProxyType
 from .identity import (DM_TYPES, OWNER, OWNER_CHANNELS, IngressFacts, IngressLedger, TurnFacts, all_of,
                        canonical_handle, handle_fits, owner_handle_source)
 from .channels import DEFAULT_REGISTRY
+from .policy import IdentityResult, safe_identity_reason
 
 __all__ = ["HermesAuthority", "ingress_facts", "turn_facts", "all_of", "owner_handle_source", "canonical_handle",
            "handle_fits", "IngressFacts", "TurnFacts", "IngressLedger", "OWNER", "OWNER_CHANNELS", "DM_TYPES"]
@@ -122,6 +123,7 @@ def turn_facts(*, platform="", sender_id="", user_message=None, conversation_his
 def _reject(label, error=None):
     """One warning line with a fixed label (and an error class name). Never message text, ids or handles."""
     try:
+        label = safe_identity_reason(label)
         if error is None:
             logger.warning("owner-mode identity: owner verify rejected: %s", label)
         else:
@@ -155,11 +157,20 @@ class HermesAuthority:
         return None  # observe only: never skip, rewrite or allow a dispatch
 
     def verify_turn(self, *, session_id, turn_id, user_message, **context):
+        return self.verify_turn_result(session_id=session_id, turn_id=turn_id,
+                                       user_message=user_message, **context).proof
+
+    def verify_turn_result(self, *, session_id, turn_id, user_message, **context):
+        """Keep the rejection reason bound to this call, never shared mutable state."""
         try:
             facts = turn_facts(user_message=user_message, **context)
             owner, label = self.ledger.verify(facts)
             if owner is not True:
-                return _reject(label)
-            return self.proof_type(session_id, turn_id, facts.channel, user_message)
+                _reject(label)
+                reason = ("no_session_context" if label == "turn_route_mismatch"
+                          and not facts.chat_id and not facts.chat_type else safe_identity_reason(label))
+                return IdentityResult(None, reason)
+            return IdentityResult(self.proof_type(session_id, turn_id, facts.channel, user_message), "verified")
         except Exception as error:
-            return _reject("exception", error)
+            _reject("exception", error)
+            return IdentityResult(None, "authority_exception")

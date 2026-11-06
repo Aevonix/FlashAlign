@@ -1,9 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
 # SPDX-License-Identifier: AGPL-3.0-only
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
-"""owner_turn(session_id, turn_id): the one read-only interface other plugins use (PM, 10-28: messaging-rcs's contact
-send). True only while this exact turn is one the owner verified himself: not a child adopted from it, not a steered
-turn, not a turn whose words the identity adapter did not attest (a completion, an injection, a resume)."""
+"""The public owner-turn query accepts only the active, personally verified turn.
+
+Adopted children, unverified replacements and unrelated turns return false.
+"""
 import sys
 import tempfile
 from pathlib import Path
@@ -112,7 +113,8 @@ class TestPublished(unittest.TestCase):
         sys.modules["hermes_constants"] = constants
         self.addCleanup(lambda: sys.modules.__setitem__("hermes_constants", saved) if saved
                         else sys.modules.pop("hermes_constants", None))
-        self.unload = []
+        if not hasattr(self, "unload"):
+            self.unload = []
         values = dict({"key_file": str(Path(tmp.name) / "key")}, **config)
 
         class Ctx:
@@ -156,6 +158,29 @@ class TestPublished(unittest.TestCase):
         runtime.policy.authority = Authority()
         runtime.policy.begin(session_id="s", turn_id="t", user_message=OWN, platform="whatsapp")
         self.run_unload()
+        self.assertFalse(plugin_module.owner_turn("s", "t"))
+
+    def test_duplicate_cannot_replace_owner_and_old_unload_cannot_close_successor(self):
+        first = self.register()
+        first.policy.authority = Authority()
+        first.policy.begin(session_id="s", turn_id="t", user_message=OWN, platform="whatsapp")
+        old_unload = self.unload[:]
+        self.assertIsNone(self.register())
+        self.assertIs(plugin_module._POLICY, first.policy)
+        self.assertTrue(plugin_module.owner_turn("s", "t"))
+        self.assertTrue(first.proxy.thread.is_alive())
+        self.run_unload()
+        replacement = self.register()
+        replacement.policy.authority = Authority()
+        replacement.policy.begin(session_id="s", turn_id="t", user_message=OWN, platform="whatsapp")
+        for callback in old_unload:
+            callback()
+        self.assertIs(plugin_module._POLICY, replacement.policy)
+        self.assertTrue(plugin_module.owner_turn("s", "t"))
+        self.assertFalse(first.proxy.thread.is_alive())
+        self.assertTrue(replacement.proxy.thread.is_alive())
+        self.run_unload()
+        self.assertIsNone(plugin_module._POLICY)
         self.assertFalse(plugin_module.owner_turn("s", "t"))
 
     def test_a_process_that_does_not_serve_owner_mode_publishes_nothing(self):

@@ -1,0 +1,41 @@
+{
+  "schema": "flashalign.package-upgrade-evidence.v1",
+  "scope": "Offline installed-wheel upgrade and rollback with synthetic deployment fixtures. No model or gateway was started.",
+  "baseline": {
+    "version": "1.1.1",
+    "commit": "979222c00070001126eaf3634d22ec03111de399",
+    "packaged_files": 53
+  },
+  "candidate": {
+    "version": "1.2.0",
+    "commit": "603879e34da3c388edb97ec2cf5a190df8c1fb2d",
+    "wheel_sha256": "ef8717ff8e450d4d9f427f59876ba6d35a188c7b6503b9ca47d24fd4343bd147",
+    "packaged_files": 375
+  },
+  "phases": [
+    "1.1.1 install",
+    "1.2.0 upgrade",
+    "1.1.1 rollback"
+  ],
+  "checks": {
+    "dependency_checks_passed": true,
+    "installed_files_match_wheels": true,
+    "no_stale_modules_after_rollback": true,
+    "new_cli_removed_on_rollback": true,
+    "prepared_deployment_at_every_phase": true,
+    "signing_key_bytes_and_permissions_preserved": true,
+    "client_configuration_preserved": true,
+    "contact_approval_bytes_and_permissions_preserved": true,
+    "approved_contact_stays_approved": true,
+    "unknown_contact_stays_unapproved": true,
+    "replay_namespace_and_sentinel_preserved": true,
+    "old_deployment_bytes_preserved": true,
+    "rollback_selects_original_preparation": true,
+    "mtp_configuration_preserved": true
+  },
+  "limits": [
+    "Engine discovery and GPU inventory used CPU fixtures.",
+    "The replay file was a preservation sentinel, not a real engine journal.",
+    "This does not establish live engine migration, old-engine journal compatibility or GPU behavior."
+  ]
+}

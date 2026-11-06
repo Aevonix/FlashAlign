@@ -92,7 +92,7 @@ class TestToolLoop(Base):
 
     def test_a_turn_refused_on_its_first_call_is_not_anchored_by_a_later_one(self):
         self.policy.begin(session_id="s", turn_id="t", user_message=OWN, platform="whatsapp")
-        body = self.body(top_logprobs=5)
+        body = self.body(unsupported_option=True)
         self.send(body)
         self.assertEqual(self.decision(), ("unknown_request_field", "off"))
         self.follow(dict(self.body()), call("c1"), result("c1"))
@@ -165,13 +165,18 @@ class TestShapesStillRefused(Base):
                 self.assertEqual(self.decision(), (reason, "off"))
 
     def test_request_level_refusals_hold_on_a_follow_up(self):
-        for n, (extra, reason) in enumerate(((dict(top_logprobs=5), "unknown_request_field"), (dict(n=2), "n_not_1"),
-                                             (dict(response_format={"type": "json_object"}), "response_format"),
+        for n, (extra, reason) in enumerate(((dict(unsupported_option=True), "unknown_request_field"), (dict(n=2), "n_not_1"),
+                                             (dict(response_format={"type": "json_schema", "json_schema": {"schema": False}}), "response_format"),
                                              (dict(tool_choice={"type": "function"}), "tool_choice"))):
             with self.subTest(reason):
                 body = self.turn(sid=f"r{n}")
                 self.follow(dict(body, **extra), call("c1"), result("c1"), sid=f"r{n}")
                 self.assertEqual(self.decision(), (reason, "off"))
+
+    def test_typed_generation_options_remain_owner_on_a_follow_up(self):
+        body = self.turn()
+        self.follow(dict(body, top_logprobs=5, response_format={"type": "json_object"}), call("c1"), result("c1"))
+        self.assertEqual(self.decision(), ("owner_clean", "owner-test"))
 
     def test_strict_trust_still_pins_and_refuses_history(self):
         self.policy.trust = dict(self.policy.trust, system_prompt="pinned", tools="pinned")

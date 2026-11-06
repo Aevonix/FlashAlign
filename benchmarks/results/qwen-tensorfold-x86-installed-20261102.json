@@ -1,0 +1,97 @@
+{
+  "schema": "flashalign.installed-wheel-smoke.v1",
+  "passed": true,
+  "flashalign_revision": "5f2e7efacc67e2e28fad2e4190a742c45b7783c4",
+  "tensorfold_revision": "a7ed78d1c16fc9745f7540c504ebf87289be5e9a",
+  "wheel_sha256": "77397355eca6dad610b14ff0a68669698b1e2a6b2f8a4513dd42814ff047632b",
+  "checkpoint": {
+    "id": "TensorFold/Qwen3.8-27B-MLX-4bit",
+    "revision": "22d8d538154e0e5b6f8dcb1fcc74a60a0798104c"
+  },
+  "hardware": "One NVIDIA RTX PRO 6000 Blackwell Max-Q",
+  "platform": "Linux x86_64, SM120",
+  "configured_context_tokens": 65536,
+  "configured_slots": 2,
+  "request_concurrency": 1,
+  "speculation": "DFlash",
+  "drafter_bits": 4,
+  "profile": "qwen38-27b-v1",
+  "profile_digest": "6755c106a67a3f0f2f03496b6a3b4f1a1f50613d21626d39f54a34c844c6fe3b",
+  "profile_strength": 1.0,
+  "installed_files_verified": 375,
+  "installed_runtime_tree_sha256": "2e413cd008a964ab2cb2e4142eeb83aba08eef9fd7ff2293523c2023e8d820bb",
+  "requests_observed": 12,
+  "builtin_one_token_checks": 4,
+  "functional_requests": [
+    {
+      "mode": "off",
+      "finish_reason": "stop",
+      "prompt_tokens": 29,
+      "completion_tokens": 66,
+      "drafted_tokens": 75,
+      "accepted_tokens": 61
+    },
+    {
+      "mode": "owner",
+      "finish_reason": "stop",
+      "prompt_tokens": 29,
+      "completion_tokens": 66,
+      "drafted_tokens": 75,
+      "accepted_tokens": 60
+    },
+    {
+      "mode": "off",
+      "finish_reason": "stop",
+      "prompt_tokens": 29,
+      "completion_tokens": 66,
+      "drafted_tokens": 75,
+      "accepted_tokens": 61
+    },
+    {
+      "mode": "owner",
+      "finish_reason": "stop",
+      "prompt_tokens": 29,
+      "completion_tokens": 66,
+      "drafted_tokens": 75,
+      "accepted_tokens": 61
+    }
+  ],
+  "cache_requests": [
+    {
+      "mode": "off",
+      "warm": false,
+      "prompt_tokens": 6768,
+      "completion_tokens": 2,
+      "cached_tokens": 0
+    },
+    {
+      "mode": "off",
+      "warm": true,
+      "prompt_tokens": 6768,
+      "completion_tokens": 2,
+      "cached_tokens": 4096
+    },
+    {
+      "mode": "owner",
+      "warm": false,
+      "prompt_tokens": 6768,
+      "completion_tokens": 2,
+      "cached_tokens": 0
+    },
+    {
+      "mode": "owner",
+      "warm": true,
+      "prompt_tokens": 6768,
+      "completion_tokens": 2,
+      "cached_tokens": 4096
+    }
+  ],
+  "expected_profile_and_generation_verified": true,
+  "public_shutdown_passed": true,
+  "cleanup": {
+    "all_witnessed_processes_gone": true,
+    "device_lock_released": true,
+    "gpu_compute_processes_remaining": 0
+  },
+  "scope": "Fresh managed installation, exact installed wheel, signed modes, active speculation and separate cold/warm caches. Serial synthetic requests; no maximum-context input, throughput, quality or broad reliability claim."
+}

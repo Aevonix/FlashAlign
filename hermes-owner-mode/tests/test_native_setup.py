@@ -130,6 +130,42 @@ class NativeSetup(unittest.TestCase):
         argv = upgraded['commands'][0]['argv']
         self.assertEqual(argv[argv.index('--owner-replay-dir')+1], str(replay))
 
+    def test_helper_upgrade_and_rollback_keep_default_key_and_old_deployment(self):
+        from owner_mode import native_setup
+        first = prepare(self.home, self.spec, self.profile, model_id='fixture')
+        state = Path(first['state'])
+        key = Path(first['key_file'])
+        key_bytes = key.read_bytes()
+        protected = {path: path.read_bytes() for path in state.rglob('*') if path.is_file()}
+        replay = Path(first['owner_replay']['directory'])
+        replay.mkdir(mode=0o700)
+        (replay/'state.bin').write_bytes(b'synthetic replay preservation sentinel')
+        source = Path(native_setup.__file__).with_name('engine_supervisor.py')
+        read_bytes = Path.read_bytes
+        changed = read_bytes(source) + b'\n# changed helper fixture\n'
+        reads = []
+        def replacement(path):
+            if path == source:
+                reads.append(path)
+                return changed
+            return read_bytes(path)
+        with mock.patch.object(Path, 'read_bytes', replacement):
+            upgraded = prepare(self.home, self.spec, self.profile, model_id='fixture')
+            self.assertEqual(len(reads), 1)  # hashed bytes are the bytes actually staged
+            repeated = prepare(self.home, self.spec, self.profile, model_id='fixture')
+        self.assertNotEqual(first['state'], upgraded['state'])
+        self.assertEqual(repeated['state'], upgraded['state'])
+        self.assertEqual((Path(upgraded['state'])/'rank-0/engine_supervisor.py').read_bytes(), changed)
+        for current in (upgraded, repeated):
+            self.assertEqual(current['key_file'], str(key))
+            self.assertEqual(current['owner_replay'], first['owner_replay'])
+            self.assertEqual(current['drafting'], first['drafting'])
+        rolled_back = prepare(self.home, self.spec, self.profile, model_id='fixture')
+        self.assertEqual(rolled_back['state'], first['state'])
+        self.assertEqual(key.read_bytes(), key_bytes)
+        self.assertEqual((replay/'state.bin').read_bytes(), b'synthetic replay preservation sentinel')
+        self.assertEqual({path: path.read_bytes() for path in protected}, protected)
+
     def test_durable_replay_is_required_before_preparation(self):
         path = self.bundle/'manifest.json'
         original = json.loads(path.read_text())
@@ -331,6 +367,8 @@ class NativeSetup(unittest.TestCase):
         self.assertEqual(result['controller_units'][0]['host'], 'local')
         self.assertEqual(stages[-1][2]['argv'][0], 'ssh')
         self.assertIn('StrictHostKeyChecking=yes', stages[-1][2]['argv'])
+        for option in ('ControlMaster=no', 'ControlPath=none', 'ControlPersist=no', 'ForkAfterAuthentication=no'):
+            self.assertIn(option, stages[-1][2]['argv'])
         self.assertIn('-N', stages[-1][2]['argv'])
         self.assertNotIn('engine.key', ' '.join(stages[-1][2]['argv']))
 

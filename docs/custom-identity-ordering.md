@@ -76,12 +76,37 @@ After updating a deployment, verify the installed files and restart or reload
 the affected gateway using the host's supported mechanism. A model-server
 restart is unnecessary when only the host integration changed.
 
+## Duplicate plugin loads
+
+A Hermes process has one active FlashAlign registration. A second load leaves
+its policy, hooks and proxy unchanged; it does not copy verified turns into the
+second profile context. To replace the registration, unload its owner first,
+then load the replacement. Retired callbacks cannot authorize new requests or
+remove the replacement's registration. A separate process establishes its own
+registration and does not inherit verified turns from its parent.
+
 ## Diagnose using mode metadata
 
 The proxy's mode audit can distinguish common integration failures without
 recording conversation content. The identity-related statuses below describe
 Verified contacts mode; a missing identity does not prevent alignment in Always
 On when the request reaches its configured route.
+
+Each request's audit row includes an `identity_reason` alongside `decision`.
+The reason describes that turn's identity check, even when the overall decision
+is `owner_unverified`. Reasons use fixed codes such as `no_session_context`,
+`no_ingress_record`, `text_mismatch` and `approval_changed`. They contain no
+message text, contact identifiers or exception messages. An identity reason is
+diagnostic metadata, not an authorization token.
+
+```json
+{"decision": "owner_unverified", "identity_reason": "no_session_context"}
+```
+
+Custom authorities can implement `verify_turn_result` and return the immutable
+`IdentityResult(proof, reason)` from `owner_mode.policy`. The existing
+`verify_turn` interface remains supported. Only recognized reason codes are
+recorded; other labels become `authority_rejected`.
 
 | Result | What it establishes |
 | --- | --- |

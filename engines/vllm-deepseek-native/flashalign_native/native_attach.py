@@ -85,6 +85,10 @@ def wrap_native_setup(attention_class):
     @wraps(original)
     def setup(self, *args, **kwargs):
         runtime = getattr(self, '_flashalign_native_runtime', None)
+        if runtime is not None and getattr(runtime, 'active_snapshot', None) is not None:
+            if self._wo_projection_weights is None:
+                raise ValueError('Native generation lost its immutable stock binding')
+            return None
         if runtime is not None and hasattr(self, '_flashalign_native_weights'):
             # Preserve the original immutable packed object on repeat setup.
             ensure_native_weights(self)

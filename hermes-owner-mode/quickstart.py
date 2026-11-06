@@ -13,6 +13,9 @@ from .drafting import draft_settings, MissingDraftModel
 from .model_metadata import inspect_model
 from .profiles import bundled_profile_for, discover_profiles, read_json, ProfileError, NATIVE_FORMAT
 from .setup_runtime import SetupError, check_harness_contexts, managed_context_window
+from .speculation import sglang_speculation
+from .engine_adapters import engine_adapters
+from . import __version__
 
 
 def download_engine_bundle(home, model_type, *, platform_id=None, profile=None):
@@ -43,7 +46,7 @@ def cached_models(home):
 
 def make_default_plan(args, found, console):
     """Ask only for missing choices and write a private, reproducible setup plan."""
-    console.banner('1.1.1')
+    console.banner(__version__)
     console.line('Default setup: detect a local model, prepare its engine and profile, then configure access.')
     console.step(1, 'Discover model and harness')
     direct = getattr(args, 'engine_only', False)
@@ -126,9 +129,10 @@ def make_default_plan(args, found, console):
             raise SetupError('Several model identities match this checkpoint; choose one in a setup plan')
     backend_metadata = {}
     if backend is None:
-        for candidate in ('vllm', 'sglang'):
+        for adapter in engine_adapters().automatic():
+            candidate = adapter.id
             try:
-                _, backend_metadata = _select_kit(candidate, config, profile)
+                _, backend_metadata = adapter.select(config, profile)
                 if not backend_matches_checkpoint(backend_metadata, model_id, Path(config['path']), quantization):
                     continue
                 backend = candidate
@@ -137,7 +141,10 @@ def make_default_plan(args, found, console):
                 continue
         backend = backend or 'tensorfold'
     elif backend != 'tensorfold':
-        _, backend_metadata = _select_kit(backend, config, profile)
+        adapter = engine_adapters().get(backend)
+        if adapter.select is None:
+            raise SetupError('This engine requires an explicit setup plan')
+        _, backend_metadata = adapter.select(config, profile)
     if backend_metadata.get('requires_private_opt_in'):
         raise SetupError('This private unqualified engine requires an explicitly supplied setup plan with allow_research=true; default setup cannot opt in')
     if backend == 'tensorfold' and not bundle_path:
@@ -245,11 +252,9 @@ def make_default_plan(args, found, console):
     native_mtp = ('native_mtp_writer_groups' in backend_metadata.get('required_features', [])
                   or backend == 'tensorfold' and backend_metadata.get('default_speculative_method') in ('mtp', 'dspark', 'ngram'))
     if backend == 'sglang':
-        methods = backend_metadata.get('speculative_algorithms', ['DFLASH'])
-        selected_method = plan['engine'].get('draft_algorithm', methods[0])
-        if not isinstance(selected_method, str):
-            raise SetupError('A speculative algorithm must be a string')
-        native_mtp = native_mtp or selected_method.upper() in backend_metadata.get('native_speculative_algorithms', [])
+        speculation = sglang_speculation(backend_metadata, plan['engine'])
+        plan['engine']['draft_algorithm'] = speculation.method
+        native_mtp = speculation.source == 'target'
     if not native_mtp and not plan['engine'].get('draft_model') and backend_metadata.get('default_draft_subdirectory'):
         plan['engine']['draft_model'] = str(_bundled_draft_path(plan['engine']['model_path'], backend_metadata))
     if backend_metadata.get('requires_native_draft'):
@@ -268,8 +273,8 @@ def make_default_plan(args, found, console):
         plan['engine'].setdefault('draft_model', plan['engine']['model_path'])
         plan['engine'].setdefault('draft_algorithm', backend_metadata['speculative_algorithms'][0])
     manifest = (read_json(Path(plan['engine']['bundle'])/'manifest.json') if backend == 'tensorfold'
-                else {'requires_draft_model': backend == 'sglang' and not native_mtp, 'min_parallel': 1,
-                      'draft_model_architectures': ['DFlash2DraftModel', 'DFlashDraftModel']})
+                else speculation.draft_manifest() if backend == 'sglang'
+                else {'requires_draft_model': False})
     if manifest.get('requires_draft_model'):
         try:
             settings = draft_settings(args.home, plan['engine'], manifest, plan['model'])

@@ -69,6 +69,9 @@ def test_container_preserves_host_uid_key_ownership_and_pinned_runtime(tmp_path,
     command = launch.container_command(args, tmp_path/'runs'/'run', name='container',
         labels={'owned':'yes'}, model=tmp_path/'model', key=tmp_path/'original-key',
         replay=tmp_path/'replay'/'nonces.sqlite', profile=tmp_path/'profile', devices=['0','1','2','3'])
+    runtime_options = command[:command.index(engine_config.IMAGE)]
+    log_drivers = [value for value in runtime_options if value.split('=', 1)[0] == '--log-driver']
+    assert log_drivers == ['--log-driver=none']
     assert command[command.index('--user') + 1] == f'{os.getuid()}:{os.getgid()}'
     assert command[command.index('--gpus') + 1] == '"device=0,1,2,3"'
     assert command[command.index('--publish') + 1] == '127.0.0.1:8041:8000'
@@ -128,7 +131,9 @@ def test_pinned_image_digest_and_platform(monkeypatch):
 
 
 def test_stop_never_signals_unowned_container(monkeypatch):
-    record = {'container_id':'c'*64, 'image_id':'sha256:'+'1'*64, 'labels':{'owner':'one'}}
+    record = {'container_id':'c'*64, 'image_id':'sha256:'+'1'*64,
+              'labels':{'owner':'one'}, 'daemon_id':'fixture-daemon'}
+    monkeypatch.setattr(supervisor, 'docker_daemon_identity', lambda **kw:'fixture-daemon')
     foreign = {'id':record['container_id'], 'image':record['image_id'], 'labels':{'owner':'two'}, 'running':True}
     monkeypatch.setattr(supervisor.subprocess, 'run', lambda *a, **k:
         SimpleNamespace(returncode=0, stdout=json.dumps(foreign)))

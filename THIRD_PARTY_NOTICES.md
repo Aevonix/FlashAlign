@@ -49,6 +49,13 @@ does not establish permission to redistribute every compatible checkpoint.
 
 ## Installed dependencies
 
+The refusal-evaluation judge includes rubric text from
+[Blackfrost-AI/r1-false-refusal-443](https://github.com/Blackfrost-AI/r1-false-refusal-443)
+at revision `a2a8051a3f4ff2593f6b6e9c22f9929b3244c742`, under Apache-2.0.
+See the [rubric notice](flashalign/notices/BLACKFROST-NOTICE.md) and included
+[license](flashalign/notices/APACHE-2.0.txt). The source prompt corpus is not
+bundled; its underlying datasets retain their applicable source terms.
+
 The dependency declarations in `pyproject.toml`, `hermes-owner-mode/requirements*.txt`
 and each engine package record the installed packages and version constraints.
 They include HTTP and configuration libraries, NumPy, safetensors,

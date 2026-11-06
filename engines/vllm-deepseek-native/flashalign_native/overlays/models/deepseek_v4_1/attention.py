@@ -1791,7 +1791,9 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase):
             raise ValueError("Invalid native WO-B execution class")
         native_profile = getattr(self, "_flashalign_native_profile", None)
         alternate = getattr(self, "_flashalign_native_weights", None)
-        if native_mode:
+        runtime = getattr(self, '_flashalign_native_runtime', None)
+        generation_active = runtime is not None and getattr(runtime, 'active_snapshot', None) is not None
+        if native_mode and not generation_active:
             if native_profile is None:
                 raise ValueError("Native WO-B execution has no declared profile")
             if type(self.layer_id) is not int or self.layer_id < 0:
@@ -1799,7 +1801,18 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase):
             is_target = self.layer_id in native_profile.layers
             if is_target and alternate is None:
                 raise ValueError("Declared native WO-B target has no loaded binding")
-        if native_mode and alternate is not None:
+        generations = runtime.bindings(self) if runtime is not None and hasattr(runtime, 'bindings') else None
+        if native_mode and generations:
+            from flashalign_native_wo.execution import run_native_generations
+            local = run_native_generations(
+                binding, state, generations, native_mode, owner_rows,
+                owner_row_indices, current_stream().cuda_stream,
+                single_generation=len(runtime.active_snapshot.members) == 1,
+            )
+        elif native_mode and generations is not None:
+            local = wo_projection.run_inv_rope(binding=binding, plan=plan,
+                                              stream=current_stream().cuda_stream)
+        elif native_mode and alternate is not None:
             from flashalign_native_wo.execution import run_native_wo
             local = run_native_wo(
                 binding, state, alternate, native_mode, owner_rows,

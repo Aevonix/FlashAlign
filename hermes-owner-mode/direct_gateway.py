@@ -26,7 +26,6 @@ from pathlib import Path
 import secrets
 import signal
 import stat
-import subprocess
 import sys
 import threading
 import time
@@ -43,7 +42,7 @@ from .setup_runtime import SetupError
 from .model_metadata import checked_request_compatibility
 
 
-class _NotReady(SetupError):
+class _NotReady(lifecycle.ManagedNotReady):
     pass
 
 
@@ -177,11 +176,10 @@ def _prepare_gateway(home, *, base_url, model, profile, key_file, api_key_file=N
     return result
 
 
-def _ready_and_profile(deployment, config, supervisor, deadline):
+def _ready_and_profile(deployment, config, command, deadline):
     remaining = deadline-time.monotonic()
     if remaining <= 0:
         raise SetupError('Gateway startup timed out')
-    command = (lifecycle._supervisor_state(Path(deployment['state']), supervisor) or {}).get('command')
     if command is None or lifecycle.process_identity(command.get('pid')) != command:
         raise _NotReady('Gateway supervisor has not established its command identity')
     base = deployment['base_url'].removesuffix('/head/v1')
@@ -213,15 +211,7 @@ def _ready_and_profile(deployment, config, supervisor, deadline):
 
 
 def activate_gateway(deployment, *, timeout=30.):
-    """Start/reuse one owned gateway; raw upstream service is never stopped."""
-    lifecycle._require_pidfds()
-    with _locked(deployment['state']):
-        return _activate_gateway(deployment, timeout=timeout)
-
-
-def _activate_gateway(deployment, *, timeout):
-    deadline = time.monotonic()+timeout
-    state = Path(deployment['state']); marker = state/'running.json'
+    """Use the shared owned command lifecycle; never stop the raw upstream."""
     config = read_private(deployment['config'])
     # Changing policy is activation, never a side effect of preparation.
     store = ApprovalStore(config['approvals_file'])
@@ -233,65 +223,23 @@ def _activate_gateway(deployment, *, timeout):
     for name, digest in config['runtime_hashes'].items():
         if lifecycle.digest(Path(deployment['runtime'])/name) != digest:
             raise SetupError('Prepared gateway runtime changed')
-    if marker.exists():
-        previous = read_private(marker)
-        supervisors = previous.get('supervisors', [])
-        if len(supervisors) == 1 and lifecycle._supervisors_running(state, supervisors):
-            check = _ready_and_profile(deployment, config, supervisors[0], deadline)
-            return {**deployment, 'status':'running', 'gateway_check':check}
-        stopped = lifecycle.stop_engine(deployment)
-        if stopped['status'] != 'stopped':
-            raise SetupError('Previous gateway ownership or cleanup is incomplete; preserve running.json')
-    lifecycle._check_available_port(urlsplit(deployment['base_url']).port)
-    receipt = 'supervisor-0.json'
-    command = [deployment['python'], str(Path(deployment['runtime'])/'engine_supervisor.py'), '--state', str(state/receipt), '--',
-               deployment['python'], str(Path(deployment['runtime'])/'direct_gateway.py'), '--serve', deployment['config']]
-    log_fd = os.open(state/'gateway.log', os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
-    process = None
-    try:
-        with os.fdopen(log_fd,'ab') as log:
-            process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-                                       cwd=state, start_new_session=True)
-        lifecycle._children[process.pid] = process
-        identity = lifecycle.process_identity(process.pid, include_zombies=True)
-        if identity is None:
-            # Keep a durable record even when /proc cannot supply a birth ID.
-            # The common stop path refuses to signal an unverified PID and
-            # preserves this marker for recovery if ownership stays unknown.
-            fallback = {'pid':process.pid, 'start':None, 'uid':os.getuid()}
-            lifecycle.private_json(marker, {'processes':[fallback], 'owned_members':[],
-                'supervisors':[{'process':fallback,'receipt':receipt}], 'startup_identity_unverified':True})
-            raise SetupError('Gateway supervisor exited before ownership was established')
-        supervisor = {'process':identity, 'receipt':receipt}
-        ownership = {'processes':[identity], 'owned_members':[identity], 'supervisors':[supervisor]}
-        lifecycle.private_json(marker, ownership)
-        last = None
-        while time.monotonic()<deadline:
-            if process.poll() is not None:
-                raise SetupError('Gateway exited during startup; inspect its private gateway.log')
-            try:
-                check = _ready_and_profile(deployment, config, supervisor, deadline)
-                result = {**deployment, 'status':'running', 'gateway_check':check}
-                lifecycle.private_json(state/'deployment.json', result)
-                return result
-            except _NotReady as error:
-                last = error
-                time.sleep(min(.05,max(0.,deadline-time.monotonic())))
-        raise SetupError('Gateway startup timed out before the configured profile was confirmed') from last
-    except BaseException as error:
-        if process is not None and marker.exists():
-            stopped = lifecycle.stop_engine(deployment)
-            if stopped['status'] != 'stopped':
-                raise SetupError('Gateway startup failed and owned cleanup is incomplete; preserve running.json') from error
-        raise
+    managed = {**deployment, 'source': deployment['state'], 'install_dependencies': False,
+               'commands': [{'argv': [deployment['python'],
+                    str(Path(deployment['runtime'])/'direct_gateway.py'), '--serve', deployment['config']],
+                    'env': {}}]}
+    def ready(_managed, rows, deadline):
+        if len(rows) != 1:
+            raise SetupError('Gateway requires one owned command')
+        return {'gateway_check': _ready_and_profile(deployment, config, rows[0].get('command'), deadline)}
+    return lifecycle.activate_managed_commands(managed, readiness=ready, timeout=timeout,
+                                               result_base=deployment)
 
 
 def stop_gateway(deployment):
     if deployment.get('kind') != 'direct_gateway':
         raise SetupError('Not a managed direct gateway descriptor')
     lifecycle._require_pidfds()
-    with _locked(deployment['state']):
-        return lifecycle.stop_engine(deployment)
+    return lifecycle.stop_engine(deployment)
 
 
 def prior_client_gateway(home):

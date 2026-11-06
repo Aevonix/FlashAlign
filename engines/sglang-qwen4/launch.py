@@ -15,6 +15,8 @@ def main():
     p.add_argument('--model',required=True)
     p.add_argument('--profile',action='append',required=True)
     p.add_argument('--key-file',required=True)
+    p.add_argument('--lifecycle-state', type=Path, help='Private durable profile state directory')
+    p.add_argument('--admin-socket', type=Path, help='Owner-UID Unix administration socket')
     p.add_argument('--host',default='127.0.0.1')
     p.add_argument('--port',type=int,default=8030)
     p.add_argument('--draft-model')
@@ -22,6 +24,12 @@ def main():
     p.add_argument('--tensor-parallel',type=int,default=2,choices=[2])
     p.add_argument('--source',type=Path,help='Prepared SGLang source folder when not installed')
     a,extra=p.parse_known_args()
+    if bool(a.lifecycle_state) != bool(a.admin_socket):
+        p.error('--lifecycle-state and --admin-socket must be supplied together')
+    if a.lifecycle_state:
+        a.lifecycle_state.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.environ['FLASHALIGN_LIFECYCLE_STATE'] = str(a.lifecycle_state.resolve())
+        os.environ['FLASHALIGN_ADMIN_SOCKET'] = str(a.admin_socket.absolute())
     if extra[:1]==['--']:extra=extra[1:]
     if any(x in extra for x in ('--disable-speculative-decoding','--no-drafts')):
         p.error('Speculative decoding may not be disabled by this launcher')

@@ -10,6 +10,7 @@ import shutil
 
 PIN='94602c9c2b7cbdb8efd5c52802dac6a1c180089e'
 ROOT=Path(__file__).resolve().parent
+from lifecycle_patches import apply_lifecycle_patches, copy_lifecycle
 
 
 def main():
@@ -49,10 +50,14 @@ def main():
     edit('python/sglang/srt/model_executor/model_runner.py',
          '    def forward(\n        self,\n        forward_batch: ForwardBatch,',
          '    from sglang.srt.flashalign.runtime import owner_forward\n\n    @owner_forward\n    def forward(\n        self,\n        forward_batch: ForwardBatch,')
+    apply_lifecycle_patches(edit)
     shutil.copytree(ROOT/'flashalign_sglang',out/'python/sglang/srt/flashalign',ignore=shutil.ignore_patterns('__pycache__'))
     receipt={'upstream':'https://github.com/sgl-project/sglang','tag':'v0.5.20','commit':PIN,'files':edits,
              'status':'FlashAlign Qwen4 prepared backend','restrictions':['TP/EP=2, one worker, PP/DP/CP=1','eager execution','Qwen4Exp target and native MTP only','no HiCache or session cache']}
     receipt['flashalign_code_sha256']={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((ROOT/'flashalign_sglang').glob('*.py'))}
+    receipt['lifecycle_code_sha256'] = copy_lifecycle(out/'python/sglang/srt/flashalign')
+    receipt['flashalign_code_sha256'] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                                        for p in sorted((out/'python/sglang/srt/flashalign').glob('*.py'))}
     (out/'flashalign-build.json').write_text(json.dumps(receipt,indent=2)+'\n')
     print(json.dumps({'source':str(out),'commit':PIN,'edits':len(edits)}))
 

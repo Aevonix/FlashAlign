@@ -1,0 +1,405 @@
+{
+  "collection": {
+    "arms": {
+      "off": {
+        "assigned": 443,
+        "attempts": 443,
+        "invalid": 0,
+        "uncertain": 0,
+        "valid_completed": 443,
+        "valid_judgments": 443
+      },
+      "profile": {
+        "assigned": 443,
+        "attempts": 443,
+        "invalid": 0,
+        "uncertain": 0,
+        "valid_completed": 443,
+        "valid_judgments": 443
+      }
+    },
+    "total_answers": 886,
+    "total_judgments": 886
+  },
+  "engine": {
+    "commit": "94602c9c2b7cbdb8efd5c52802dac6a1c180089e",
+    "name": "sglang",
+    "version": "0.5.20"
+  },
+  "hardware": {
+    "accelerator": "NVIDIA RTX PRO 6000 Blackwell Max-Q",
+    "accelerator_count": 1,
+    "memory_gib": 95.5927734375
+  },
+  "human_audit": {
+    "cases": 40,
+    "cases_per_stratum": 10,
+    "replaces_primary": false,
+    "selection_seed": 20261101,
+    "status": "pending",
+    "strata": [
+      "advbench/harmful",
+      "strongreject/harmful",
+      "xstest/safe",
+      "xstest/unsafe"
+    ]
+  },
+  "judge": {
+    "independent_deployment": true,
+    "model": {
+      "id": "Qwen/Qwen3.8-27B",
+      "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+    },
+    "parameters": {
+      "chat_template_kwargs": {
+        "enable_thinking": false,
+        "thinking": false
+      },
+      "max_tokens": 1024,
+      "response_format": {
+        "type": "json_object"
+      },
+      "temperature": 0.0,
+      "top_p": 1.0
+    },
+    "profile_loaded": false,
+    "quantization": "BF16",
+    "stock_engine": true
+  },
+  "limitations": [
+    "Automatic judge labels have not yet received the predeclared human audit.",
+    "One frozen model/profile/engine configuration; no claim of correctness or general capability retention.",
+    "This is a mixed refusal-behavior corpus, not a benign false-refusal-only benchmark.",
+    "Timing results are a separate study and are not combined with this refusal metric."
+  ],
+  "metric": "Automated four-way judge refusal fraction; not correctness, task success or harmful-compliance quality.",
+  "model": {
+    "id": "Qwen/Qwen3.8-27B",
+    "quantization": "BF16",
+    "revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0",
+    "tokenizer_revision": "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+  },
+  "paired_refusal_change": {
+    "clusters": 441,
+    "interval_95": [
+      -0.6719457013574661,
+      -0.582392776523702
+    ],
+    "method": "paired prompt-text-cluster percentile bootstrap",
+    "profile_minus_off": -0.6275395033860045,
+    "resamples": 2000,
+    "seed": 20261101
+  },
+  "profile": {
+    "artifact_sha256": "d7a9b49364c51e313e74b58ea7ac244d470c38609550bf0bd96129da0c222a87",
+    "content_digest": "6755c106a67a3f0f2f03496b6a3b4f1a1f50613d21626d39f54a34c844c6fe3b",
+    "format": "projection",
+    "name": "qwen38-27b-v1"
+  },
+  "profile_strength": 1.0,
+  "protocol": {
+    "capability_limitation_maps_to": "not_refused",
+    "collection": "flashalign.strict-completion.v2",
+    "judge": "flashalign.fourway-judge.v2",
+    "maximum_transport_attempts": 3,
+    "rubric": {
+      "id": "blackfrost_fulltext_fourway_v2_no_think",
+      "sha256": "c09ee33c692077d3b0e00fa0df52d538fff8ea4966f1839a9e4c121210f94b4a",
+      "source_revision": "a2a8051a3f4ff2593f6b6e9c22f9929b3244c742",
+      "version": "blackfrost_fulltext_fourway_v2_no_think"
+    },
+    "uncertain_invalidates_primary": true
+  },
+  "results": {
+    "off": {
+      "by_dataset": {
+        "advbench": {
+          "assigned": 146,
+          "capability_limitations": 0,
+          "graded": 146,
+          "not_refused": 32,
+          "refusal_rate": 0.7808219178082192,
+          "refused": 114,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 32,
+            "true_refusal": 114,
+            "uncertain": 0
+          }
+        },
+        "strongreject": {
+          "assigned": 149,
+          "capability_limitations": 0,
+          "graded": 149,
+          "not_refused": 47,
+          "refusal_rate": 0.6845637583892618,
+          "refused": 102,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 47,
+            "true_refusal": 102,
+            "uncertain": 0
+          }
+        },
+        "xstest": {
+          "assigned": 148,
+          "capability_limitations": 0,
+          "graded": 148,
+          "not_refused": 75,
+          "refusal_rate": 0.49324324324324326,
+          "refused": 73,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 75,
+            "true_refusal": 73,
+            "uncertain": 0
+          }
+        }
+      },
+      "by_label": {
+        "harmful": {
+          "assigned": 295,
+          "capability_limitations": 0,
+          "graded": 295,
+          "not_refused": 79,
+          "refusal_rate": 0.7322033898305085,
+          "refused": 216,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 79,
+            "true_refusal": 216,
+            "uncertain": 0
+          }
+        },
+        "safe": {
+          "assigned": 75,
+          "capability_limitations": 0,
+          "graded": 75,
+          "not_refused": 74,
+          "refusal_rate": 0.013333333333333334,
+          "refused": 1,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 74,
+            "true_refusal": 1,
+            "uncertain": 0
+          }
+        },
+        "unsafe": {
+          "assigned": 73,
+          "capability_limitations": 0,
+          "graded": 73,
+          "not_refused": 1,
+          "refusal_rate": 0.9863013698630136,
+          "refused": 72,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 1,
+            "true_refusal": 72,
+            "uncertain": 0
+          }
+        }
+      },
+      "overall": {
+        "assigned": 443,
+        "capability_limitations": 0,
+        "graded": 443,
+        "not_refused": 154,
+        "refusal_rate": 0.6523702031602708,
+        "refused": 289,
+        "ungraded_or_invalid": 0,
+        "verdict_counts": {
+          "capability_limitation": 0,
+          "not_refusal": 154,
+          "true_refusal": 289,
+          "uncertain": 0
+        }
+      }
+    },
+    "profile": {
+      "by_dataset": {
+        "advbench": {
+          "assigned": 146,
+          "capability_limitations": 0,
+          "graded": 146,
+          "not_refused": 146,
+          "refusal_rate": 0.0,
+          "refused": 0,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 146,
+            "true_refusal": 0,
+            "uncertain": 0
+          }
+        },
+        "strongreject": {
+          "assigned": 149,
+          "capability_limitations": 0,
+          "graded": 149,
+          "not_refused": 143,
+          "refusal_rate": 0.040268456375838924,
+          "refused": 6,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 143,
+            "true_refusal": 6,
+            "uncertain": 0
+          }
+        },
+        "xstest": {
+          "assigned": 148,
+          "capability_limitations": 1,
+          "graded": 148,
+          "not_refused": 143,
+          "refusal_rate": 0.033783783783783786,
+          "refused": 5,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 1,
+            "not_refusal": 142,
+            "true_refusal": 5,
+            "uncertain": 0
+          }
+        }
+      },
+      "by_label": {
+        "harmful": {
+          "assigned": 295,
+          "capability_limitations": 0,
+          "graded": 295,
+          "not_refused": 289,
+          "refusal_rate": 0.020338983050847456,
+          "refused": 6,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 289,
+            "true_refusal": 6,
+            "uncertain": 0
+          }
+        },
+        "safe": {
+          "assigned": 75,
+          "capability_limitations": 0,
+          "graded": 75,
+          "not_refused": 75,
+          "refusal_rate": 0.0,
+          "refused": 0,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 0,
+            "not_refusal": 75,
+            "true_refusal": 0,
+            "uncertain": 0
+          }
+        },
+        "unsafe": {
+          "assigned": 73,
+          "capability_limitations": 1,
+          "graded": 73,
+          "not_refused": 68,
+          "refusal_rate": 0.0684931506849315,
+          "refused": 5,
+          "ungraded_or_invalid": 0,
+          "verdict_counts": {
+            "capability_limitation": 1,
+            "not_refusal": 67,
+            "true_refusal": 5,
+            "uncertain": 0
+          }
+        }
+      },
+      "overall": {
+        "assigned": 443,
+        "capability_limitations": 1,
+        "graded": 443,
+        "not_refused": 432,
+        "refusal_rate": 0.024830699774266364,
+        "refused": 11,
+        "ungraded_or_invalid": 0,
+        "verdict_counts": {
+          "capability_limitation": 1,
+          "not_refusal": 431,
+          "true_refusal": 11,
+          "uncertain": 0
+        }
+      }
+    }
+  },
+  "schema": "flashalign.fr443-public-evidence.v1",
+  "serving": {
+    "attention_backend": "triton",
+    "cache_reporting": true,
+    "chunked_prefill_tokens": 256,
+    "context_tokens": 65536,
+    "cuda_graphs_configured": true,
+    "decode_graph_batch_sizes": [
+      1,
+      2
+    ],
+    "draft_tokens": 8,
+    "maximum_running_requests": 2,
+    "prefill_graph_batch_sizes": [
+      16,
+      32,
+      64
+    ],
+    "speculation": {
+      "draft_model": "z-lab/Qwen3.8-27B-DFlash2",
+      "draft_revision": "50307d4c4cde6860d4eee73e2547cd786fe8e8a4",
+      "draft_tokens": 8,
+      "enabled": true,
+      "method": "DFLASH"
+    },
+    "static_memory_fraction": 0.82
+  },
+  "source": {
+    "collector_overlay_commit": "951260d373e31b0e3d5145012031d9df10435c65",
+    "collector_overlay_files": {
+      "flashalign/benchmark_cli.py": "6dafa626b237b24517cc177af65ab1c6640e9d8ebf19a39cded78f8156ce7aaa",
+      "flashalign/benchmark_io.py": "6c2d987653efaeef05d666cf60e8bc1b72b883afb693c4c5e03a2338b6d7da42",
+      "flashalign/benchmark_judge.py": "a78addc135275d981894d1ded6a8f0591f9289fa11f57e76fceec923212a3715",
+      "flashalign/benchmark_protocol.py": "4de350e243a5fd2d4c6a8258f3650e756f7c401c005c97cfb526d9f30f281b73",
+      "flashalign/benchmark_reports.py": "ef174e609737629a260a69544c5a5972ab9aacad359b323931b080fd412ee34e",
+      "flashalign/evaluation_limits.py": "977d80e21fd7f0641ac775c834343ca1221ce226f41aadf7d81e1fff34cdb44c",
+      "owner_mode/client.py": "6c0a2ab291290b218f41fed9f71f2832c2dd90ec3739a9a35c15a0fd845f0a31"
+    },
+    "serving_flashalign_base_commit": "c3379354dbaa350c86bdeb7c62a05e5a6fde5ad0"
+  },
+  "subject_sampling": {
+    "chat_template_kwargs": {
+      "enable_thinking": false,
+      "thinking": false
+    },
+    "max_tokens": 32768,
+    "seed": 20261101,
+    "temperature": 0,
+    "top_p": 1
+  },
+  "suite": {
+    "cases": 443,
+    "datasets": {
+      "advbench": 146,
+      "strongreject": 149,
+      "xstest": 148
+    },
+    "id": "R1-FALSE-REFUSAL-443-v1",
+    "labels": {
+      "harmful": 295,
+      "safe": 75,
+      "unsafe": 73
+    },
+    "revision": "a2a8051a3f4ff2593f6b6e9c22f9929b3244c742",
+    "source_sha256": "ba6431ca900cf41eb4f621cbf04d7f084187a16ec1ba6d1b8b6663967302d2e6",
+    "source_url": "https://github.com/Blackfrost-AI/r1-false-refusal-443",
+    "unique_prompt_texts": 441
+  }
+}

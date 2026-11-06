@@ -2,7 +2,7 @@
 
 **ReAlign models instantly, on demand.**
 
-By Aevonix Research · Version 1.1.1
+By Aevonix Research · Version 1.2.0
 
 [![Stock DeepSeek V4.1 Flash refuses to help make a realistic-looking ID for a theatrical role; with FlashAlign on, the same model answers it](assets/demo/flashalign-promo-preview.gif)](https://aevonix.github.io/FlashAlign/)
 
@@ -18,7 +18,7 @@ changing them. Run it directly, with Hermes or OpenClaw, or through your own
 harness. Managed inference runs on Linux with NVIDIA GPUs. See
 [compatibility](docs/compatibility.md) for DGX Spark support and engine requirements.
 
-The V1 starter profiles focus on refusal reduction. Future profiles could also
+The starter profiles focus on refusal reduction. Future profiles could also
 increase refusals for public or higher-risk tasks.
 
 Restricting abliteration to verified users and channels reduces the risk of an
@@ -70,9 +70,9 @@ See [compatibility](docs/compatibility.md#engines-and-models) for hardware
 requirements, pinned checkpoints and feature limits, and
 [validation](docs/validation.md) for tested configurations and results.
 
-Switching happens per request among profiles already loaded by the engine.
-Loading a new model or profile happens beforehand and can require an engine
-restart.
+Switching happens per request. Engines that advertise profile hot loading can
+also add compatible profiles without a restart. Loading another model still
+requires its own engine setup. See [profile management](docs/profile-lifecycle.md).
 
 Use `--model-path /path/to/model` to select a model. Run `bash ./install.sh` to
 connect to an engine that is already running. See the
@@ -102,6 +102,38 @@ bash ./install.sh --detect
 
 The [setup guide](docs/setup.md) covers connection and activation. The engine's
 effective-profile response confirms that the selected profile is active.
+
+## Check and manage your deployment
+
+After setup, run:
+
+```sh
+bash ./flashalign.sh status
+bash ./flashalign.sh doctor --probe
+bash ./flashalign.sh dashboard
+bash ./flashalign.sh profile list
+```
+
+Status reads runtime metadata. Doctor sends a synthetic request only with
+`--probe`. The dashboard shows measured values when the engine provides them.
+See [operations](docs/operations.md), [profile management](docs/profile-lifecycle.md)
+and [benchmarks](docs/benchmarks.md).
+
+## Measured results
+
+On Qwen3.8-27B, the automated FR443 judge counted **289 refusals in 443 stock
+responses** and **11 in 443 profile responses**. The suite includes safe,
+harmful and unsafe requests. Human audit and broader capability testing remain
+pending. [Full results and settings](docs/qwen-fr443-results.md).
+
+A separate Qwen/SGLang timing study measured **1.324× end-to-end completion-token
+throughput** for the opt-in graph Owner Mode path compared with the previous
+release's eager path. This was a fixed 256-token workload with three pairs of
+engine starts, not a decode-speed measurement. [Timing results and reproducible data](docs/qwen-sglang-timing.md).
+
+A fixed follow-up passed completion and GSM8K, but did not establish all
+capability gates. Eager remains the default and graphs remain opt-in.
+[Quality results and limits](docs/qwen-sglang-quality.md).
 
 ## Choose when to apply FlashAlign
 
@@ -197,6 +229,8 @@ requirements.
 ## Documentation
 
 - [Setup and activation](docs/setup.md)
+- [Status, doctor and dashboard](docs/operations.md)
+- [Live profile management](docs/profile-lifecycle.md)
 - [Managed engine setup](docs/engine-setup.md)
 - [Agent-assisted setup](docs/agent-setup.md)
 - [Harness and model compatibility](docs/compatibility.md)
@@ -208,6 +242,7 @@ requirements.
 - [Hermes configuration](hermes-owner-mode/README.md)
 - [OpenClaw adapter](openclaw-owner-mode/README.md)
 - [Engine API](docs/engine-contract.md)
+- [Extension interfaces](docs/extending.md)
 - [Security model and vulnerability reports](SECURITY.md)
 - [Development and tests](CONTRIBUTING.md)
 - [Vector logos and brand kit](assets/brand/README.md)

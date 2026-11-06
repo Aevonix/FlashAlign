@@ -132,9 +132,21 @@ loaded; the in-memory cache remains available in both modes.
 
 The launcher exposes Chat Completions, Completions, model discovery, health and
 metrics. Native slot-save and adapter-administration endpoints are not exposed.
-Profile tensors and the loaded model stay immutable for the process lifetime;
-a restart resets its in-memory caches. Local users who can bypass the loopback
-listener are inside the deployment's trust boundary.
+The loaded model and each profile generation are immutable. New profile
+generations can be staged, activated, rolled back and deactivated without
+restarting the model. Existing requests retain their original generation.
+Cached prefixes include a generation ID and exact strength, so switching an
+alias never makes a previous generation's cache eligible for reuse.
+
+Local administration uses the owner-only socket at
+`STATE/lifecycle/admin.sock`. Retirement requires all request, cache and graph
+references to drain. Explicit cache eviction waits for an idle native worker,
+synchronizes its work and clears graph references before releasing tensors.
+Existing speculative decoding settings remain in effect.
+
+Local users who can bypass the loopback listener are inside the deployment's
+trust boundary. The native worker's control endpoint also requires a separate
+ephemeral capability that is never exposed by the external listener.
 
 ## Evidence and limits
 

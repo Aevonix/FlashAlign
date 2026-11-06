@@ -17,6 +17,8 @@ def main(argv=None):
     p.add_argument('--model',required=True)
     p.add_argument('--profile',type=Path,action='append',required=True)
     p.add_argument('--key-file',type=Path,required=True)
+    p.add_argument('--profile-state-dir',type=Path)
+    p.add_argument('--profile-admin-socket',type=Path)
     p.add_argument('--host',default='127.0.0.1')
     p.add_argument('--port',type=int,default=8030)
     p.add_argument('--draft-model')
@@ -38,6 +40,11 @@ def main(argv=None):
     if len(model_ids)!=1:
         p.error('All loaded profiles must target the same model')
     load_key(args.key_file)
+    state = (args.profile_state_dir or args.key_file.resolve().parent / 'flashalign-runtime').resolve()
+    state.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if state.stat().st_uid != os.getuid() or state.stat().st_mode & 0o077:
+        p.error('Profile state directory must be private to its owner')
+    socket = (args.profile_admin_socket or state / 'admin.sock').absolute()
     config=json.loads(args.speculative_config) if args.speculative_config else None
     if args.draft_model:
         if config is not None or not args.draft_method:
@@ -47,6 +54,7 @@ def main(argv=None):
         p.error('Unsupported active speculative method; it will not be disabled')
     os.environ.update(FLASHALIGN_PROFILES=json.dumps([str(x.resolve()) for x in args.profile]),
                       FLASHALIGN_KEY_FILE=str(args.key_file.resolve()),FLASHALIGN_MODEL_ID=args.model,
+                      FLASHALIGN_PROFILE_STATE=str(state), FLASHALIGN_PROFILE_ADMIN_SOCKET=str(socket),
                       FLASHALIGN_SECURE_LAUNCH='1',
                       VLLM_NO_USAGE_STATS='1',HF_HUB_DISABLE_TELEMETRY='1',
                       VLLM_PLUGINS='flashalign',VLLM_USE_V2_MODEL_RUNNER='0')
@@ -62,6 +70,7 @@ def main(argv=None):
               '--enforce-eager','--tensor-parallel-size','1','--pipeline-parallel-size','1',
               '--data-parallel-size','1','--api-server-count','1','--reasoning-parser',args.reasoning_parser,
               '--served-model-name',next(iter(model_ids)),
+              '--worker-extension-cls','flashalign_vllm.lifecycle.WorkerExtension',
               '--middleware','flashalign_vllm.middleware.OwnerMiddleware',*extra]
     if config is not None:sys.argv.extend(['--speculative-config',json.dumps(config,separators=(',',':'))])
     from vllm.entrypoints.cli.main import main as serve

@@ -128,7 +128,6 @@ def native_terminal(args):
         raise ValueError('Session-scoped authorization requires Verified mode; Always On applies independently of session grants')
     if not state['enabled']:
         raise ValueError('FlashAlign is disabled in this deployment')
-    source = Path(__file__).resolve().parents[1]
     import owner_mode
     core = Path(owner_mode.__file__).resolve().parent
     if args.harness == 'hermes':
@@ -138,7 +137,8 @@ def native_terminal(args):
         node = shutil.which('node')
         if node is None:
             raise ValueError('Node is required for the native OpenClaw terminal')
-        launcher = source/'openclaw-owner-mode/terminal-runner.mjs'
+        from owner_mode.resources import setup_resource
+        launcher = setup_resource('openclaw-owner-mode')/'terminal-runner.mjs'
         if not launcher.is_file():
             launcher = home/'.openclaw/extensions/owner-mode/terminal-runner.mjs'
         if not launcher.is_file():

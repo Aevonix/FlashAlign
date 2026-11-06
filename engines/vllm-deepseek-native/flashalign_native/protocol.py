@@ -15,6 +15,7 @@ import re
 import stat
 import threading
 import time
+from .auth_contract import authenticate_header, read_signing_key
 
 
 class FieldError(ValueError):
@@ -26,22 +27,11 @@ class Selection:
     name: str
     digest: str
     scale: float
+    generation: str | None = None
 
 
 def load_key(path):
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    try:
-        info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o077:
-            raise ValueError('Signing key must be an owned regular private file')
-        if info.st_uid != os.getuid():
-            raise ValueError('Signing key belongs to another user')
-        key = os.read(fd, 33)
-    finally:
-        os.close(fd)
-    if len(key) != 32:
-        raise ValueError('Signing key must contain exactly 32 bytes')
-    return key
+    return read_signing_key(path)
 
 
 class Gate:
@@ -63,19 +53,11 @@ class Gate:
             return None
         if not self.profiles:
             raise FieldError('this server was started without owner-mode profiles: owner_mode must be "off"')
-        if self.key is None or len(headers) != 1:
-            return None
-        match = re.fullmatch(r'v1:([0-9]{1,12}):([A-Za-z0-9_-]{16,128}):([0-9a-f]{64})', headers[0])
-        if not match:
-            return None
-        stamp, nonce, supplied = match.groups()
         now = self.clock()
-        if abs(now-int(stamp)) > 60:
+        auth = authenticate_header(self.key, raw, headers, now=now)
+        if auth is None:
             return None
-        message = stamp+'\n'+nonce+'\n'+hashlib.sha256(raw).hexdigest()
-        wanted = hmac.new(self.key, message.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(wanted, supplied):
-            return None
+        stamp, nonce = auth.timestamp, auth.nonce
         if self.replay_store is not None:
             if not self.replay_store.consume(nonce, int(stamp)+61, now=now):
                 return None
@@ -164,7 +146,8 @@ def cache_key(selection, store, model_identity, original=None):
     mode = 'off' if selection is None else selection.name
     digest = '' if selection is None else selection.digest
     scale = '' if selection is None else selection.scale.hex()
-    material = json.dumps([model_identity,mode,digest,scale,original],sort_keys=True,separators=(',',':'))
+    generation = '' if selection is None else selection.generation
+    material = json.dumps([model_identity,mode,digest,scale,generation,original],sort_keys=True,separators=(',',':'))
     return 'flashalign:'+hashlib.sha256(material.encode()).hexdigest()
 
 

@@ -1,0 +1,7 @@
+{
+  "base_url": "http://127.0.0.1:9000/v1",
+  "model": "replace-with-judge-model-id",
+  "revision": "replace-with-pinned-judge-revision",
+  "independent_deployment": true,
+  "timeout": 120
+}

@@ -1,8 +1,8 @@
 # TensorFold setup
 
-FlashAlign manages TensorFold 1.1.9 and 1.2.0 bundles on Linux x86_64 and
-aarch64. A bundle must match the host's CPU and GPU architectures. Install the
-NVIDIA driver before setup.
+The managed download catalog provides pinned TensorFold 1.2.0 bundles for
+Linux x86_64 and aarch64. A bundle must match the host's CPU and GPU
+architectures. Install the NVIDIA driver before setup.
 
 Setup stages the checked native executable, runtime libraries, matching source
 archive, profile and unique deployment signing key.
@@ -81,8 +81,7 @@ stages profiles and required files through encrypted SSH input into private
 rank directories. Only commands that need a signing key receive one. Keys
 never appear in arguments or setup output. The leader authenticates API
 requests; every rank loads the same profile.
-GLM Flash also receives the key-file path during startup. Preparation does not
-start a model or restart a harness.
+Preparation does not start a model or restart a harness.
 
 Activation starts followers, then the leader and its SSH forward. Startup
 allows 30 minutes by default; bundles can set `startup_timeout` from 60 to
@@ -121,8 +120,9 @@ The bundle declares the supported speculative method. Setup preserves a matching
 active external drafter, MTP depth and parallel setting. An incompatible active
 configuration stops setup; the installer does not disable speculation. Native
 GLM uses its MTP weights. Each bundle declares whether MTP depth is adjustable.
-Flash supports up to three drafts; Full defaults to four. The Full preset uses
-an 8,192-token context, two concurrent sequences and an 8 GiB host prompt cache.
+Flash supports up to three drafts; Full defaults to four. Both presets use a
+65,536-token context and two concurrent sequences. Full includes an 8 GiB host
+prompt cache.
 It supports automatic tool calls; forced tool selection, JSON Schema and image
 input are unsupported. Setup rejects unsupported speculative settings before
 staging. Qwen may require an external DFlash checkpoint. DeepSeek uses its
@@ -162,9 +162,11 @@ declared context and speculative settings.
 
 ## Bundle contract
 
-A bundle uses manifest version 2 with `engine: "tensorfold-native"`,
-`runtime_version: "1.1.9"` or `"1.2.0"`, an exact `source_revision`, `platform`, and
-`cuda_architectures`. `durable_owner_replay: true` is required; the installer
+Current catalog bundles use manifest version 2 with `engine: "tensorfold-native"`,
+`runtime_version: "1.2.0"`, an exact `source_revision`, `platform`, and
+`cuda_architectures`. The installer also accepts supported 1.1.9 manifests
+within their original profile and runtime contracts. `durable_owner_replay: true`
+is required; the installer
 rejects bundles without persistent replay protection before staging them.
 It includes a complete SHA-256 and size inventory of its
 `bin/`, `lib/`, `assets/`, `sources/`, and `licenses/` files plus `LICENSE` and
@@ -179,6 +181,27 @@ original target pin; compatible serving bases are declared by the runtime.
 `binary` names the primary executable. `rank_transport` is `cli`, `glm_env`, or
 `dsv41_env`, according to the native family interface. DeepSeek additionally
 names its `follower_binary` and `assets_directory`.
+
+Bundles with live profile management declare an inventoried bridge:
+
+```json
+"profile_control": {
+  "schema": "flashalign.native-profile-control.v1",
+  "protocol": "flashalign.tensorfold-control.v2",
+  "bridge": "bin/flashalign_admin.py"
+}
+```
+
+The bundle builder copies that bridge from the pinned source commit and checks
+its protocol. Setup starts it beside the native engine, stages the shared
+FlashAlign Python modules, and records the private administration socket. This
+path needs Python 3.10 or newer and uses its standard library. Every rank uses
+the same controlled serving entry point; only the leader receives a signing key
+and runs the bridge.
+
+For a remote leader, setup creates an owned SSH socket forward. Profile commands
+upload a validated temporary snapshot to that host before staging it. SSH access
+authorizes administration; inference signing keys do not grant this access.
 
 Maintainers build a reproducible runtime archive with
 [build-native-bundle.py](../tools/build-native-bundle.py). Its source archive comes

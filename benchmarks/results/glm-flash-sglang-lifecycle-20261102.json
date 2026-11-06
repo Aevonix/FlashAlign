@@ -1,0 +1,64 @@
+{
+  "checkpoint_files_freshly_hashed": 67,
+  "cleanup": {
+    "all_four_gpus_idle": true,
+    "engine_tree_reaped": true,
+    "probe_tree_reaped": true,
+    "reservation_released": true
+  },
+  "engine": "SGLang",
+  "lifecycle_checks": [
+    "hot_stage",
+    "activate",
+    "stale_revision_rejection",
+    "rollback",
+    "cache_retained_retirement_rejection",
+    "cache_eviction_and_retirement",
+    "post_retirement_allocation",
+    "cache_reuse",
+    "cancellation"
+  ],
+  "model": "zai-org/GLM-5.3-Flash",
+  "model_revision": "46a050bec13002ad29ee795c16e61cf4fa3c4a9c",
+  "profile": "glm53-flash-v1",
+  "profile_digest": "e566fd3dae0b9e9824be925ec7ce874bf53e04a0af47aec62be52bcc79dcfcb8",
+  "result": "passed",
+  "runtime_revision": "5f2e7efacc67e2e28fad2e4190a742c45b7783c4",
+  "schema": "flashalign.public-safe-lifecycle-result.v1",
+  "scope": "Text-only full-model lifecycle qualification. No new numerical parity, answer-quality, throughput, or other-hardware claim.",
+  "sglang_version": "0.5.20",
+  "speculation_positive_in_modes": [
+    "off",
+    "owner"
+  ],
+  "stress": {
+    "concurrent_old_new_observations": 100,
+    "cycles": 100,
+    "failed_requests": 0,
+    "live_swap_observations": 200,
+    "successful_requests": 1000,
+    "ordinary_request_max_tokens": 8,
+    "anchor_request_max_tokens": 128,
+    "observed_finish_reasons": {
+      "stop": 700,
+      "length": 300
+    },
+    "finish_contract": "A completed stop or length finish is valid for this bounded lifecycle test; these are not answer-quality or refusal-rate results."
+  },
+  "topology": {
+    "attention": "dsa/tilelang",
+    "chunked_prefill": 2048,
+    "compute_capability": "12.0",
+    "context_length": 65536,
+    "execution": "eager",
+    "expert_parallel": 1,
+    "gpus": 4,
+    "kv_cache_dtype": "bfloat16",
+    "max_running_requests": 2,
+    "memory_fraction": 0.9,
+    "speculative_algorithm": "EAGLE",
+    "tensor_parallel": 4
+  },
+  "transport_checks_passed": 14,
+  "upstream_revision": "94602c9c2b7cbdb8efd5c52802dac6a1c180089e"
+}
