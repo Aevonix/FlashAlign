@@ -46,6 +46,15 @@ Start with a predeclared small subset. Report its size and selection seed,
 completed and failed cases, and both modes. Keep all selected cases in the
 aggregate, and label any demonstration clips as selected examples.
 
+## Input errors
+
+Benchmark, profile evaluation and calibration commands report the failed
+command and FlashAlign's fixed validation message. File parsing errors name
+the input option (for example, `--settings`) and JSON line and column when
+available. Diagnostics omit input contents, private filenames and server
+response bodies. Check the named input and retain incomplete receipts; a
+validation failure does not trigger a fallback or change generation settings.
+
 ## FR443 refusal comparison
 
 FR443 contains 443 source rows: 75 safe, 295 harmful and 73 unsafe, with two

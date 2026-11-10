@@ -437,7 +437,7 @@ def record_run(config, manifest, cases, output, *, options, repetitions=1, warmu
 
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
-    from .benchmark_cli import COMMANDS
+    from .benchmark_cli import COMMANDS, input_error, read_input
     if argv and argv[0] in COMMANDS:
         from .benchmark_cli import main as evaluation_main
         return evaluation_main(argv)
@@ -463,8 +463,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == "record":
-            report = record_run(read_json(args.config), read_json(args.manifest), read_jsonl(args.cases),
-                                args.output, options=read_json(args.settings), repetitions=args.repetitions,
+            report = record_run(read_input("--config", args.config, read_json), read_input("--manifest", args.manifest, read_json), read_input("--cases", args.cases, read_jsonl),
+                                args.output, options=read_input("--settings", args.settings, read_json), repetitions=args.repetitions,
                                 warmups=args.warmups, scale=args.scale)
             print(canonical({"completed": {mode: data["completed"] for mode, data in report["modes"].items()},
                              "measured_requests": report["measured_requests"]}))
@@ -472,7 +472,7 @@ def main(argv=None):
         if args.command == "summarize":
             run, rows, recording_hash = read_recording(args.run)
             result = aggregate(rows, run["manifest"], run["request_settings"],
-                               cases_sha256=run["cases_sha256"], labels=read_jsonl(args.labels))
+                               cases_sha256=run["cases_sha256"], labels=read_input("--labels", args.labels, read_jsonl))
             result["recording_sha256"] = recording_hash
             write_private(args.output, result)
             print(canonical({"labelled_requests": result["judgments"]["labelled_requests"]}))
@@ -481,8 +481,7 @@ def main(argv=None):
             build_demo(args.run, args.case, args.output, repetition=args.repetition, note=args.note)
             print("Playback created from the selected recorded pair; review it before sharing.")
     except Exception as exc:
-        # Error response bodies and user-supplied filenames can contain secrets.
-        print("Benchmark stopped: " + type(exc).__name__ + ". Inspect local inputs; no fallback was applied.", file=sys.stderr)
+        print("Benchmark stopped (" + args.command + "): " + input_error(exc) + ". Inspect local inputs; no fallback was applied.", file=sys.stderr)
         return 1
     return 0
 
