@@ -7,12 +7,14 @@ from contextvars import ContextVar
 from functools import wraps
 import inspect
 import importlib.util
+from ipaddress import ip_address
 import logging
 import os
 from pathlib import Path
 import sys
 import threading
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 from .policy import Policy, TICKET_HEADER, CONTEXT_HEADER, VerifiedTurn, flatten_request
 from .proxy import ProviderProxy
@@ -102,7 +104,14 @@ class Runtime:
                     flatten_request(result), session_id=session_id, turn_id=turn_id, route=route, info=info)
                 break
             else:
-                warn_fallback(getattr(self.proxy, "audit", None), "route_mismatch")
+                url = urlsplit(base_url)
+                try:
+                    loopback = ip_address(url.hostname or "").is_loopback
+                except ValueError:
+                    loopback = (url.hostname or "").rstrip(".") == "localhost"
+                if loopback and any(url.port == urlsplit(self.proxy.base_url(route)).port
+                                    for route in self.proxy.routes):
+                    warn_fallback(getattr(self.proxy, "audit", None), "route_mismatch")
         except Exception:
             result["extra_headers"].pop(TICKET_HEADER, None)
             warn_fallback(getattr(self.proxy, "audit", None), "request_middleware_exception")
@@ -296,9 +305,12 @@ def register(ctx):
             pass
         from .terminal import current_binding, TerminalAuthority
         terminal = current_binding(approvals.path)
-        if terminal is None and not serving_process(ctx.get_config("serve_argv", None)):
-            warn_fallback(audit, "serving_process_mismatch")
-            return None
+        if terminal is None:
+            expected = ctx.get_config("serve_argv", None)
+            if not serving_process(expected):
+                if isinstance(expected, list) and expected and sys.argv[1:2] == [str(expected[0])]:
+                    warn_fallback(audit, "serving_process_mismatch")
+                return None
         owner = SimpleNamespace(active=False, closed=False, closing=False,
                                 runtime=None, proxy=None, authority=None, terminal=terminal,
                                 registrations=set())

@@ -43,7 +43,7 @@ class FallbackDiagnostics(unittest.TestCase):
         rows = []
         ctx = self.context(serve_argv=['gateway', 'run'])
         with mock.patch.object(plugin, 'AuditLog', return_value=rows.append), \
-             mock.patch.object(plugin.sys, 'argv', ['fixture', 'different']):
+             mock.patch.object(plugin.sys, 'argv', ['fixture', 'gateway', 'different']):
             self.check_fallback('serving_process_mismatch', lambda: plugin.register(ctx), rows)
         self.assertFalse(ctx.hooks)
         self.assertFalse(fixtures.Proxy.instances)

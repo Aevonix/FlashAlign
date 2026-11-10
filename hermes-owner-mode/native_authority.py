@@ -15,6 +15,10 @@ from . import hermes_ingress
 from .policy import IdentityResult
 
 
+class _RejectedIngress(ValueError):
+    pass
+
+
 class NativeAuthority:
     def __init__(self, path, proof_type, *, registry=None, audit=None):
         self.audit = audit
@@ -51,17 +55,17 @@ class NativeAuthority:
             keys = [self._key(item) for item in facts]
             if (not keys or len(keys) != len(set(keys)) or root_key not in keys
                     or any(key[:4] != root_key[:4] for key in keys)):
-                raise ValueError('Invalid native composition')
+                raise _RejectedIngress('Invalid native composition')
             rows = []
             for item, key in zip(facts, keys):
                 if (not self.registry.supports(item.channel, 'native_message')
                         or not item.native or item.internal or not item.allowlisted or item.own_account
                         or item.reaction or item.chat_type not in DM_TYPES
                         or not all(key) or not (item.text or item.media)):
-                    raise ValueError('Unverified native message')
+                    raise _RejectedIngress('Unverified native message')
                 grant = self.store.approved(key[0], key[1], key[2])
                 if not grant:
-                    raise ValueError('Contact is not approved')
+                    raise _RejectedIngress('Contact is not approved')
                 rows.append((item, grant))
             with self.lock:
                 if any(key in self.consumed for key in keys):
@@ -69,13 +73,14 @@ class NativeAuthority:
                 for key, row in zip(keys, rows):
                     prior = self.pending.get(key)
                     if prior and (prior[0].text, prior[0].media, prior[1]) != (row[0].text, row[0].media, row[1]):
-                        raise ValueError('Native message identity was reused')
+                        raise _RejectedIngress('Native message identity was reused')
                 for key, row in zip(keys, rows):
                     self.pending.setdefault(key, row)
                 self.groups[root_key] = tuple(keys)
                 self._trim(self.pending); self._trim(self.groups)
-        except Exception:
-            warn_fallback(self.audit, "ingress_observation_exception")
+        except Exception as error:
+            if not isinstance(error, _RejectedIngress):
+                warn_fallback(self.audit, "ingress_observation_exception")
             if root_key:
                 with self.lock:
                     self.rendered[root_key] = None
