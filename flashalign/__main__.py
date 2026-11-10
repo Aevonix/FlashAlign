@@ -21,6 +21,9 @@ def main(argv=None):
     if argv[:1] == ['why']:
         from owner_mode.audit import main as why_main
         return why_main(argv[1:])
+    if argv[:1] and argv[0] in ('pause', 'resume'):
+        from owner_mode.manage import cli as manage_main
+        return manage_main(argv)
     if argv[:1] == ['benchmark']:
         from .benchmark import main as benchmark_main
         return benchmark_main(argv[1:])

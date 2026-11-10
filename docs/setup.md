@@ -203,6 +203,22 @@ or media support in your harness. See [message bindings](message-bindings.md).
 
 ## Manage contacts and tools
 
+Pause or resume profile selection without changing the saved mode, contacts,
+channels or tool settings:
+
+```sh
+flashalign pause
+flashalign resume
+flashalign pause --store /path/to/approvals.json
+```
+
+These commands set the approval store's existing `enabled` flag. They take
+effect on subsequent requests without a restart and do not cancel requests
+already running. Pausing makes routed requests use stock mode, including in
+Always On. Resuming restores the saved policy; it does not add any approvals.
+The default store is `~/.config/owner-mode/approvals.json`. For a direct gateway
+or another installation, pass that deployment's approval-store path.
+
 Use [channel administration](channels.md) to inspect installed adapters or
 change the enabled channel selection. New transports can register their own
 identity format and capabilities in trusted adapter code.

@@ -15,6 +15,9 @@ subagents even when their alignment flags are off. It persists across restarts
 until the operator changes the mode. OpenClaw still controls message admission
 and tool execution permissions. Always On does not make a sender verified, and
 requests sent to a different provider are outside this route's policy.
+`flashalign pause` suspends profile selection, including Always On, on the next
+request. `flashalign resume` restores the saved policy. Both accept `--store`
+for an approval store outside `~/.config/owner-mode/approvals.json`.
 
 ## Verified contacts
 

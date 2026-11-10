@@ -41,6 +41,8 @@ def main(argv=None):
     p.add_argument("action", choices=("list", "enable", "disable"))
     p.add_argument("name", nargs="?")
     commands.add_parser("list")
+    commands.add_parser("pause", help="Pause profile selection without changing saved access settings")
+    commands.add_parser("resume", help="Resume the saved access mode and settings")
     args = parser.parse_args(argv)
     store = ApprovalStore(args.store, registry=DEFAULT_REGISTRY if args.command == "adapters" else None)
     if args.command == "adapters":
@@ -55,6 +57,8 @@ def main(argv=None):
             else:
                 disable_channel_adapter(args.store, args.name)
         state = {"plugins": available_channel_adapters(args.store)}
+    elif args.command in ("pause", "resume"):
+        state = store.set_enabled(args.command == "resume")
     elif args.command in ("approve", "revoke"):
         state = store.set_contact(args.channel, args.account, args.contact, args.command == "approve")
     elif args.command == "tool":
@@ -75,6 +79,14 @@ def main(argv=None):
     else:
         state = store.read()
     print(json.dumps(state, indent=2))
+
+
+def cli(argv=None):
+    """Main CLI adapter: accept the store option before or after the command."""
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--store", type=Path, default=Path.home() / '.config/owner-mode/approvals.json')
+    args, remaining = parser.parse_known_args(argv)
+    return main(["--store", str(args.store), *remaining])
 
 
 if __name__ == "__main__":

@@ -181,6 +181,11 @@ class ApprovalStore:
             raise ValueError("Mode must be verified or always_on")
         return self.update(lambda state: state.update(mode=mode))
 
+    def set_enabled(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError("Enabled must be a boolean")
+        return self.update(lambda state: state.update(enabled=enabled))
+
     def update(self, change):
         """Local operator action only. Serialize writers and replace the file atomically."""
         parent = self.path.parent

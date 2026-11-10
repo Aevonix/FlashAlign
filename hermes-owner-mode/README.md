@@ -50,6 +50,9 @@ approval store also requires an owned `0600` regular file. The wizard and
 administration command create the store. Authorization rereads its mode,
 approvals and tool flags. Contact revocation takes effect without a restart in
 Verified contacts mode; it does not disable Always On.
+Use `flashalign pause` and `flashalign resume` to suspend and restore profile
+selection for either mode. Pass `--store` for a nondefault approval store.
+These commands preserve the saved contacts, channels, mode and tool settings.
 
 Saved channel selections also take effect without a restart. The plugin admits
 installed channel adapters and the policy checks the approval store on each
