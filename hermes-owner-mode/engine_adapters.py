@@ -4,7 +4,8 @@
 """Trusted engine registration for setup orchestration and read-only probes.
 
 Metadata never supplies executable callbacks. Installed application code builds
-this registry explicitly; the immutable snapshot can also be injected in tests.
+this registry explicitly or supplies installed entry points; immutable snapshots
+can also be injected in tests.
 """
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -99,11 +100,19 @@ DEFAULT_ENGINE_ADAPTERS = EngineAdapterRegistry((
     EngineAdapter('llamacpp', _python_check, _python_prepare, select=_select('llamacpp')),
 ))
 _registry = DEFAULT_ENGINE_ADAPTERS
+_loaded = False
 _lock = threading.RLock()
 
 
 def engine_adapters():
+    global _registry, _loaded
     with _lock:
+        if not _loaded:
+            from .channel_plugins import load_adapters
+            registry = _registry
+            for adapter in load_adapters('flashalign.engine_adapters', EngineAdapter):
+                registry = registry.with_adapter(adapter)
+            _registry, _loaded = registry, True
         return _registry
 
 
@@ -117,12 +126,13 @@ def register_engine_adapter(adapter):
 @contextmanager
 def using_engine_adapters(registry):
     """Temporarily install a registry snapshot during setup/testing."""
-    global _registry
+    global _registry, _loaded
     if not isinstance(registry, EngineAdapterRegistry):
         raise TypeError('Expected trusted engine registry')
     with _lock:
-        previous, _registry = _registry, registry
+        previous = _registry, _loaded
+        _registry, _loaded = registry, True
         try:
             yield registry
         finally:
-            _registry = previous
+            _registry, _loaded = previous

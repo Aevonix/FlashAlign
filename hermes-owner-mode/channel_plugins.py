@@ -26,14 +26,14 @@ def _path(store_path):
     return Path(str(Path(store_path).expanduser()) + ".adapters.json")
 
 
-def _installed():
+def _installed(group=ENTRYPOINT_GROUP):
     entries = {}
-    for entry in metadata.entry_points(group=ENTRYPOINT_GROUP):
+    for entry in metadata.entry_points(group=group):
         adapter_id(entry.name)
         if entry.name in entries:
-            raise ValueError("Duplicate installed channel adapter entry point")
+            raise ValueError("Duplicate installed adapter entry point")
         if entry.dist is None:
-            raise ValueError("A channel adapter needs installed distribution metadata")
+            raise ValueError("An adapter needs installed distribution metadata")
         name = opaque_id(entry.dist.name)
         version = opaque_id(entry.dist.version)
         entries[entry.name] = (entry, name, version)
@@ -111,12 +111,21 @@ def _write(path, rows):
             os.unlink(candidate)
 
 
-def _load(entry):
+def _load(entry, adapter_type=ChannelAdapter):
     loaded = entry.load()
-    adapter = loaded if isinstance(loaded, ChannelAdapter) else loaded() if callable(loaded) else None
-    if not isinstance(adapter, ChannelAdapter):
-        raise ValueError("A channel adapter entry point must provide a ChannelAdapter")
+    adapter = loaded if isinstance(loaded, adapter_type) else loaded() if callable(loaded) else None
+    if not isinstance(adapter, adapter_type):
+        raise ValueError("An adapter entry point must provide the expected adapter type")
     return adapter
+
+
+def load_adapters(group, adapter_type):
+    """Load trusted installed extensions with the channel loader's validation.
+
+    Load and factory exceptions propagate. Channel identity extensions still
+    use their separate explicit selection and distribution pins below.
+    """
+    return tuple(_load(entry, adapter_type) for entry, _, _ in _installed(group).values())
 
 
 def available_channel_adapters(store_path):
