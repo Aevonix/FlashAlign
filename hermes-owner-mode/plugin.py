@@ -7,39 +7,20 @@ from contextvars import ContextVar
 from functools import wraps
 import inspect
 import importlib.util
-import json
 import logging
 import os
 from pathlib import Path
 import sys
 import threading
-import time
 from types import SimpleNamespace
 
 from .policy import Policy, TICKET_HEADER, CONTEXT_HEADER, VerifiedTurn, flatten_request
 from .proxy import ProviderProxy
 from .contacts import ApprovalStore
+from .audit import AuditLog, warn_fallback
 from .native_authority import NativeAuthority
 
 logger = logging.getLogger(__name__)
-
-
-class AuditLog:
-    """One JSON line per model call. Callers pass fixed fields only: no prompt text, key or header value."""
-
-    def __init__(self, path):
-        self.path = Path(path).expanduser()
-        self.lock = threading.Lock()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-
-    def __call__(self, row):
-        line = json.dumps(dict({"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")}, **row), sort_keys=True) + "\n"
-        with self.lock:
-            fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-            try:
-                os.write(fd, line.encode())
-            finally:
-                os.close(fd)
 
 
 class Runtime:
@@ -120,8 +101,11 @@ class Runtime:
                 result["extra_headers"][CONTEXT_HEADER] = self.policy.context_ticket(
                     flatten_request(result), session_id=session_id, turn_id=turn_id, route=route, info=info)
                 break
+            else:
+                warn_fallback(getattr(self.proxy, "audit", None), "route_mismatch")
         except Exception:
             result["extra_headers"].pop(TICKET_HEADER, None)
+            warn_fallback(getattr(self.proxy, "audit", None), "request_middleware_exception")
         return {"request": result, "source": "owner-mode"}
 
 def load_authority(path, settings=None):
@@ -303,9 +287,15 @@ def register(ctx):
         from hermes_constants import get_hermes_home
         approvals = ApprovalStore(ctx.get_config("approvals_file", "") or
                                   Path(get_hermes_home()) / "owner-mode" / "approvals.json")
+        audit = None
+        try:
+            audit = AuditLog(ctx.get_config("audit_log", "") or Path(get_hermes_home()) / "logs" / "owner-mode.log")
+        except Exception:
+            pass
         from .terminal import current_binding, TerminalAuthority
         terminal = current_binding(approvals.path)
         if terminal is None and not serving_process(ctx.get_config("serve_argv", None)):
+            warn_fallback(audit, "serving_process_mismatch")
             return None
         owner = SimpleNamespace(active=False, closed=False, closing=False,
                                 runtime=None, proxy=None, authority=None, terminal=terminal,
@@ -316,7 +306,7 @@ def register(ctx):
                 adapter = ctx.get_config("identity_adapter", "")
                 authority = (TerminalAuthority(terminal, VerifiedTurn) if terminal is not None else
                              load_authority(adapter, ctx.get_config("identity_settings", {})) if adapter
-                             else NativeAuthority(approvals.path, VerifiedTurn))
+                             else NativeAuthority(approvals.path, VerifiedTurn, audit=audit))
             except Exception as error:
                 authority = None
                 try:
@@ -326,11 +316,6 @@ def register(ctx):
             owner.authority = authority
             registry = getattr(authority, 'registry', approvals.registry)
             approvals = ApprovalStore(approvals.path, registry=registry)
-            audit = None
-            try:
-                audit = AuditLog(ctx.get_config("audit_log", "") or Path(get_hermes_home()) / "logs" / "owner-mode.log")
-            except Exception:
-                audit = None
             channels = ctx.get_config("allowed_channels", None)
             if not isinstance(channels, list):
                 channels = list(registry.ids())

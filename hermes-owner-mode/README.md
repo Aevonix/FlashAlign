@@ -91,6 +91,14 @@ If later middleware changes that body, the request uses stock mode and the
 decision log records `request_changed`. It does not reuse the ticket's identity
 metadata for the changed request.
 
+The plugin also emits one warning and a decision entry when a request route
+does not match (`route_mismatch`), request middleware raises
+(`request_middleware_exception`), the process does not match `serve_argv`
+(`serving_process_mismatch`), or native ingress observation fails
+(`ingress_observation_exception`). These diagnostics contain fixed reason
+codes, not message content or exception text. They do not change fallback or
+authorization behavior.
+
 ## Trust settings
 
 `host` accepts framing and tools supplied by the harness. `pinned` requires

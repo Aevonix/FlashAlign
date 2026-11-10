@@ -7,6 +7,7 @@ from contextvars import ContextVar
 import threading
 
 from .contacts import ApprovalStore
+from .audit import warn_fallback
 from .content import bind_content, proof_matches
 from .hermes_observer import HermesObserver, event_copy
 from .identity import DM_TYPES, canonical_handle
@@ -15,7 +16,8 @@ from .policy import IdentityResult
 
 
 class NativeAuthority:
-    def __init__(self, path, proof_type, *, registry=None):
+    def __init__(self, path, proof_type, *, registry=None, audit=None):
+        self.audit = audit
         self.store = ApprovalStore(path, registry=registry)
         self.registry = self.store.registry
         self.proof_type = proof_type
@@ -73,6 +75,7 @@ class NativeAuthority:
                 self.groups[root_key] = tuple(keys)
                 self._trim(self.pending); self._trim(self.groups)
         except Exception:
+            warn_fallback(self.audit, "ingress_observation_exception")
             if root_key:
                 with self.lock:
                     self.rendered[root_key] = None
