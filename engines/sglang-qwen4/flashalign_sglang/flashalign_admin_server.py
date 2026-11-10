@@ -9,11 +9,51 @@ generation-signing keys never authorize this control plane.
 """
 import asyncio
 import json
+import math
 import os
 from pathlib import Path
 import socket
 import stat
 import struct
+import sys
+
+
+def runtime_counters(engine):
+    """Read existing in-process metrics without importing a metrics dependency."""
+    names = {
+        "output_tokens_total": engine + ":generation_tokens_total",
+        "ttft_seconds_sum": engine + ":time_to_first_token_seconds_sum",
+        "ttft_seconds_count": engine + ":time_to_first_token_seconds_count",
+    }
+    unavailable = dict.fromkeys(names)
+    metrics = sys.modules.get("prometheus_client")
+    registry = getattr(metrics, "REGISTRY", None)
+    if registry is None:
+        return unavailable
+    samples = {name: [] for name in names.values()}
+    try:
+        for family in registry.collect():
+            for sample in family.samples:
+                if sample.name in samples:
+                    samples[sample.name].append(sample.value)
+        result = {}
+        for field, name in names.items():
+            values = samples[name]
+            if (not values or any(type(value) not in (int, float)
+                    or not math.isfinite(value) or value < 0 for value in values)):
+                result[field] = None
+                continue
+            total = sum(values)
+            if field != "ttft_seconds_sum" and any(value != int(value) for value in values):
+                result[field] = None
+            else:
+                result[field] = total if math.isfinite(total) else None
+        if result["ttft_seconds_sum"] is None or result["ttft_seconds_count"] is None:
+            result["ttft_seconds_sum"] = result["ttft_seconds_count"] = None
+        return result
+    except Exception:
+        # Optional telemetry must not prevent status or profile administration.
+        return unavailable
 
 
 def _json(raw):
