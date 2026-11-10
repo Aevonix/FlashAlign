@@ -1,10 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
 # SPDX-License-Identifier: AGPL-3.0-only
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
-"""Explicit operator selection of trusted, installed channel adapters.
+"""Discovery and loading of trusted, installed adapters.
 
-Discovering entry points never imports them. Only a locally enabled, version-
-pinned entry point can execute, and request bodies cannot select Python code.
+Listing channel entry points does not import them; channel loading requires
+local selection and version pins. Engine, model and profile registries load all
+their installed entry points. Request bodies cannot select Python code.
 """
 from contextlib import contextmanager
 import fcntl
@@ -111,21 +112,34 @@ def _write(path, rows):
             os.unlink(candidate)
 
 
+@contextmanager
+def entry_point_context(entry):
+    """Identify the installed extension when loading or registration fails."""
+    try:
+        yield
+    except Exception as error:
+        message = f"Adapter entry point {entry.name!r} from distribution {entry.dist.name!r}: {error}"
+        error_type = ValueError if isinstance(error, ValueError) else RuntimeError
+        raise error_type(message) from error
+
+
 def _load(entry, adapter_type=ChannelAdapter):
-    loaded = entry.load()
-    adapter = loaded if isinstance(loaded, adapter_type) else loaded() if callable(loaded) else None
-    if not isinstance(adapter, adapter_type):
-        raise ValueError("An adapter entry point must provide the expected adapter type")
-    return adapter
+    with entry_point_context(entry):
+        loaded = entry.load()
+        adapter = loaded if isinstance(loaded, adapter_type) else loaded() if callable(loaded) else None
+        if not isinstance(adapter, adapter_type):
+            raise ValueError("An adapter entry point must provide the expected adapter type")
+        return adapter
 
 
-def load_adapters(group, adapter_type):
+def load_adapters(group, adapter_type, *, with_sources=False):
     """Load trusted installed extensions with the channel loader's validation.
 
     Load and factory exceptions propagate. Channel identity extensions still
     use their separate explicit selection and distribution pins below.
     """
-    return tuple(_load(entry, adapter_type) for entry, _, _ in _installed(group).values())
+    loaded = tuple((entry, _load(entry, adapter_type)) for entry, _, _ in _installed(group).values())
+    return loaded if with_sources else tuple(adapter for _, adapter in loaded)
 
 
 def available_channel_adapters(store_path):
@@ -156,7 +170,8 @@ def enable_channel_adapter(store_path, name):
     entry, distribution, version = installed
     adapter = _load(entry)
     # Installed adapters extend built-ins; they cannot replace built-in identity rules.
-    DEFAULT_REGISTRY.with_adapter(adapter)
+    with entry_point_context(entry):
+        DEFAULT_REGISTRY.with_adapter(adapter)
     row = {"name": name, "distribution": distribution, "version": version,
            "adapter": adapter.id, "identity_version": adapter.identity_version}
     with _locked(store_path) as path:
@@ -204,5 +219,6 @@ def load_channel_registry(store_path):
         identity = hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()[:32]
         bound = ChannelAdapter(adapter.id, adapter.normalize_contact, adapter.capabilities,
                                adapter.label, "installed-" + identity)
-        registry = registry.with_adapter(bound)
+        with entry_point_context(current[0]):
+            registry = registry.with_adapter(bound)
     return registry

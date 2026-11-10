@@ -177,13 +177,15 @@ _lock = threading.RLock()
 def _load_installed():
     global _operators, _formats, _loaded
     if not _loaded:
-        from .channel_plugins import load_adapters
+        from .channel_plugins import entry_point_context, load_adapters
         operators, formats = _operators, _formats
-        for adapter in load_adapters('flashalign.profile_adapters', (OperatorAdapter, ArtifactFormatAdapter)):
-            if isinstance(adapter, OperatorAdapter):
-                operators = operators.with_adapter(adapter)
-            else:
-                formats = formats.with_adapter(adapter)
+        for entry, adapter in load_adapters('flashalign.profile_adapters', (OperatorAdapter, ArtifactFormatAdapter),
+                                           with_sources=True):
+            with entry_point_context(entry):
+                if isinstance(adapter, OperatorAdapter):
+                    operators = operators.with_adapter(adapter)
+                else:
+                    formats = formats.with_adapter(adapter)
         _operators, _formats, _loaded = operators, formats, True
 
 

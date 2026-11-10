@@ -77,10 +77,11 @@ def model_adapters():
     global _registry, _loaded
     with _lock:
         if not _loaded:
-            from .channel_plugins import load_adapters
+            from .channel_plugins import entry_point_context, load_adapters
             registry = _registry
-            for adapter in load_adapters('flashalign.model_adapters', ModelAdapter):
-                registry = registry.with_adapter(adapter)
+            for entry, adapter in load_adapters('flashalign.model_adapters', ModelAdapter, with_sources=True):
+                with entry_point_context(entry):
+                    registry = registry.with_adapter(adapter)
             _registry, _loaded = registry, True
         return _registry
 
