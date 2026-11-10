@@ -6,12 +6,13 @@ import asyncio
 from concurrent.futures import TimeoutError as WorkerTimeout
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import secrets
 
 from .flashalign_lifecycle import LifecycleError, LifecycleManager, RecoveryRequired, WorkerAck
-from .flashalign_admin_server import LocalAdminServer, dispatch_operation
+from .flashalign_admin_server import LocalAdminServer, dispatch_operation, runtime_counters
 from .lifecycle_support import MAX_CONTROL, checked_profile, private_directory, recovery_generations, stage_profile, strict_json, tensor_bytes
 
 _CONTROLLER = None
@@ -228,7 +229,8 @@ def advertised_profiles(profiles):
 async def public_status():
     result = {"schema": "flashalign.runtime-status.v1", "instance_id": _INSTANCE, "engine": "sglang",
               "version": "0.5.20", "numerical_attestation": False,
-              "active_requests": _REQUESTS["active"], "request_errors_total": _REQUESTS["errors"]}
+              "active_requests": _REQUESTS["active"], "request_errors_total": _REQUESTS["errors"],
+              **runtime_counters("sglang")}
     if _CONTROLLER is not None:
         state = _CONTROLLER.manager.status()
         models = {json.loads(value)["id"] for value in _CONTROLLER.backend.models}
@@ -246,6 +248,10 @@ async def public_status():
             result["speculative_method"] = str(method)
         try:
             workers = await asyncio.to_thread(_CONTROLLER.backend.call, "inspect")
+            leader = next((worker for worker in workers if worker.get("worker_id") == "tp-0"), {})
+            tokens = leader.get("output_tokens_total")
+            if type(tokens) in (int, float) and math.isfinite(tokens) and tokens >= 0 and tokens == int(tokens):
+                result["output_tokens_total"] = tokens
             scheduler_active = [worker.get("active_requests") for worker in workers]
             cancellations = [worker.get("cancellation_matches_total") for worker in workers]
             if scheduler_active and all(type(count) is int and count >= 0 for count in scheduler_active):

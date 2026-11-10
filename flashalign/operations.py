@@ -218,7 +218,15 @@ def _display(value, ui):
     loaded = value.get('profile_loaded')
     ui.line('PROFILE  ' + ('Loaded' if loaded else 'Not loaded' if loaded is False else 'Inventory unavailable'))
     runtime = value.get('runtime') or {}
-    ui.line('EXECUTION  ' + ('Numerically attested' if runtime.get('numerical_attestation') else 'Not attested'))
+    for name, label in (('graph_mode', 'GRAPH MODE'), ('generation', 'GENERATION')):
+        ui.line(label + '  ' + (runtime.get(name) or 'Unavailable'))
+    for name, label, unit in (('expected_sites', 'EXPECTED SITES', ''),
+                              ('installed_sites', 'INSTALLED SITES', ''),
+                              ('exercised_sites', 'EXERCISED SITES', ''),
+                              ('active_requests', 'ACTIVE REQUESTS', ''),
+                              ('gpu_memory_bytes', 'GPU MEMORY', ' bytes')):
+        number = runtime.get(name)
+        ui.line(label + '  ' + (f'{number}{unit}' if number is not None else 'Unavailable'))
     spec = runtime.get('speculation_enabled')
     ui.line('SPECULATION  ' + ('Enabled' if spec else 'Disabled' if spec is False else 'Unavailable'))
     metrics = value.get('rates') or {}

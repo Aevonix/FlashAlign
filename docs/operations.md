@@ -34,10 +34,11 @@ The dashboard uses the existing FlashAlign terminal styling and supports
 `--no-color`. JSON output is suitable for scripts. It excludes credentials,
 prompts and responses.
 
-Configured selection, engine-reported state and numerical attestation are
-separate facts. A listed or loaded profile is not a behavioral benchmark.
-Counters and attestation are displayed only when an engine supplies them;
-unavailable values are not reported as zero.
+The dashboard displays graph mode, generation, expected, installed and exercised
+sites, active requests and GPU memory when supplied by the engine. Missing
+values display as unavailable, while measured zeros remain zero. A listed or
+loaded profile is not a behavioral benchmark. The dashboard does not display
+an execution attestation: no engine currently supplies one.
 
 Memory observations describe the engine's reported usage, not the profile
 admission estimate. Allocated, reserved and available memory are distinct
@@ -47,7 +48,14 @@ budgets do not cap all engine or allocator memory.
 Output rates use counter changes between samples from the same engine instance
 and generation. They describe the observation window, not a maximum-throughput
 benchmark. TTFT and draft acceptance are unavailable when the engine does not
-expose the corresponding measurements.
+expose the corresponding measurements. vLLM and SGLang reuse their existing
+in-process metrics collectors; metrics must be enabled in the engine. A missing
+collector or sample remains unavailable. SGLang reads generation tokens from
+one tensor-parallel leader, avoiding duplicated counts. llama.cpp currently
+leaves output-token and TTFT counters unavailable; the legacy vLLM DeepSeek kit
+does not expose runtime status. No shipped adapter currently reports draft
+acceptance counters. See the [status contract](engine-contract.md#optional-runtime-status)
+for the shared counter names and scope.
 
 See [profile management](profile-lifecycle.md) for loading, activation, rollback
 and recovery, and [benchmarks](benchmarks.md) for controlled comparisons.

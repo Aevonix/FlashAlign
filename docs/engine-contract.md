@@ -189,3 +189,41 @@ The native Docker helper checks the daemon identity, container ID, image and
 ownership labels recorded by the launcher. An unresolved creation intent does
 not establish that no container exists. Other engines can supply their own
 helper using the same contract; host-only engines need no helper.
+
+## Optional runtime status
+
+`GET /v1/flashalign/status` returns `schema: "flashalign.runtime-status.v1"`.
+Use a new `instance_id` when the serving process restarts. `generation` identifies
+the active profile generation or alias epoch. Counters cover all requests in
+that engine instance, including stock requests; they are not per-profile
+benchmarks. A client must discard deltas across instance, model or generation
+changes and when a counter decreases.
+
+Every implementation of this status schema includes these counter fields.
+Use JSON `null` when a measurement is unavailable; never substitute zero:
+
+| Field | Meaning |
+| --- | --- |
+| `output_tokens_total` | Cumulative generated output tokens reported by the engine's metrics collector, including reasoning tokens when counted by that collector |
+| `ttft_seconds_sum` | Cumulative seconds to first token for requests observed by the engine's first-token histogram |
+| `ttft_seconds_count` | Number of observations contributing to `ttft_seconds_sum` |
+
+Counters must be finite and nonnegative; token and observation counts must be
+integers. Return the TTFT sum and count together, or both as `null`. A real
+zero is distinct from a missing metric. Output tokens per second is the token
+counter delta divided by elapsed time. Mean TTFT is the sum delta divided by
+the observation-count delta. A zero count delta has no mean.
+
+The vLLM adapters read existing in-process `vllm:generation_tokens_total` and
+`vllm:time_to_first_token_seconds_{sum,count}` samples. SGLang uses the matching
+`sglang:` names, reading generation tokens from the tensor-parallel leader and
+first-token observations from the API process. Label series within a collector
+are summed; replicated workers are not summed. Collection is optional: if the
+metrics package or samples are absent, status reports `null`. No metrics
+package is imported or installed by the status reader. The llama.cpp adapter
+currently reports these counters as unavailable.
+
+Status may also include `graph_mode`, `expected_sites`, `installed_sites`,
+`exercised_sites`, `active_requests`, and `gpu_memory_bytes`. The memory field
+is allocated device memory as reported by the adapter, not an admission budget.
+These fields describe engine state and do not attest numerical correctness.

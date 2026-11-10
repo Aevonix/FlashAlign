@@ -115,7 +115,9 @@ bash ./flashalign.sh profile list
 ```
 
 Status reads runtime metadata. Doctor sends a synthetic request only with
-`--probe`. The dashboard shows measured values when the engine provides them.
+`--probe`. The dashboard shows graph mode, generation, sites, active requests,
+GPU memory and measured rates when the engine provides them. Missing counters
+remain unavailable; the dashboard does not claim execution attestation.
 See [operations](docs/operations.md), [profile management](docs/profile-lifecycle.md)
 and [benchmarks](docs/benchmarks.md).
 

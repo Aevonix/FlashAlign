@@ -10,7 +10,7 @@ import secrets
 import threading
 from types import SimpleNamespace
 
-from owner_mode.profile_admin_server import LocalAdminServer
+from owner_mode.profile_admin_server import LocalAdminServer, runtime_counters
 from owner_mode.profile_lifecycle import GenerationBusy, LifecycleError, LifecycleManager
 from owner_mode.profile_staging import stage_validated_profile
 from .native_profile import NativeProfile as Profile
@@ -126,7 +126,7 @@ class LifecycleService:
             raise LifecycleError('Worker status inventory changed')
         result = {'schema':'flashalign.runtime-status.v1', 'engine':'vllm',
                   'model':self.identity[0], 'instance_id':self.instance_id,
-                  'numerical_attestation':False}
+                  'numerical_attestation':False, **runtime_counters('vllm')}
         active = {row['generation'] for row in snapshot['aliases'].values() if row['generation'] is not None}
         inventory = {row['id']:row for row in snapshot['generations']}
         if len(active) == 1:
