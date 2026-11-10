@@ -66,6 +66,9 @@ Use `flashalign why --limit 20` to read recent decisions, including the channel,
 reason and effective profile. For a custom log path, use
 `flashalign why --log /path/to/owner-mode.log`. The reader prints decision
 fields only; see [setup diagnostics](../docs/setup.md#activate-and-verify).
+The Python proxy opens an upstream HTTP client on its first forwarded request
+and reuses it until shutdown, with separate request headers and route timeouts.
+It does not retain upstream cookies.
 
 The integration targets the OpenClaw 2026.10.8 plugin interface. See
 [compatibility](../docs/compatibility.md) for runtime requirements and activation

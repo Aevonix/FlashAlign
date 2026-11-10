@@ -115,6 +115,12 @@ also records control failures and returns a fixed `reason` alongside its error.
 See [setup diagnostics](../docs/setup.md#activate-and-verify) for the reader's
 fields and options.
 
+The provider proxy opens one upstream HTTP client on the first discovery or
+model request, reuses it for later requests, and closes it on shutdown.
+Route timeouts still apply per request;
+authorization headers remain request-specific and upstream cookies are not
+retained. Streaming responses are closed after forwarding or failure.
+
 ## Trust settings
 
 `host` accepts framing and tools supplied by the harness. `pinned` requires

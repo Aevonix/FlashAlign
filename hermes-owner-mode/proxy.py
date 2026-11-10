@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """Loopback provider wrapper. Only this boundary can sign a final wire body."""
+from http.cookiejar import CookieJar, DefaultCookiePolicy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
@@ -81,6 +82,12 @@ def loopback_request(headers):
     return not sites or len(sites) == 1 and sites[0] in ('none', 'same-origin')
 
 
+class _NoCookies(DefaultCookiePolicy):
+    """Connection reuse must not carry one caller's cookies to another."""
+    def set_ok(self, cookie, request):
+        return False
+
+
 class ProviderProxy:
     def __init__(self, policy, routes, key_file, *, port=0, audit=None, bridge=None, approvals=None):
         self.policy, self.routes, self.key_file, self.audit = policy, dict(routes), key_file, audit
@@ -131,17 +138,16 @@ class ProviderProxy:
                     if proxy.routes[path[1]].get('api_key_file'):
                         headers['Authorization'] = 'Bearer ' + read_api_key(proxy.routes[path[1]]['api_key_file'])
                     upstream = proxy.routes[path[1]]["upstream"].rstrip("/") + '/' + '/'.join(path[3:])
-                    with httpx.Client(timeout=httpx.Timeout(10, connect=5), follow_redirects=False) as client:
-                        with client.stream('GET', upstream, headers=headers) as response:
-                            chunks, size = [], 0
-                            for chunk in response.iter_bytes():
-                                size += len(chunk)
-                                if size > 1024 * 1024:
-                                    raise ValueError('Oversized discovery response')
-                                chunks.append(chunk)
-                            content = b''.join(chunks)
-                            status = response.status_code
-                            content_type = response.headers.get('Content-Type', 'application/json')
+                    with proxy.client.stream('GET', upstream, headers=headers, timeout=httpx.Timeout(10, connect=5)) as response:
+                        chunks, size = [], 0
+                        for chunk in response.iter_bytes():
+                            size += len(chunk)
+                            if size > 1024 * 1024:
+                                raise ValueError('Oversized discovery response')
+                            chunks.append(chunk)
+                        content = b''.join(chunks)
+                        status = response.status_code
+                        content_type = response.headers.get('Content-Type', 'application/json')
                     self.send_response(status)
                     self.send_header("Content-Type", content_type)
                     self.send_header("Content-Length", str(len(content)))
@@ -185,11 +191,12 @@ class ProviderProxy:
                     headers["Accept-Encoding"] = "identity"
                     upstream = proxy.routes[route_name]["upstream"].rstrip("/") + "/chat/completions"
                     timeout = httpx.Timeout(proxy.routes[route_name].get("timeout", 120), connect=10)
-                    with httpx.Client(timeout=timeout, follow_redirects=False) as client:
-                        def send(content, hdrs):
-                            return client.send(client.build_request("POST", upstream, content=content, headers=hdrs),
-                                               stream=True)
-                        response = send(outbound, headers)
+                    def send(content, hdrs):
+                        return proxy.client.send(proxy.client.build_request("POST", upstream, content=content,
+                                                                             headers=hdrs, timeout=timeout),
+                                                 stream=True)
+                    response = send(outbound, headers)
+                    try:
                         buffered = None
                         if response.status_code == 400:
                             # Small error body: read (bounded) so it can be classified, then pass on or drop it.
@@ -216,37 +223,36 @@ class ProviderProxy:
                                 logger.error("OWNER_MODE_REJECTED route=%s case=%s owner_mode_sent=%s: engine answered "
                                              "HTTP 400; surfaced to the caller, not retried", route_name, case, effective)
                                 info = dict(info, decision="owner_mode_rejected_" + case)
-                        try:
-                            status = response.status_code
-                            actual = response.headers.get("X-Owner-Mode-Effective", "none")
-                            if (info.get("activation_mode") == "always_on" and 200 <= status < 300
-                                    and actual != effective):
-                                info["decision"] = "always_on_unconfirmed"
-                                status = 502
-                                raise ValueError("Always On profile was not confirmed")
-                            from .client import response_metadata
-                            identity = response_metadata(response, actual)
-                            self.send_response(response.status_code)
-                            self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
-                            # This is the engine's decision, never an optimistic client decision.
-                            # "none" in logs = the engine sent no header (it does not implement owner mode).
-                            self.send_header("X-Owner-Mode-Effective", "off" if actual == "none" else actual)
-                            for name, field in (('X-FlashAlign-Profile-Digest', 'profile_digest'),
-                                                ('X-FlashAlign-Model-Digest', 'model_digest'),
-                                                ('X-FlashAlign-Generation', 'generation')):
-                                if field in identity:
-                                    self.send_header(name, identity[field])
-                            if buffered is not None:
-                                self.send_header("Content-Length", str(len(buffered)))
-                            self.end_headers()
-                            if buffered is not None:
-                                self.wfile.write(buffered)
-                            else:
-                                for chunk in response.iter_raw():
-                                    self.wfile.write(chunk)
-                                    self.wfile.flush()
-                        finally:
-                            response.close()
+                        status = response.status_code
+                        actual = response.headers.get("X-Owner-Mode-Effective", "none")
+                        if (info.get("activation_mode") == "always_on" and 200 <= status < 300
+                                and actual != effective):
+                            info["decision"] = "always_on_unconfirmed"
+                            status = 502
+                            raise ValueError("Always On profile was not confirmed")
+                        from .client import response_metadata
+                        identity = response_metadata(response, actual)
+                        self.send_response(response.status_code)
+                        self.send_header("Content-Type", response.headers.get("Content-Type", "application/json"))
+                        # This is the engine's decision, never an optimistic client decision.
+                        # "none" in logs = the engine sent no header (it does not implement owner mode).
+                        self.send_header("X-Owner-Mode-Effective", "off" if actual == "none" else actual)
+                        for name, field in (('X-FlashAlign-Profile-Digest', 'profile_digest'),
+                                            ('X-FlashAlign-Model-Digest', 'model_digest'),
+                                            ('X-FlashAlign-Generation', 'generation')):
+                            if field in identity:
+                                self.send_header(name, identity[field])
+                        if buffered is not None:
+                            self.send_header("Content-Length", str(len(buffered)))
+                        self.end_headers()
+                        if buffered is not None:
+                            self.wfile.write(buffered)
+                        else:
+                            for chunk in response.iter_raw():
+                                self.wfile.write(chunk)
+                                self.wfile.flush()
+                    finally:
+                        response.close()
                 except (BrokenPipeError, ConnectionResetError):
                     status = status or 499
                 except Exception:
@@ -262,7 +268,25 @@ class ProviderProxy:
 
         self.server = ThreadingHTTPServer(("127.0.0.1", int(port)), Handler)
         self.server.daemon_threads = True
+        self._client_guard = threading.Lock()
+        self._client = self._client_context = None
+        self._client_closed = False
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True, name="owner-mode-provider")
+
+    @property
+    def client(self):
+        with self._client_guard:
+            if self._client_closed:
+                raise RuntimeError("provider wrapper is closed")
+            if self._client is None:
+                context = httpx.Client(follow_redirects=False, cookies=CookieJar(policy=_NoCookies()))
+                try:
+                    self._client = context.__enter__()
+                except BaseException:
+                    context.close()
+                    raise
+                self._client_context = context
+            return self._client
 
     @property
     def port(self):
@@ -275,10 +299,17 @@ class ProviderProxy:
         self.thread.start()
 
     def close(self):
-        if self.thread.is_alive():
-            self.server.shutdown()
-            self.thread.join(timeout=2)
-        self.server.server_close()
+        try:
+            if self.thread.is_alive():
+                self.server.shutdown()
+                self.thread.join(timeout=2)
+            self.server.server_close()
+        finally:
+            with self._client_guard:
+                self._client_closed = True
+                if self._client_context is not None:
+                    self._client_context.__exit__(None, None, None)
+                    self._client_context = None
 
     def record(self, route, requested, effective, *, info=None, status=0, ms=0):
         if self.audit:
