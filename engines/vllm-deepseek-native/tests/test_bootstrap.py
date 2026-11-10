@@ -139,7 +139,7 @@ def test_fresh_service_initializes_once(setup_service):
     finally:close(service)
 
 
-def test_existing_empty_journal_stays_empty(setup_service):
+def test_existing_empty_journal_activates_configured_profile(setup_service):
     _,_,state,stage,create=setup_service
     backend=Backend(validate=lambda a:None,estimate=lambda a:{'device_bytes':4,'host_bytes':4})
     manager=LifecycleManager(state,backend=backend,stager=stage,admin_key=KEY,
@@ -173,7 +173,6 @@ def test_tombstone_is_not_reactivated(setup_service):
     close(service)
     reopened=create()
     try:
-        assert reopened.manager.status()['aliases']['owner']['generation'] is not None
-        assert reopened.manager.status()['aliases']['owner']['revision']==3
-        assert 'prepared' in reopened.backend.events
+        assert reopened.manager.status()['aliases']['owner']=={'generation':None,'revision':2}
+        assert 'prepared' not in reopened.backend.events
     finally:close(reopened)
