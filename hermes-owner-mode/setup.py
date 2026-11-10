@@ -46,7 +46,7 @@ MODULES = runtime_files(ROOT)
 def load_config(path):
     if not path.exists():
         return {}
-    text = path.read_text()
+    text = path.read_text(encoding='utf-8')
     try:
         value = json.loads(text)
     except ValueError:
@@ -161,7 +161,7 @@ def save_config(path, config):
         text = yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
     elif suffix in ('.json', '.json5') and path.exists():
         from owner_mode.config_edit import patch_json5
-        text = patch_json5(path.read_text(), config)
+        text = patch_json5(path.read_text(encoding='utf-8'), config)
     else:
         text = json.dumps(config, indent=2) + '\n'
     if path.exists():
@@ -169,7 +169,7 @@ def save_config(path, config):
         shutil.copy2(path, path.with_name(path.name+'.before-owner-mode-'+stamp))
     temp=path.with_name(path.name+'.owner-mode-new-'+secrets.token_hex(6))
     fd=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-    with os.fdopen(fd,'w') as stream:stream.write(text)
+    with os.fdopen(fd,'w',encoding='utf-8') as stream:stream.write(text)
     os.replace(temp,path)
 
 
