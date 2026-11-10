@@ -20,7 +20,7 @@ sys.path.insert(0, 'hermes-owner-mode/tests')
 from support import load_cli
 wizard = load_cli('setup')
 print(wizard.__file__)
-assert codecs.lookup(locale.getencoding()).name == 'ascii'
+assert codecs.lookup(locale.getpreferredencoding(False)).name == 'ascii'
 path = Path(sys.argv[1])
 label = 'caf' + chr(233)
 """
