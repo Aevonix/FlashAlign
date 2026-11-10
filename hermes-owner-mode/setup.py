@@ -284,6 +284,7 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
         ensure_key(control)
         bridge_cfg=state/'openclaw-bridge.json'
         save_config(bridge_cfg,{'port':ports['openclaw'],'approvals_file':str(store.path),
+                              'audit_log':str(state/'owner-mode.log'),
                               'control_key_file':str(control),'key_file':str(key),'routes':{'head':route}})
         extension=current_transaction().stage_tree(home/'.openclaw/extensions/owner-mode')
         for filename in ['index.mjs','terminal.mjs','terminal-runner.mjs','model-params.mjs','package.json','openclaw.plugin.json','LICENSE','NOTICE.md']:
@@ -315,6 +316,7 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
         cfg.setdefault('plugins',{}).setdefault('entries',{})['owner-mode']={
             'enabled':True,'hooks':{'allowConversationAccess':True},'config':{
             'bridgeUrl':f"http://127.0.0.1:{ports['openclaw']}",'controlKeyFile':str(control),
+            'auditLog':str(state/'owner-mode.log'),
             'python':sys.executable,'corePath':str(release),'bridgeConfig':str(bridge_cfg),'model':descriptor,
             **({'requestPolicy':request_policy} if request_policy else {})}}
         cfg.setdefault('models',{}).setdefault('providers',{})['owner-mode']={

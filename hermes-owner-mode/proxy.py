@@ -173,7 +173,7 @@ class ProviderProxy:
                     info = proxy.policy.consume_context(self.headers.get(CONTEXT_HEADER, ""), body, route_name)
                     ticket = self.headers.get(TICKET_HEADER, "")
                     if proxy.bridge:
-                        ticket = proxy.bridge.ticket(self.headers.get("X-Owner-Mode-Run", ""), body, route_name)
+                        ticket = proxy.bridge.ticket(self.headers.get("X-Owner-Mode-Run", ""), body, route_name, info=info)
                     outbound, headers, effective = proxy.prepare(route_name, body, ticket, info=info)
                     # Deliberately never forward caller-supplied owner authentication.
                     authorization = self.headers.get("Authorization")

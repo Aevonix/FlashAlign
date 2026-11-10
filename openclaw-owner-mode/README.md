@@ -46,6 +46,19 @@ in for its bridge. The service owns only the bridge process it starts. In
 Verified contacts mode, a tool scope that cannot close stays in standard mode
 until that run ends.
 
+The bridge writes model decisions and control rejection reasons to
+`owner-mode.log` beside its approval store. The extension records control
+connection failures there too (beside the control key by default). Setup gives
+both the same path; custom installations can set the bridge's `audit_log` and
+the extension's `auditLog` to the same file. Terminal bridges use the same
+audit configuration. Bridge errors carry a fixed `reason` code, without
+message content or exception details.
+
+Use `flashalign why --limit 20` to read recent decisions, including the channel,
+reason and effective profile. For a custom log path, use
+`flashalign why --log /path/to/owner-mode.log`. The reader prints decision
+fields only; see [setup diagnostics](../docs/setup.md#activate-and-verify).
+
 The integration targets the OpenClaw 2026.10.8 plugin interface. See
 [compatibility](../docs/compatibility.md) for runtime requirements and activation
 checks.

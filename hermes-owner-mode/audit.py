@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """Content-free decision logging shared by local integrations."""
+import argparse
+from collections import deque
+from datetime import datetime
 import json
 import logging
 import os
@@ -42,3 +45,54 @@ def warn_fallback(audit, decision):
             audit({"decision": decision})
         except Exception:
             pass
+
+
+DECISION_FIELDS = frozenset({
+    "ts", "route", "platform", "owner_verified", "activation_mode", "decision",
+    "identity_ms", "identity_reason", "owner_mode_sent", "owner_mode_scale_sent",
+    "effective", "status", "ms",
+})
+
+
+def recent_decisions(paths, limit=10):
+    """Read only decision fields, tolerating partial or malformed log lines."""
+    rows = []
+    for path in dict.fromkeys(Path(path).expanduser() for path in paths):
+        try:
+            with path.open() as source:
+                recent = deque(maxlen=limit)
+                for line in source:
+                    try:
+                        row = json.loads(line)
+                        if (not isinstance(row, dict) or not isinstance(row.get("decision"), str)
+                                or not isinstance(row.get("ts"), str)):
+                            continue
+                        time_format = "%Y-%m-%dT%H:%M:%S.%f%z" if "." in row["ts"] else "%Y-%m-%dT%H:%M:%S%z"
+                        timestamp = datetime.strptime(row["ts"], time_format).timestamp()
+                        selected = {key: value for key, value in row.items() if key in DECISION_FIELDS
+                                    and (value is None or type(value) in (str, int, float, bool))}
+                        recent.append((timestamp, selected))
+                    except (ValueError, TypeError, KeyError, OverflowError):
+                        continue
+                rows.extend(recent)
+        except FileNotFoundError:
+            continue
+    return [row for _, row in sorted(rows, key=lambda item: item[0])[-limit:]]
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Show recent FlashAlign decisions without message content")
+    parser.add_argument("--home", type=Path, default=Path.home())
+    parser.add_argument("--log", type=Path, action="append", help="Read an explicit audit log (repeatable)")
+    parser.add_argument("--limit", type=int, default=10)
+    args = parser.parse_args(argv)
+    if args.limit < 1:
+        parser.error("--limit must be positive")
+    paths = args.log
+    if paths is None:
+        paths = [args.home / ".hermes/logs/owner-mode.log",
+                 args.home / ".config/owner-mode/owner-mode.log",
+                 *sorted((args.home / ".local/share/flashalign/gateways").glob("*/owner-mode.log"))]
+    for row in recent_decisions(paths, args.limit):
+        print(json.dumps(row, sort_keys=True))
+    return 0

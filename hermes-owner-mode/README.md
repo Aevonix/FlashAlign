@@ -99,6 +99,15 @@ does not match (`route_mismatch`), request middleware raises
 codes, not message content or exception text. They do not change fallback or
 authorization behavior.
 
+Use `flashalign why` to read the recent decision trail, or
+`flashalign why --log /path/to/owner-mode.log` when `audit_log` names a custom
+location. Hermes defaults to `logs/owner-mode.log` beneath its home. The
+standalone bridge and direct gateway default to `owner-mode.log` beside their
+approval store; both accept `audit_log` in their configuration. The bridge
+also records control failures and returns a fixed `reason` alongside its error.
+See [setup diagnostics](../docs/setup.md#activate-and-verify) for the reader's
+fields and options.
+
 ## Trust settings
 
 `host` accepts framing and tools supplied by the harness. `pinned` requires

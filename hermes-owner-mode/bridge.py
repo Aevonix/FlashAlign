@@ -20,6 +20,33 @@ from .content import content_digest, snapshot
 from .policy import Policy, VerifiedTurn, strict_json
 
 
+CONTROL_REASONS = {
+    'Channel has no installed native-message adapter': 'channel_has_no_installed_native_message_adapter',
+    'Channel has no installed native-session adapter': 'channel_has_no_installed_native_session_adapter',
+    'Inconsistent native message group': 'inconsistent_native_message_group',
+    'Missing native message claims': 'missing_native_message_claims',
+    'Missing native message identity': 'missing_native_message_identity',
+    'Missing native session claim': 'missing_native_session_claim',
+    'Missing terminal submission': 'missing_terminal_submission',
+    'Native claim changed': 'native_claim_changed',
+    'Native message was already claimed': 'native_message_was_already_claimed',
+    'Native session grant changed': 'native_session_grant_changed',
+    'Rendered message changed': 'rendered_message_changed',
+    'Run already has a different native binding': 'run_already_has_a_different_native_binding',
+    'Run already has a different terminal binding': 'run_already_has_a_different_terminal_binding',
+    'Terminal rendered content changed': 'terminal_rendered_content_changed',
+    'Terminal submission changed before dispatch': 'terminal_submission_changed_before_dispatch',
+    'invalid control body': 'invalid_control_body',
+    'invalid control object': 'invalid_control_object',
+    'invalid tool scope': 'invalid_tool_scope',
+    'missing native ingress fields': 'missing_native_ingress_fields',
+    'run identity changed': 'run_identity_changed',
+    'tool scope changed': 'tool_scope_changed',
+    'unknown command': 'unknown_command',
+    'unknown tool scope': 'unknown_tool_scope',
+}
+
+
 class BridgeAuthority:
     def __init__(self, store):
         self.store, self.proofs = store, {}
@@ -44,7 +71,8 @@ class BridgeAuthority:
 
 
 class Bridge:
-    def __init__(self, store, control_key_file, routes, *, instance_id=None):
+    def __init__(self, store, control_key_file, routes, *, instance_id=None, audit=None):
+        self.audit = audit
         self.store, self.routes = store, routes
         self.instance_id = instance_id
         self.key = read_key(control_key_file).hex()
@@ -260,19 +288,35 @@ class Bridge:
                                          and self.policy.inherits(body.get("tool")))}
             raise ValueError("unknown command")
 
-    def ticket(self, capability, body, route):
+    def ticket(self, capability, body, route, *, info=None):
         with self.lock:
             pair = self.runs.get(capability)
             profile = self.routes.get(route, {}).get("profile", "off")
-            if not pair or profile == "off" or not self._tools_active(capability):
-                return ""
-            return self.policy.issue(body, session_id=pair[0], turn_id=pair[1], profile=profile, route=route) or ""
+            ticket, reason = None, "no_run_context"
+            if pair:
+                if profile == "off":
+                    reason = "route_profile_off"
+                elif not self._tools_active(capability):
+                    reason = "tool_owner_mode_disabled"
+                else:
+                    ticket, reason = self.policy.decide(body, session_id=pair[0], turn_id=pair[1],
+                                                        profile=profile, route=route)
+            if info is not None:
+                verified = bool(pair and self.policy.is_owner_work(*pair))
+                with self.policy.lock:
+                    turn = self.policy._turn(*pair) if pair else None
+                    channel = turn.proof.channel if turn and turn.proof else ""
+                info.update(decision=reason, owner_verified=verified, platform=channel,
+                            identity_reason=self.policy.identity_reason(*pair, verified=verified) if pair else "no_context",
+                            identity_ms=self.policy.identity_ms(*pair) if pair else None)
+            return ticket or ""
 
     def _tools_active(self, capability):
         return all(self.policy.inherits(tool) for tool in self.tool_scopes.get(capability, {}).values())
 
     def http(self, handler):
-        status, result = 403, {"error": "control authentication required"}
+        status, result = 403, {"error": "control authentication required",
+                               "reason": "control_authentication_required"}
         supplied = handler.headers.get("Authorization", "")
         if hmac.compare_digest(supplied, "Bearer " + self.key):
             try:
@@ -285,8 +329,14 @@ class Bridge:
                     raise ValueError("invalid control object")
                 result = self.command(handler.path.removeprefix("/_owner/"), body)
                 status = 200
+            except Exception as error:
+                reason = CONTROL_REASONS.get(str(error), "invalid_control_request") if isinstance(error, ValueError) else "control_failure"
+                status, result = 400, {"error": "control request rejected", "reason": reason}
+        if status != 200 and self.audit is not None:
+            try:
+                self.audit({"decision": result["reason"], "status": status})
             except Exception:
-                status, result = 400, {"error": "control request rejected"}
+                pass
         raw = json.dumps(result, separators=(",", ":")).encode()
         handler.send_response(status)
         handler.send_header("Content-Type", "application/json")

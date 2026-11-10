@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
 // SPDX-License-Identifier: AGPL-3.0-only
 // Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
-import { readFileSync, lstatSync } from "node:fs";
+import { readFileSync, lstatSync, mkdirSync, openSync, writeSync, closeSync, constants } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { canonicalModelParams, canonicalTokenDefault, checkedRequestPolicy, requestModel } from './model-params.mjs';
 import { terminalReceipt, terminalSessionActive } from './terminal.mjs';
 
@@ -22,6 +22,15 @@ export function createAdapter(api, config, request = fetch) {
       (process.getuid && keyInfo.uid !== process.getuid())) throw new Error("Invalid control key permissions");
   const key = readFileSync(config.controlKeyFile);
   if (key.length !== 32) throw new Error("Invalid control key length");
+  function recordDecision(decision) {
+    const path = config.auditLog || join(dirname(config.controlKeyFile), 'owner-mode.log');
+    try {
+      mkdirSync(dirname(path), {recursive:true, mode:0o700});
+      const fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW, 0o600);
+      try { writeSync(fd, JSON.stringify({ts:new Date().toISOString(), decision}) + '\n'); }
+      finally { closeSync(fd); }
+    } catch {}
+  }
   const runs = new Map(), ingress = new Map(), aliases = new Map(), pendingTools = new Map(), seen = new Map();
   const endedRuns = new Set();
   const agentEvents = api.agent?.events;
@@ -31,12 +40,25 @@ export function createAdapter(api, config, request = fetch) {
       ? (subscription) => api.registerAgentEventSubscription(subscription) : undefined;
 
   async function control(action, body, timeout) {
-    const response = await request(new URL(`/_owner/${action}`, endpoint), {
-      method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${key.toString('hex')}`},
-      body: JSON.stringify(body), signal: AbortSignal.timeout(timeout ?? (action === 'bind' ? 30000 : 5000)),
-    });
-    if (!response.ok) throw new Error("Owner Mode control request failed");
-    return response.json();
+    let response;
+    try {
+      response = await request(new URL(`/_owner/${action}`, endpoint), {
+        method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${key.toString('hex')}`},
+        body: JSON.stringify(body), signal: AbortSignal.timeout(timeout ?? (action === 'bind' ? 30000 : 5000)),
+      });
+    } catch {
+      recordDecision('control_unavailable');
+      throw new Error('Owner Mode control request failed: control_unavailable');
+    }
+    const result = await response.json();
+    if (!response.ok) {
+      const reason = typeof result.reason === 'string' && /^[a-z_]+$/.test(result.reason)
+        ? result.reason : 'control_request_rejected';
+      const error = new Error(`Owner Mode control request failed: ${reason}`);
+      error.reason = reason;
+      throw error;
+    }
+    return result;
   }
 
   function remember(id, value) {
@@ -345,6 +367,7 @@ export function createAdapter(api, config, request = fetch) {
   });
 
   return {
+    recordDecision,
     async ready(timeout = 1000) { return control('ready', {}, timeout); },
     async toolEnabled(runId, toolName) {
       const run = runs.get(runId);
@@ -396,6 +419,7 @@ export default {
             }
             throw new Error('FlashAlign bridge readiness identity was not confirmed');
           } catch (error) {
+            adapter.recordDecision('bridge_startup_failed');
             if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
             throw error;
           }

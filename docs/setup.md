@@ -157,6 +157,28 @@ send a message through the approved direct channel.
 Check that the engine response reports the installed profile in
 `X-Owner-Mode-Effective`, including when the HTTP status is 200.
 
+Read the latest routing decisions without displaying message content:
+
+```sh
+flashalign why
+flashalign why --limit 20
+flashalign why --log /path/to/owner-mode.log
+```
+
+`why` prints one JSON decision per line, oldest first, with the most recent ten
+by default. It includes the channel (`platform`), reason (`decision` and
+`identity_reason`), requested and effective profile, and timing/status fields
+when available. It never prints request bodies, messages, contact IDs, session
+IDs, credentials or unknown log fields. No rows means no recorded decisions
+were found; it does not prove that a turn used the profile.
+
+By default it reads Hermes's `~/.hermes/logs/owner-mode.log`, the bridge's
+`~/.config/owner-mode/owner-mode.log`, and direct gateway logs beneath
+`~/.local/share/flashalign/gateways/`. Use `--home /path/to/home` for another
+home or repeat `--log` for custom locations. Missing logs and incomplete JSON
+lines are ignored. A changed request body records `request_changed`; a
+bridge request with no run capability records `no_run_context`.
+
 In Verified contacts mode, check an unapproved contact too: its effective mode
 should be `off`. Try one enabled and one disabled tool, then revoke a test
 contact and confirm that subsequent requests use the standard model.
