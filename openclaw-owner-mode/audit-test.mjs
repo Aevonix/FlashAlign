@@ -12,10 +12,18 @@ const root = mkdtempSync(join(tmpdir(), 'flashalign-audit-'));
 try {
   const key = join(root, 'control.key');
   writeFileSync(key, randomBytes(32), {mode:0o600});
-  const api = {on() {}, registerProvider() {}};
+  const hooks = {};
+  const api = {on(name, callback) { hooks[name] = callback; }, registerProvider() {}};
   const config = {bridgeUrl:'http://127.0.0.1:8030', controlKeyFile:key, model:{id:'bench'}};
-  const unavailable = createAdapter(api, config, async () => { throw new Error('unlogged detail'); });
-  await assert.rejects(unavailable.ready(), /control_unavailable/);
+  createAdapter(api, config, async url => {
+    if (url.pathname === '/_owner/claim') return {ok:true, json:async () => ({capability:'fixture-run'})};
+    throw new Error('unlogged detail');
+  });
+  const context = {runId:'run', sessionKey:'session', channelId:'rcs', senderId:'+10000000000',
+    accountId:'default', messageId:'message'};
+  await hooks.inbound_claim({content:'Hello', channel:'rcs', isGroup:false}, context);
+  await hooks.before_model_resolve({}, context);
+  await assert.rejects(hooks.before_tool_call({toolName:'fixture_tool'}, context), /control_unavailable/);
   const rows = readFileSync(join(root, 'owner-mode.log'), 'utf8').trim().split('\n').map(JSON.parse);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].decision, 'control_unavailable');

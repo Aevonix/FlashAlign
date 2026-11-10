@@ -47,18 +47,23 @@ export function createAdapter(api, config, request = fetch) {
         body: JSON.stringify(body), signal: AbortSignal.timeout(timeout ?? (action === 'bind' ? 30000 : 5000)),
       });
     } catch {
-      recordDecision('control_unavailable');
+      if (action !== 'ready') recordDecision('control_unavailable');
       throw new Error('Owner Mode control request failed: control_unavailable');
     }
-    const result = await response.json();
     if (!response.ok) {
+      let result;
+      try { result = await response.json(); }
+      catch {
+        if (action !== 'ready') recordDecision('control_request_rejected');
+        throw new Error('Owner Mode control request failed');
+      }
       const reason = typeof result.reason === 'string' && /^[a-z_]+$/.test(result.reason)
         ? result.reason : 'control_request_rejected';
       const error = new Error(`Owner Mode control request failed: ${reason}`);
       error.reason = reason;
       throw error;
     }
-    return result;
+    return response.json();
   }
 
   function remember(id, value) {
