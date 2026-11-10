@@ -74,3 +74,13 @@ retirement: a profile still listed there becomes active again on restart, even
 if its old generation was retired. Remove it from the startup configuration as
 well as deactivating it to keep it inactive. Removing a configured path alone
 does not deactivate an alias already in the journal.
+
+## Native startup failures
+
+The native Docker launcher reports the last failing readiness step and its
+cause when startup times out or repeated readiness checks fail. The steps are
+engine health and profile discovery, native worker coverage, and native worker
+liveness. A container exit also includes the last readiness failure when one
+was observed. Failed helper commands report their operation, exit status and
+standard error. Container stdout logging remains disabled; these diagnostics
+come from the launcher's checks, not an inferred model execution result.

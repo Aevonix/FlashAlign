@@ -322,6 +322,7 @@ def main(argv=None):
             raise RuntimeError('Container cleanup guard identity differs')
         run(['docker', 'start', container_id], timeout=60)
         ready = False; failures = 0; started = time.monotonic()
+        last_readiness_error = None
         control = {'admin_socket': str(args.profile_admin_socket or state / 'profiles' / 'admin.sock'),
                    'admin_staging_directory': str(state / 'profiles' / 'incoming')}
         save(state / 'current.json', {'run': str(run_dir), **record, **control})
@@ -330,20 +331,26 @@ def main(argv=None):
                 raise RuntimeError('Container cleanup guard exited')
             current = owned_container(record)
             if current is None or not current['running']:
-                raise RuntimeError('Native engine container exited')
+                raise RuntimeError('Native engine container exited' + (
+                    '; last readiness failure: ' + last_readiness_error if last_readiness_error else ''))
             if available_memory() < 24 * GIB:
                 raise RuntimeError('Host/cgroup memory fell below the runtime floor')
             try:
+                step = 'engine health and profile discovery'
                 context = healthy(args.host, args.port, args.served_model_name, profile, require_profile=not ready)
+                step = 'native worker coverage'
                 coverage = native_coverage(run_dir / 'receipts', profile,
                                            started_unix=record['started_unix'])
+                step = 'native worker liveness'
                 check_live_worker_pids(record, coverage)
-            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                last_readiness_error = f'{step}: {type(error).__name__}: {error}'
                 failures += 1
                 if ready and failures >= 3:
-                    raise RuntimeError('Native engine repeatedly failed readiness')
+                    raise RuntimeError('Native engine repeatedly failed readiness; ' + last_readiness_error) from error
             else:
                 failures = 0
+                last_readiness_error = None
                 if not ready:
                     data = {'ready': True, 'container_id': container_id, 'profile': profile.name,
                             'profile_digest': profile.digest, 'context_window': context,
@@ -352,7 +359,8 @@ def main(argv=None):
                     print(json.dumps(data), flush=True)
                     ready = True
             if not ready and time.monotonic() - started > args.startup_timeout:
-                raise TimeoutError('Native engine startup deadline exceeded')
+                raise TimeoutError('Native engine startup deadline exceeded; last readiness failure: '
+                                   + (last_readiness_error or 'no readiness result'))
             time.sleep(5)
     finally:
         try:

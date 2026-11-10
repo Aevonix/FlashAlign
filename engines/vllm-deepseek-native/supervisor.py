@@ -16,7 +16,9 @@ import urllib.request
 def run(command, *, timeout=30):
     result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
     if result.returncode:
-        raise RuntimeError('Command failed: ' + command[0])
+        step = ' '.join(command[:2])
+        detail = (getattr(result, 'stderr', None) or '').strip() or 'no diagnostic output'
+        raise RuntimeError(f'{step} failed (exit {result.returncode}): {detail}')
     return result.stdout.strip()
 
 
