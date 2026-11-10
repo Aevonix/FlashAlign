@@ -577,9 +577,17 @@ class LifecycleManager:
             if name in self.status()["aliases"]:
                 return
             generation = self.stage(permit, source)
-            if generation.artifact.name != name:
-                raise LifecycleError("Configured profile name changed during staging")
-            self.activate(permit, name, generation.id, expected_revision=0)
+            try:
+                if generation.artifact.name != name:
+                    raise LifecycleError("Configured profile name changed during staging")
+                self.activate(permit, name, generation.id, expected_revision=0)
+            except BaseException:
+                try:
+                    self.retire(permit, generation.id)
+                except BaseException:
+                    # Recovery or cleanup failure must not hide the start failure.
+                    pass
+                raise
 
     def activate(self, permit, alias, generation_id, *, expected_revision):
         self._authorize(permit)
