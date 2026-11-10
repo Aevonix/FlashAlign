@@ -44,10 +44,11 @@ def runtime_counters(engine):
                 result[field] = None
                 continue
             total = sum(values)
-            if field != "ttft_seconds_sum" and any(value != int(value) for value in values):
+            if not math.isfinite(total) or (field != "ttft_seconds_sum"
+                    and any(value != int(value) for value in values)):
                 result[field] = None
             else:
-                result[field] = total if math.isfinite(total) else None
+                result[field] = float(total) if field == "ttft_seconds_sum" else int(total)
         if result["ttft_seconds_sum"] is None or result["ttft_seconds_count"] is None:
             result["ttft_seconds_sum"] = result["ttft_seconds_count"] = None
         return result
