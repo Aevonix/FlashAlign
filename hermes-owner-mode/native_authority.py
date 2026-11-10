@@ -10,7 +10,7 @@ from .contacts import ApprovalStore
 from .audit import warn_fallback
 from .content import bind_content, proof_matches
 from .hermes_observer import HermesObserver, event_copy
-from .identity import DM_TYPES, canonical_handle
+from .identity import DM_TYPES, canonical_handle, handle_fits
 from . import hermes_ingress
 from .policy import IdentityResult
 
@@ -63,6 +63,8 @@ class NativeAuthority:
                         or item.reaction or item.chat_type not in DM_TYPES
                         or not all(key) or not (item.text or item.media)):
                     raise _RejectedIngress('Unverified native message')
+                if not handle_fits(item.channel, key[2], registry=self.registry):
+                    raise _RejectedIngress('Contact is not approved')
                 grant = self.store.approved(key[0], key[1], key[2])
                 if not grant:
                     raise _RejectedIngress('Contact is not approved')
