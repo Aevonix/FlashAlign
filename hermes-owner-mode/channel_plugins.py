@@ -119,7 +119,8 @@ def entry_point_context(entry):
         yield
     except Exception as error:
         message = f"Adapter entry point {entry.name!r} from distribution {entry.dist.name!r}: {error}"
-        error_type = ValueError if isinstance(error, ValueError) else RuntimeError
+        error_type = (ValueError if isinstance(error, ValueError) else
+                      OSError if isinstance(error, OSError) else RuntimeError)
         raise error_type(message) from error
 
 
