@@ -248,6 +248,8 @@ def _retire_registration(state, owner):
 
 
 def _attach_registration(ctx, state, owner):
+    if not hasattr(owner, "registrations"):
+        return None
     registration = object()
     owner.registrations.add(registration)
 
