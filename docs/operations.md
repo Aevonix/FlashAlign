@@ -68,6 +68,9 @@ and GLM Flash kits declare 1,800 seconds. Without a declaration, Python engine
 kits use 900 seconds, or 3,600 seconds for native Docker launches. TensorFold
 keeps its bundle default of 1,800 seconds. Activation uses the recorded budget.
 Use only `startup_timeout` in kit manifests and setup plans.
+The timeout must be an integer from 60 to 7200 seconds for every engine kind.
+Deployments prepared before this release keep their recorded budget (900 seconds
+for Python kits) until they are prepared again.
 
 ## Configured profiles on restart
 
@@ -76,6 +79,9 @@ configured profile list on every start. A configured name without an alias
 record in the journal is staged and activated. Existing active aliases keep
 their generation; changing a file under the same name does not replace it.
 Use the profile admin commands to replace an active generation.
+A configured profile that cannot be staged or activated stops the start.
+Earlier releases activated configured profiles only on the first start, so names
+added later are activated at the next restart.
 
 A profile deactivated through the profile admin commands stays deactivated
 across restarts, even when it is still in the startup configuration and its old

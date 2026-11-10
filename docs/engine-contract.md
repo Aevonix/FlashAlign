@@ -208,6 +208,8 @@ Use JSON `null` when a measurement is unavailable; never substitute zero:
 | `ttft_seconds_sum` | Cumulative seconds to first token for requests observed by the engine's first-token histogram |
 | `ttft_seconds_count` | Number of observations contributing to `ttft_seconds_sum` |
 
+Clients treat a missing counter field as unavailable.
+
 Counters must be finite and nonnegative; token and observation counts must be
 integers. Return the TTFT sum and count together, or both as `null`. A real
 zero is distinct from a missing metric. Output tokens per second is the token
@@ -216,8 +218,9 @@ the observation-count delta. A zero count delta has no mean.
 
 The vLLM adapters read existing in-process `vllm:generation_tokens_total` and
 `vllm:time_to_first_token_seconds_{sum,count}` samples. SGLang uses the matching
-`sglang:` names, reading generation tokens from the tensor-parallel leader and
-first-token observations from the API process. Label series within a collector
+`sglang:` names, reading generation tokens from the tensor-parallel leader when
+it reports one, otherwise from the API process, and first-token observations
+from the API process. Label series within a collector
 are summed; replicated workers are not summed. Collection is optional: if the
 metrics package or samples are absent, status reports `null`. No metrics
 package is imported or installed by the status reader. The llama.cpp adapter
