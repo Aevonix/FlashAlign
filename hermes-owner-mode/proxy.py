@@ -323,7 +323,7 @@ class ProviderProxy:
             if always_on:
                 candidate = self.routes[route].get("profile")
             else:
-                candidate = self.policy.consume(ticket, body, route) if ticket else "off"
+                candidate = self.policy.consume(ticket, body, route, info=info) if ticket else "off"
             if (candidate == self.routes[route].get("profile") and candidate != "off"
                     and isinstance(candidate, str) and candidate
                     and route not in self.disabled):

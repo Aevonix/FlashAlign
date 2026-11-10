@@ -81,6 +81,11 @@ exceptions while applying model-selection scope.
 This API reports identity; it does not report whether Always On applies to the
 provider's next request.
 
+Request tickets bind the whole request body except transport streaming flags.
+If later middleware changes that body, the request uses stock mode and the
+decision log records `request_changed`. It does not reuse the ticket's identity
+metadata for the changed request.
+
 ## Trust settings
 
 `host` accepts framing and tools supplied by the harness. `pinned` requires
