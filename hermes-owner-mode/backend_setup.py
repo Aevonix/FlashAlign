@@ -749,10 +749,10 @@ def _check_python_backend(home, spec, profile, *, model_id, proc_root=Path('/pro
     model = inspect_model(spec.get('model_path', ''))
     kit, metadata = _select_kit(kind, model, profile, spec.get('variant'))
     python = select_backend_python(spec, metadata)
-    if metadata.get('runtime') == 'docker':
-        startup_timeout = spec.get('startup_timeout', metadata.get('startup_timeout', 3600))
-        if type(startup_timeout) is not int or not 60 <= startup_timeout <= 7200:
-            raise SetupError('Native Docker startup_timeout must be an integer from 60 to 7200 seconds')
+    startup_timeout = spec.get('startup_timeout', metadata.get(
+        'startup_timeout', 3600 if metadata.get('runtime') == 'docker' else 900))
+    if type(startup_timeout) is not int or not 60 <= startup_timeout <= 7200:
+        raise SetupError('Engine startup_timeout must be an integer from 60 to 7200 seconds')
     if metadata.get('requires_private_opt_in') and spec.get('allow_research') is not True:
         raise SetupError('This CPU-prepared private engine requires explicit allow_research=true; no GPU qualification is claimed')
     if 'allow_research' in spec and type(spec['allow_research']) is not bool:
