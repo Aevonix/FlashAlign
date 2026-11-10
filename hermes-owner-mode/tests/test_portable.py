@@ -254,7 +254,7 @@ class WizardTests(unittest.TestCase):
             p.write_text(json.dumps({'unrelated':{'keep':True}}))
             result=wizard.provision(home,['hermes','openclaw'],'http://127.0.0.1:9871/v1','glm-5.3',
                 'glm53-full-v1',[('rcs','default','+15550000011')],False)
-            self.assertEqual(json.loads(p.read_text())['unrelated'],{'keep':True})
+            self.assertEqual(wizard.load_config(p)['unrelated'],{'keep':True})
             store=ApprovalStore(result['approval_store'])
             self.assertTrue(store.approved('rcs','default','+15550000011'))
             self.assertFalse(store.tool_enabled('delegate_task'))

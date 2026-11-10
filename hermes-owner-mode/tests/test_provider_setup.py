@@ -84,7 +84,7 @@ class ProviderSetup(unittest.TestCase):
             old=self.config();path.write_text(json.dumps(old))
             result=wizard.provision(home,['hermes'],'http://127.0.0.1:12345/v1','new','profile',[],False,
                                     model_info={'input':['text','image']})
-            configured=json.loads(path.read_text());name=result['hermes_provider']['name']
+            configured=wizard.load_config(path);name=result['hermes_provider']['name']
             self.assertEqual(configured['providers']['existing'],old['providers']['existing'])
             self.assertEqual(configured['providers'][name]['base_url'],configured['model']['base_url'])
             self.assertEqual(configured['model']['provider'],name)

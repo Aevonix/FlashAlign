@@ -52,7 +52,7 @@ class TensorFoldMetadata(unittest.TestCase):
         result = wizard.provision(self.home, ['hermes'], 'http://127.0.0.1:12345/v1',
             'bench', 'custom-owner', [], False,
             model_info={'input': checked['input_modalities'], 'contextWindow': checked['context_window']['tokens']})
-        actual = json.loads((self.home/'.hermes/config.yaml').read_text())
+        actual = wizard.load_config(self.home/'.hermes/config.yaml')
         self.assertEqual(actual['model']['default'], 'bench')
         self.assertIs(actual['model']['supports_vision'], False)
         self.assertEqual(actual['auxiliary'], before['auxiliary'])
