@@ -78,7 +78,7 @@ preserved. Writing YAML regenerates its formatting: comments, quoting style,
 layout and original anchor names are not preserved. JSON5 is patched only at
 properties changed by setup, including nested properties. Unchanged text,
 comments, quoting and key order remain intact, except that CRLF line endings
-become LF. Configuration files are read and written as UTF-8. New properties
+become LF. The files setup patches are read and written as UTF-8. New properties
 are appended; changed arrays and scalar values use JSON formatting, so comments inside a
 replaced value or removed property are lost. Comments outside those spans
 remain. Backups retain the original file bytes.

@@ -109,8 +109,12 @@ uses the proxy's port but does not match a route (`route_mismatch`), request
 middleware raises (`request_middleware_exception`), process arguments match
 the first `serve_argv` argument but differ after it (`serving_process_mismatch`),
 or native ingress observation raises unexpectedly (`ingress_observation_exception`).
-Other providers, one-shot commands and deliberate native-message rejections
-do not emit these diagnostics. These diagnostics contain fixed reason
+Other providers and deliberate native-message rejections do not emit these
+diagnostics. A command line whose first argument matches the first
+`serve_argv` argument warns with `serving_process_mismatch` when later
+configured arguments differ, including a one-shot command such as
+`gateway status` with `serve_argv: [gateway, run]`. Other one-shot commands
+remain silent. These diagnostics contain fixed reason
 codes, not message content or exception text. They do not change fallback or
 authorization behavior.
 
