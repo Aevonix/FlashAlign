@@ -72,16 +72,16 @@ Use only `startup_timeout` in kit manifests and setup plans.
 ## Configured profiles on restart
 
 SGLang, vLLM and llama.cpp recover the lifecycle journal before checking the
-configured profile list on every start. A configured name without an active
-alias is staged and activated. Existing active aliases keep their generation;
-changing a file under the same name does not replace it. Use the profile admin
-commands to replace an active generation.
+configured profile list on every start. A configured name without an alias
+record in the journal is staged and activated. Existing active aliases keep
+their generation; changing a file under the same name does not replace it.
+Use the profile admin commands to replace an active generation.
 
-The configured list takes precedence over an administrative deactivation or
-retirement: a profile still listed there becomes active again on restart, even
-if its old generation was retired. Remove it from the startup configuration as
-well as deactivating it to keep it inactive. Removing a configured path alone
-does not deactivate an alias already in the journal.
+A profile deactivated through the profile admin commands stays deactivated
+across restarts, even when it is still in the startup configuration and its old
+generation has been retired. Activate it again with the profile admin commands.
+Removing a configured path alone does not deactivate an alias already in the
+journal.
 
 ## Native startup failures
 

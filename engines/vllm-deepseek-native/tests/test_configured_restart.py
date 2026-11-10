@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
 # SPDX-License-Identifier: AGPL-3.0-only
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
-"""Configured profiles become active on restart using only CPU fake transports."""
+"""Configured profiles respect journal aliases on restart with CPU fake transports."""
 import json
 from types import SimpleNamespace
 from unittest.mock import Mock
+
+import pytest
 
 from test_bootstrap import setup_service, close
 
@@ -68,19 +70,29 @@ def test_new_configured_name_is_added_and_existing_alias_is_preserved(setup_serv
         close(again)
 
 
-def test_configured_retired_profile_is_reactivated(setup_service, monkeypatch):
+@pytest.mark.parametrize('retire', [False, True], ids=['kept', 'retired'])
+def test_configured_deactivated_profile_stays_deactivated(setup_service, monkeypatch, retire):
     module, _, _, _, create = setup_service
     offline_admin(module, monkeypatch)
     service = create()
     old = service.manager.status()['aliases']['owner']['generation']
-    service.manager.deactivate(service.permit, 'owner', expected_revision=1)
-    service.manager.retire(service.permit, old)
+    if hasattr(module, 'NativeLifecycle'):
+        service.backend.evict_cache = Mock()
+    service.operation({'action': 'deactivate', 'alias': 'owner', 'expected_revision': 1})
+    if retire:
+        service.operation({'action': 'retire', 'generation': old})
+    generations = service.manager.status()['generations']
     close(service)
+    stager = 'stage_profile' if hasattr(module, 'Controller') else (
+        'stage_projection' if hasattr(module, 'NativeLifecycle') else 'stage_validated_profile')
+    stage = Mock(wraps=getattr(module, stager))
+    monkeypatch.setattr(module, stager, stage)
     reopened = create()
     try:
         alias = reopened.manager.status()['aliases']['owner']
-        assert alias['generation'] is not None and alias['generation'] != old
-        assert alias['revision'] == 3
-        assert 'prepared' in reopened.backend.events
+        assert alias == {'generation': None, 'revision': 2}
+        assert reopened.manager.status()['generations'] == generations
+        stage.assert_not_called()
+        assert 'prepared' not in reopened.backend.events
     finally:
         close(reopened)
