@@ -223,18 +223,24 @@ Use [channel administration](channels.md) to inspect installed adapters or
 change the enabled channel selection. New transports can register their own
 identity format and capabilities in trusted adapter code.
 
-Use the included administration command with your approval-store path:
+Use the main command for local access changes. `approve`, `revoke`, `mode`,
+`channels` and `tool` call the same operations as `manage.py`. Each accepts
+`--store /path/to/approvals.json`; without it they use
+`~/.config/owner-mode/approvals.json`.
+
+```sh
+flashalign approve rcs +10000000000 --account default
+flashalign revoke rcs +10000000000 --account default
+flashalign channels --set whatsapp rcs telegram
+flashalign tool sessions_spawn off
+flashalign mode always_on
+flashalign mode verified
+```
+
+List the full stored state with the original administration entry point:
 
 ```sh
 python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json list
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  approve rcs +15550000011 --account default
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  tool sessions_spawn off
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  mode always_on
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  mode verified
 ```
 
 Use `revoke` with the same channel, account and contact to remove contact approval

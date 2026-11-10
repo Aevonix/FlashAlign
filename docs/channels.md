@@ -26,18 +26,20 @@ authority. Their names do not make them native chat transports.
 List installed adapters and their enabled state:
 
 ```sh
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json channels
+flashalign channels
 ```
 
 The wizard offers installed adapters. To change an existing selection, supply
 the complete list you want to keep enabled, then approve the exact contact:
 
 ```sh
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  channels --set whatsapp rcs telegram
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  approve telegram 123456789 --account default
+flashalign channels --set whatsapp rcs telegram
+flashalign approve telegram 123456789 --account default
 ```
+
+These commands use `~/.config/owner-mode/approvals.json`; add `--store` to select
+another deployment. Use `flashalign revoke` with the same channel, account and
+contact to remove approval.
 
 Use the account ID supplied by your harness. Disable a channel by leaving it
 out of `channels --set`. Existing capabilities from that channel become invalid.
