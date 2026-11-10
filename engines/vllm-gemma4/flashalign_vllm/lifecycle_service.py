@@ -76,10 +76,8 @@ class LifecycleService:
         try:
             if self.manager.journal_was_present:
                 self.manager.recover(self.permit)
-            else:
-                for path in paths:
-                    generation = self.manager.stage(self.permit, path)
-                    self.manager.activate(self.permit, generation.artifact.name, generation.id, expected_revision=0)
+            for path, profile in zip(paths, initial):
+                self.manager.activate_configured(self.permit, path, name=profile.name)
         except BaseException:
             self.manager.close()
             raise

@@ -182,11 +182,11 @@ class Controller:
         permit = self.manager.admin(self._secret)
         if self.manager.journal_was_present:
             self.manager.recover(permit)
-        else:
-            for source in os.environ.get("FLASHALIGN_PROFILES", "").split(","):
-                if source.strip():
-                    generation = self.manager.stage(permit, source.strip())
-                    self.manager.activate(permit, generation.artifact.name, generation.id, expected_revision=0)
+        for source in os.environ.get("FLASHALIGN_PROFILES", "").split(","):
+            if source.strip():
+                source = Path(source.strip())
+                name = strict_json((source / "profile.json").read_bytes())["name"]
+                self.manager.activate_configured(permit, source, name=name)
         self.backend.call("finish_bootstrap")
 
     def bind(self, selected):

@@ -249,10 +249,8 @@ class NativeLifecycle:
         self.permit = self.manager.admin(key)
         if self.manager.journal_was_present:
             self.manager.recover(self.permit)
-        else:
-            for path, item in zip(profiles, metadata):
-                generation = self.manager.stage(self.permit, path)
-                self.manager.activate(self.permit, item['name'], generation.id, expected_revision=0)
+        for path, item in zip(profiles, metadata):
+            self.manager.activate_configured(self.permit, path, name=item['name'])
         self.server = LocalAdminServer(self.admin_socket, status=self.manager.status,
                                       operation=self.operation, conflict_errors=(LifecycleError,))
         self.loop = asyncio.new_event_loop()

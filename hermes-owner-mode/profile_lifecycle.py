@@ -570,6 +570,19 @@ class LifecycleManager:
                 if not published and temporary.exists():
                     shutil.rmtree(temporary)
 
+    def activate_configured(self, permit, source, *, name):
+        """Ensure a configured name has an active alias after journal recovery."""
+        self._authorize(permit)
+        with self._mutation:
+            current = self.status()["aliases"].get(name)
+            if current is not None and current["generation"] is not None:
+                return
+            generation = self.stage(permit, source)
+            if generation.artifact.name != name:
+                raise LifecycleError("Configured profile name changed during staging")
+            self.activate(permit, name, generation.id,
+                          expected_revision=current["revision"] if current else 0)
+
     def activate(self, permit, alias, generation_id, *, expected_revision):
         self._authorize(permit)
         _text(alias)

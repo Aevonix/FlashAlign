@@ -60,3 +60,17 @@ and GLM Flash kits declare 1,800 seconds. Without a declaration, Python engine
 kits use 900 seconds, or 3,600 seconds for native Docker launches. TensorFold
 keeps its bundle default of 1,800 seconds. Activation uses the recorded budget.
 Use only `startup_timeout` in kit manifests and setup plans.
+
+## Configured profiles on restart
+
+SGLang, vLLM and llama.cpp recover the lifecycle journal before checking the
+configured profile list on every start. A configured name without an active
+alias is staged and activated. Existing active aliases keep their generation;
+changing a file under the same name does not replace it. Use the profile admin
+commands to replace an active generation.
+
+The configured list takes precedence over an administrative deactivation or
+retirement: a profile still listed there becomes active again on restart, even
+if its old generation was retired. Remove it from the startup configuration as
+well as deactivating it to keep it inactive. Removing a configured path alone
+does not deactivate an alias already in the journal.
