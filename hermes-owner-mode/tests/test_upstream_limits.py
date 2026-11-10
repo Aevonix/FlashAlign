@@ -3,6 +3,7 @@
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """The shared client does not impose an upstream connection cap."""
 from types import SimpleNamespace
+import sys
 import unittest
 from unittest import mock
 
@@ -18,6 +19,6 @@ class UpstreamLimits(unittest.TestCase):
             proxy = ProviderProxy(Policy(), {}, '')
         self.addCleanup(proxy.close)
         pool = proxy.client._transport._pool
-        self.assertEqual(pool._max_connections, float('inf'))
+        self.assertEqual(pool._max_connections, sys.maxsize)
         self.assertEqual(pool._max_keepalive_connections, 20)
         self.assertIs(proxy.client._transport._pool, pool)
