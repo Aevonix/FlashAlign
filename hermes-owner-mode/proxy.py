@@ -279,7 +279,8 @@ class ProviderProxy:
             if self._client_closed:
                 raise RuntimeError("provider wrapper is closed")
             if self._client is None:
-                context = httpx.Client(follow_redirects=False, cookies=CookieJar(policy=_NoCookies()))
+                context = httpx.Client(follow_redirects=False, cookies=CookieJar(policy=_NoCookies()),
+                                       limits=httpx.Limits(max_connections=None, max_keepalive_connections=20))
                 try:
                     self._client = context.__enter__()
                 except BaseException:
