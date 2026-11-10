@@ -64,7 +64,7 @@
     "image"
   ],
   "tested_speculative_algorithm": "EAGLE/native MTP",
-  "startup_timeout_seconds": 1800,
+  "startup_timeout": 1800,
   "qualification": {
     "common_fixtures_per_mode": 16,
     "full_runs": 2,

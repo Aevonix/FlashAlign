@@ -1299,7 +1299,9 @@ def _prepare_python_backend(home, spec, profile_path, *, model_id, key_file=None
               'commands': [{'argv': argv, 'env': env}], 'base_url': f'http://127.0.0.1:{port}/v1',
               'model': model_id, 'profile': profile['name'], 'key_file': str(key), 'profile_path': str(staged),
               'integration_files': files, 'drafting': drafting, 'status': 'prepared', 'install_dependencies': False,
-              'python': python, 'requirements': []}
+              'python': python, 'requirements': [],
+              'startup_timeout': spec.get('startup_timeout', checked['metadata'].get(
+                  'startup_timeout', 3600 if runtime.get('container_runtime') == 'docker' else 900))}
     result.update(control)
     if checked.get('gguf_binding'):
         result['gguf_model'] = checked['gguf_binding']
@@ -1310,7 +1312,6 @@ def _prepare_python_backend(home, spec, profile_path, *, model_id, key_file=None
     if runtime.get('container_runtime') == 'docker':
         result.update(container_runtime='docker', image=runtime.get('image'),
                       image_id=runtime.get('image_id'),
-                      startup_timeout=spec.get('startup_timeout', checked['metadata'].get('startup_timeout', 3600)),
                       replay_file=str(state/'replay/nonces.sqlite3'))
         if (staged/'RESPONSIBLE_USE.md').is_file():
             result['profile_source_terms'] = str(staged/'RESPONSIBLE_USE.md')

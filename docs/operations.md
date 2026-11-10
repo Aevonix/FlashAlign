@@ -51,3 +51,12 @@ expose the corresponding measurements.
 
 See [profile management](profile-lifecycle.md) for loading, activation, rollback
 and recovery, and [benchmarks](benchmarks.md) for controlled comparisons.
+
+## Startup budget
+
+Managed preparation records `startup_timeout` in seconds for every engine kind.
+An explicit engine setting overrides the kit's `startup_timeout`; SGLang's Qwen4
+and GLM Flash kits declare 1,800 seconds. Without a declaration, Python engine
+kits use 900 seconds, or 3,600 seconds for native Docker launches. TensorFold
+keeps its bundle default of 1,800 seconds. Activation uses the recorded budget.
+Use only `startup_timeout` in kit manifests and setup plans.
