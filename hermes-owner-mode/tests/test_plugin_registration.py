@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Process ownership survives duplicate module loads without sharing new grants."""
+"""Duplicate registrations share the first policy and proxy until the last unload."""
 import importlib
 import importlib.util
 import os
@@ -122,7 +122,7 @@ class ProcessRegistrationTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def test_duplicate_context_is_not_read_and_registers_nothing(self):
+    def test_duplicate_context_is_not_read_and_shares_first_registration(self):
         first = self.context(port=8123)
         runtime = plugin.register(first)
         self.verify(runtime)
@@ -137,7 +137,7 @@ class ProcessRegistrationTests(unittest.TestCase):
         self.assertTrue(plugin.owner_turn("session", "turn"))
         self.assertTrue(runtime.proxy.started)
 
-    def test_distinct_import_uses_first_owner_and_never_creates_a_proxy(self):
+    def test_distinct_import_shares_first_owner_after_first_unload(self):
         first = self.context()
         runtime = plugin.register(first)
         self.verify(runtime)
@@ -150,7 +150,7 @@ class ProcessRegistrationTests(unittest.TestCase):
         first.close()
         self.assertTrue(other.owner_turn("session", "turn"))
 
-    def test_module_reload_keeps_owner_and_saved_accessor(self):
+    def test_module_reload_shares_owner_and_keeps_saved_accessor_after_first_unload(self):
         first = self.context()
         runtime = plugin.register(first)
         self.verify(runtime)
@@ -216,7 +216,7 @@ class ProcessRegistrationTests(unittest.TestCase):
         self.assertTrue(plugin.owner_turn("session", "turn"))
         self.assertEqual(runtime.proxy.closed, 0)
 
-    def test_concurrent_registrations_construct_one_runtime(self):
+    def test_concurrent_registrations_share_one_runtime(self):
         barrier = threading.Barrier(4)
         contexts = [self.context() for _ in range(4)]
         def register(ctx):
