@@ -58,9 +58,9 @@ def recent_decisions(paths, limit=10):
     """Read only decision fields, tolerating partial or malformed log lines."""
     rows = []
     for path in dict.fromkeys(Path(path).expanduser() for path in paths):
+        recent = deque(maxlen=limit)
         try:
-            with path.open() as source:
-                recent = deque(maxlen=limit)
+            with path.open(encoding="utf-8", errors="replace") as source:
                 for line in source:
                     try:
                         row = json.loads(line)
@@ -74,9 +74,9 @@ def recent_decisions(paths, limit=10):
                         recent.append((timestamp, selected))
                     except (ValueError, TypeError, KeyError, OverflowError):
                         continue
-                rows.extend(recent)
-        except FileNotFoundError:
-            continue
+        except OSError:
+            pass
+        rows.extend(recent)
     return [row for _, row in sorted(rows, key=lambda item: item[0])[-limit:]]
 
 
