@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 import io
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -24,8 +25,20 @@ class AccessCLI(unittest.TestCase):
 
     def run_command(self, *argv):
         output = io.StringIO()
-        with mock.patch.object(Path, 'home', return_value=self.home), redirect_stdout(output):
-            main(list(argv))
+        package = sys.modules['owner_mode']
+        try:
+            with mock.patch.object(Path, 'home', return_value=self.home), redirect_stdout(output):
+                main(list(argv))
+        finally:
+            # The first access command imports manage.py, whose standalone bootstrap replaces the
+            # package object. Keep the suite's package and its bindings, as support.load_cli does.
+            sys.modules['owner_mode'] = package
+            for fullname, child in list(sys.modules.items()):
+                if fullname.startswith('owner_mode.'):
+                    parent_name, _, attribute = fullname.rpartition('.')
+                    parent = sys.modules.get(parent_name)
+                    if parent is not None and child is not None:
+                        setattr(parent, attribute, child)
         return json.loads(output.getvalue())
 
     def test_approve_uses_default_store_and_exact_account(self):
