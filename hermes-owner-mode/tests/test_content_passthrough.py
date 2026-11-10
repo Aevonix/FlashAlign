@@ -58,7 +58,8 @@ class Forwarding(GateBase):
         token = self.policy.context_ticket(body, session_id="s", turn_id="t", route="head",
                                            info={"owner_verified": True})
         self.assertEqual(self.proxy.prepare("head", body)[2], "off")
-        self.assertEqual(self.policy.consume_context(token, dict(body, model="changed"), "head"), {})
+        self.assertEqual(self.policy.consume_context(token, dict(body, model="changed"), "head"),
+                         {"decision": "request_changed"})
         self.assertEqual(self.policy.consume_context(token, body, "head"), {})
         token = self.policy.context_ticket(body, session_id="s", turn_id="t", route="head",
                                            info={"owner_verified": True})
