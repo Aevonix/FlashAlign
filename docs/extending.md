@@ -37,7 +37,8 @@ distribution/version pins. Installing other adapter types never enables a
 channel or approves a contact.
 
 Import errors, factory exceptions and wrong result types propagate to the
-caller, as they do for a selected channel plugin. A failed load does not publish
+caller, as they do for a selected channel plugin; load and collision errors
+name the entry point and its distribution. A failed load does not publish
 a partial registry. Registries reject duplicate or ambiguous identities,
 including collisions with built-ins. Successful discovery is cached for the
 process; restart to pick up changed installed distributions.

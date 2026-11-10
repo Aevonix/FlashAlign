@@ -18,6 +18,10 @@ Setup writes YAML with mapping key order preserved. It regenerates layout,
 quoting and anchor names and does not retain YAML comments; the backup keeps
 the original bytes. See [configuration preservation](../docs/setup.md#run-the-wizard).
 
+With an `identity_adapter`, a store without `enabled_channels` also admits voice
+and companion; run `flashalign channels --store /absolute/path/to/approvals.json --set whatsapp rcs`
+to limit this example to `whatsapp` and `rcs`.
+
 ```yaml
 plugins:
   entries:
@@ -53,6 +57,8 @@ Verified contacts mode; it does not disable Always On.
 Use `flashalign pause` and `flashalign resume` to suspend and restore profile
 selection for either mode. Pass `--store` for a nondefault approval store.
 These commands preserve the saved contacts, channels, mode and tool settings.
+While paused, no turn counts as the owner's, so other plugins see a non-owner
+and no tool inherits owner status; resume restores that status.
 
 Saved channel selections also take effect without a restart. The plugin admits
 installed channel adapters and the policy checks the approval store on each
@@ -98,11 +104,13 @@ If later middleware changes that body, the request uses stock mode and the
 decision log records `request_changed`. It does not reuse the ticket's identity
 metadata for the changed request.
 
-The plugin also emits one warning and a decision entry when a request route
-does not match (`route_mismatch`), request middleware raises
-(`request_middleware_exception`), the process does not match `serve_argv`
-(`serving_process_mismatch`), or native ingress observation fails
-(`ingress_observation_exception`). These diagnostics contain fixed reason
+The plugin also emits one warning and a decision entry when a loopback URL
+uses the proxy's port but does not match a route (`route_mismatch`), request
+middleware raises (`request_middleware_exception`), process arguments match
+the first `serve_argv` argument but differ after it (`serving_process_mismatch`),
+or native ingress observation raises unexpectedly (`ingress_observation_exception`).
+Other providers, one-shot commands and deliberate native-message rejections
+do not emit these diagnostics. These diagnostics contain fixed reason
 codes, not message content or exception text. They do not change fallback or
 authorization behavior.
 

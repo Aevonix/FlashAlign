@@ -77,8 +77,9 @@ YAML configuration stays YAML, with mapping key order and unrelated values
 preserved. Writing YAML regenerates its formatting: comments, quoting style,
 layout and original anchor names are not preserved. JSON5 is patched only at
 properties changed by setup, including nested properties. Unchanged text,
-comments, quoting and key order remain intact. New properties are appended;
-changed arrays and scalar values use JSON formatting, so comments inside a
+comments, quoting and key order remain intact, except that CRLF line endings
+become LF. Configuration files are read and written as UTF-8. New properties
+are appended; changed arrays and scalar values use JSON formatting, so comments inside a
 replaced value or removed property are lost. Comments outside those spans
 remain. Backups retain the original file bytes.
 
@@ -184,8 +185,9 @@ were found; it does not prove that a turn used the profile.
 By default it reads Hermes's `~/.hermes/logs/owner-mode.log`, the bridge's
 `~/.config/owner-mode/owner-mode.log`, and direct gateway logs beneath
 `~/.local/share/flashalign/gateways/`. Use `--home /path/to/home` for another
-home or repeat `--log` for custom locations. Missing logs and incomplete JSON
-lines are ignored. A changed request body records `request_changed`; a
+home or repeat `--log` for custom locations. Missing or unreadable logs and
+malformed JSON lines are ignored; readable decision rows are still printed.
+A changed request body records `request_changed`; a
 bridge request with no run capability records `no_run_context`.
 
 In Verified contacts mode, check an unapproved contact too: its effective mode
@@ -216,6 +218,8 @@ These commands set the approval store's existing `enabled` flag. They take
 effect on subsequent requests without a restart and do not cancel requests
 already running. Pausing makes routed requests use stock mode, including in
 Always On. Resuming restores the saved policy; it does not add any approvals.
+While paused, no turn counts as the owner's, so other plugins see a non-owner
+and no tool inherits owner status; resume restores that status.
 The default store is `~/.config/owner-mode/approvals.json`. For a direct gateway
 or another installation, pass that deployment's approval-store path.
 

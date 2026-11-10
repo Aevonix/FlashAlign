@@ -7,7 +7,8 @@ harness-managed service.
 Setup patches changed properties in JSON5 configuration without rewriting
 unrelated text, comments or key order. Comments inside replaced values or
 removed properties are not preserved; new and replaced values use JSON
-formatting. Backups keep the original bytes.
+formatting. CRLF line endings become LF, and configuration is read and written
+as UTF-8. Backups keep the original bytes.
 
 Verified contacts is the default. Always On applies the configured profile to
 every request routed through the FlashAlign provider, including all tools and
@@ -61,6 +62,9 @@ both the same path; custom installations can set the bridge's `audit_log` and
 the extension's `auditLog` to the same file. Terminal bridges use the same
 audit configuration. Bridge errors carry a fixed `reason` code, without
 message content or exception details.
+Readiness polls write no failure rows; startup records `bridge_startup_failed`
+if it gives up. A non-JSON error reply to another control operation records
+`control_request_rejected` and reports `Owner Mode control request failed`.
 
 Use `flashalign why --limit 20` to read recent decisions, including the channel,
 reason and effective profile. For a custom log path, use
