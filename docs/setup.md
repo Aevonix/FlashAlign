@@ -73,6 +73,15 @@ profile it runs
 harnesses. A restart failure is reported separately; saved configuration and
 backups remain available.
 
+YAML configuration stays YAML, with mapping key order and unrelated values
+preserved. Writing YAML regenerates its formatting: comments, quoting style,
+layout and original anchor names are not preserved. JSON5 is patched only at
+properties changed by setup, including nested properties. Unchanged text,
+comments, quoting and key order remain intact. New properties are appended;
+changed arrays and scalar values use JSON formatting, so comments inside a
+replaced value or removed property are lost. Comments outside those spans
+remain. Backups retain the original file bytes.
+
 Use `--no-restart` to save configuration for a later restart. `--no-color` or
 the `NO_COLOR` environment variable disables the Aevonix terminal colors.
 

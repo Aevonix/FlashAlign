@@ -14,6 +14,10 @@ route's policy. See [setup](../docs/setup.md) for switching modes.
 
 Equivalent manual settings:
 
+Setup writes YAML with mapping key order preserved. It regenerates layout,
+quoting and anchor names and does not retain YAML comments; the backup keeps
+the original bytes. See [configuration preservation](../docs/setup.md#run-the-wizard).
+
 ```yaml
 plugins:
   entries:

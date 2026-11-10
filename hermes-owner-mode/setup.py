@@ -51,7 +51,7 @@ def load_config(path):
         value = json.loads(text)
     except ValueError:
         try:
-            if path.suffix == '.json':
+            if path.suffix in ('.json', '.json5'):
                 import json5
                 value = json5.loads(text)
             else:
@@ -152,15 +152,24 @@ def free_port(preferred):
 
 
 def save_config(path, config):
+    suffix = path.suffix.lower()
     transaction = current_transaction()
     if transaction is not None:path = transaction.stage_file(path)
     path.parent.mkdir(parents=True,exist_ok=True)
+    if suffix in ('.yaml', '.yml'):
+        import yaml
+        text = yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
+    elif suffix in ('.json', '.json5') and path.exists():
+        from owner_mode.config_edit import patch_json5
+        text = patch_json5(path.read_text(), config)
+    else:
+        text = json.dumps(config, indent=2) + '\n'
     if path.exists():
         stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
         shutil.copy2(path, path.with_name(path.name+'.before-owner-mode-'+stamp))
     temp=path.with_name(path.name+'.owner-mode-new-'+secrets.token_hex(6))
     fd=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-    with os.fdopen(fd,'w') as stream:json.dump(config,stream,indent=2);stream.write('\n')
+    with os.fdopen(fd,'w') as stream:stream.write(text)
     os.replace(temp,path)
 
 

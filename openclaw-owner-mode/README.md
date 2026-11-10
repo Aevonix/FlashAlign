@@ -4,6 +4,11 @@ Run the [setup wizard](../docs/setup.md) and select OpenClaw. It installs the
 extension, configures its model provider and registers the Python bridge as a
 harness-managed service.
 
+Setup patches changed properties in JSON5 configuration without rewriting
+unrelated text, comments or key order. Comments inside replaced values or
+removed properties are not preserved; new and replaced values use JSON
+formatting. Backups keep the original bytes.
+
 Verified contacts is the default. Always On applies the configured profile to
 every request routed through the FlashAlign provider, including all tools and
 subagents even when their alignment flags are off. It persists across restarts
