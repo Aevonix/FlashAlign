@@ -24,7 +24,6 @@ plugins:
         port: 18034
         approvals_file: /absolute/path/to/approvals.json
         key_file: /absolute/path/to/engine.key
-        allowed_channels: [whatsapp, rcs]
         trust:
           system_prompt: host
           tools: host
@@ -47,6 +46,12 @@ approval store also requires an owned `0600` regular file. The wizard and
 administration command create the store. Authorization rereads its mode,
 approvals and tool flags. Contact revocation takes effect without a restart in
 Verified contacts mode; it does not disable Always On.
+
+Saved channel selections also take effect without a restart. The plugin admits
+installed channel adapters and the policy checks the approval store on each
+call. An older configuration with `allowed_channels` still limits the plugin
+to that list; remove the key and reload the plugin, or rerun setup, to use the
+live selection for every installed adapter.
 
 ## Verified contacts
 

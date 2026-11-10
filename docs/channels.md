@@ -44,6 +44,9 @@ out of `channels --set`. Existing capabilities from that channel become invalid.
 SMS is also opt-in. After verifying the provider's sender authentication, add
 `sms` to the complete channel selection you want to keep, then approve the
 contact. Saved explicit channel selections are preserved across upgrades.
+Changes take effect as soon as the selection is saved. For an older Hermes
+configuration that still has `allowed_channels`, remove that setting and reload
+the plugin, or rerun setup; the saved list otherwise remains an additional limit.
 These controls apply to Verified mode. Always On uses its configured profile
 for every routed request without claiming a verified identity.
 

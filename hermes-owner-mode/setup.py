@@ -274,7 +274,7 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
         cfg.setdefault('plugins',{}).setdefault('entries',{})['owner-mode']={'enabled':True,'settings':{
             'serve_argv':['gateway','run'],'port':ports['hermes'],'approvals_file':str(store.path),
             'managed_provider':result['hermes_provider']['name'],
-            'key_file':str(key),'allowed_channels':sorted(pending_store.channels()),
+            'key_file':str(key),
             'trust':{'system_prompt':'host','tools':'host','turn_context':'host','history':'verified_owner'},
             'routes':{'head':route}}}
         cfg.setdefault('model',{}).update(default=model,base_url=f"http://127.0.0.1:{ports['hermes']}/head/v1")
