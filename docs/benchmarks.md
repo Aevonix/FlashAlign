@@ -8,6 +8,24 @@ does not change the engine or its caches.
 The included tooling records responses and timings. FR443 has a pinned semantic
 judge and scoring protocol; other suites retain their own scoring procedures.
 
+## Prepare a checkout
+
+Run all commands below from the repository root. First install this checkout
+in an isolated environment with Python 3.10 or later:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install .
+```
+
+Keep this environment active for the module commands and preparation scripts.
+The install supplies `owner_mode`, whose source directory in the checkout is
+named `hermes-owner-mode`. A bare checkout alone is not an importable install.
+Replace the example input and output paths with your own private files. The
+collection commands require a separately configured, running engine; corpus,
+judge and optional tool prerequisites are described with each workflow.
+
 ## Choose the measurement
 
 | Question | Tool | What to report |
@@ -135,12 +153,6 @@ scorers register through trusted Python interfaces in `benchmark_suites.py` and
 `benchmark_judge.py`; input files cannot supply executable plugins.
 
 ## Record a controlled comparison
-
-Install FlashAlign in an environment with Python 3.10 or later:
-
-```sh
-python -m pip install .
-```
 
 Use a direct engine client configuration from setup. It must point to the same
 engine for both modes and use `mode: "verified"`, with the deployment key in a
