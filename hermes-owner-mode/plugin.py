@@ -263,12 +263,43 @@ def _retire_registration(state, owner):
             pass
 
 
+def _attach_registration(ctx, state, owner):
+    registration = object()
+    owner.registrations.add(registration)
+
+    def unload():
+        if state.pid != os.getpid():
+            return
+        with state.lock:
+            owner.registrations.discard(registration)
+            if owner.registrations:
+                return
+            owner.active = False
+        _retire_registration(state, owner)
+
+    try:
+        ctx.on_unload(unload)
+        runtime, policy = owner.runtime, owner.runtime.policy
+        ctx.register_hook("pre_llm_call", runtime.begin)
+        ctx.register_hook("post_llm_call", policy.end)
+        if owner.authority and callable(getattr(owner.authority, "hear", None)):
+            ctx.register_hook("pre_gateway_dispatch", _guard_callback(state, owner, owner.authority.hear))
+        ctx.register_hook("subagent_start", runtime.adopt)
+        ctx.register_hook("pre_tool_call", policy.steered)
+        ctx.register_middleware("llm_request", runtime.request)
+        ctx.register_middleware("tool_execution", runtime.execute_tool)
+    except BaseException:
+        unload()
+        raise
+    return owner.runtime
+
+
 def register(ctx):
     global _POLICY
     state = _process_state(create=True)
     with state.lock:
         if state.owner is not None:
-            return None
+            return _attach_registration(ctx, state, state.owner) if state.owner.active else None
         from hermes_constants import get_hermes_home
         approvals = ApprovalStore(ctx.get_config("approvals_file", "") or
                                   Path(get_hermes_home()) / "owner-mode" / "approvals.json")
@@ -277,7 +308,8 @@ def register(ctx):
         if terminal is None and not serving_process(ctx.get_config("serve_argv", None)):
             return None
         owner = SimpleNamespace(active=False, closed=False, closing=False,
-                                runtime=None, proxy=None, authority=None, terminal=terminal)
+                                runtime=None, proxy=None, authority=None, terminal=terminal,
+                                registrations=set())
         state.owner = owner
         try:
             try:
@@ -327,15 +359,7 @@ def register(ctx):
                 setattr(policy, name, _guard_callback(state, owner, getattr(policy, name)))
             runtime.request = _guard_callback(state, owner, runtime.request, kind="request")
             runtime.execute_tool = _guard_callback(state, owner, runtime.execute_tool, kind="tool")
-            ctx.on_unload(lambda: _retire_registration(state, owner))
-            ctx.register_hook("pre_llm_call", runtime.begin)
-            ctx.register_hook("post_llm_call", policy.end)
-            if authority and callable(getattr(authority, "hear", None)):
-                ctx.register_hook("pre_gateway_dispatch", _guard_callback(state, owner, authority.hear))
-            ctx.register_hook("subagent_start", runtime.adopt)
-            ctx.register_hook("pre_tool_call", policy.steered)
-            ctx.register_middleware("llm_request", runtime.request)
-            ctx.register_middleware("tool_execution", runtime.execute_tool)
+            _attach_registration(ctx, state, owner)
             proxy.start()
             if state.owner is not owner or owner.closed:
                 raise RuntimeError("FlashAlign registration withdrawn during startup")

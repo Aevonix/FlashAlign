@@ -53,6 +53,11 @@ call. An older configuration with `allowed_channels` still limits the plugin
 to that list; remove the key and reload the plugin, or rerun setup, to use the
 live selection for every installed adapter.
 
+Plugin managers in the same process share the first active registration's
+policy, settings and proxy. Each manager receives the guarded hooks and
+middleware. Unloading one manager keeps that proxy open until the last
+registration unloads, including when a reload registers before unloading.
+
 ## Verified contacts
 
 The adapter checks the registered transport, host access list, direct-message
