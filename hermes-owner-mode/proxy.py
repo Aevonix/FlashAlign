@@ -255,9 +255,15 @@ class ProviderProxy:
                         response.close()
                 except (BrokenPipeError, ConnectionResetError):
                     status = status or 499
-                except Exception:
+                except Exception as error:
                     # Fixed error text; exceptions can contain bodies or credentials.
                     status = status or 502
+                    extension = getattr(error, "extension", None)
+                    if extension:
+                        # An installed adapter failed while this request needed its registry. Only the
+                        # names the loader recorded are logged, never the failure's own text.
+                        logger.warning("OWNER_MODE_EXTENSION route=%s: %s could not be loaded or registered; "
+                                       "answered HTTP 502", route_name, extension)
                     try:
                         self.send_error(502, "provider wrapper unavailable")
                     except Exception:

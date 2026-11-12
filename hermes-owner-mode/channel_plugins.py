@@ -118,10 +118,13 @@ def entry_point_context(entry):
     try:
         yield
     except Exception as error:
-        message = f"Adapter entry point {entry.name!r} from distribution {entry.dist.name!r}: {error}"
+        extension = f"Adapter entry point {entry.name!r} from distribution {entry.dist.name!r}"
         error_type = (ValueError if isinstance(error, ValueError) else
                       OSError if isinstance(error, OSError) else RuntimeError)
-        raise error_type(message) from error
+        named = error_type(f"{extension}: {error}")
+        # The names alone, for a diagnostic that must not repeat the failure's own text.
+        named.extension = extension
+        raise named from error
 
 
 def _load(entry, adapter_type=ChannelAdapter):

@@ -46,6 +46,14 @@ a partial registry. Registries reject duplicate or ambiguous identities,
 including collisions with built-ins. Successful discovery is cached for the
 process; restart to pick up changed installed distributions.
 
+A gateway loads the model group when a request arrives on a route saved with
+the legacy `request_compatibility` name. While an installed model adapter
+fails to load or collides, each of those requests is answered with HTTP 502
+`provider wrapper unavailable`, and the gateway logs one `OWNER_MODE_EXTENSION`
+warning that names the route, the entry point and its distribution. The warning
+holds nothing from the request and not the failure's own text. Other requests
+are served and log nothing.
+
 Trusted code that is already imported can also call `register_engine_adapter`,
 `register_model_adapter`, `register_operator` or `register_artifact_format`.
 Merely placing a module on disk does not import or register it. A model can
