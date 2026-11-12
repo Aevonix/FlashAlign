@@ -57,7 +57,8 @@ until that run ends.
 
 The bridge writes model decisions and control rejection reasons to
 `owner-mode.log` beside its approval store. The extension records control
-connection failures there too (beside the control key by default). Setup gives
+connection failures there too (beside the control key by default), as
+`control_unavailable`. Setup gives
 both the same path; custom installations can set the bridge's `audit_log` and
 the extension's `auditLog` to the same file. Terminal bridges use the same
 audit configuration. Bridge errors carry a fixed `reason` code, without

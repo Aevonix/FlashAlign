@@ -70,6 +70,8 @@ Plugin managers in the same process share the first active registration's
 policy, settings and proxy. Each manager receives the guarded hooks and
 middleware. Unloading one manager keeps that proxy open until the last
 registration unloads, including when a reload registers before unloading.
+After an in-process upgrade, a new registration leaves the previous release's
+registration running and registers nothing.
 
 ## Verified contacts
 
@@ -92,7 +94,7 @@ If the adapter depends on another host plugin's identity capture, declare and
 test that deployment-specific ordering. See
 [custom identity provider ordering](../docs/custom-identity-ordering.md).
 
-`owner_turn(session_id, turn_id, tool_name=None)` reports a personally verified
+`owner_turn(session_id, turn_id, tool_name="")` reports a personally verified
 turn, optionally subject to a tool flag. Delegated work follows its own
 inherited authority path. Tool middleware preserves arguments, results and
 exceptions while applying model-selection scope.
@@ -117,6 +119,11 @@ configured arguments differ, including a one-shot command such as
 remain silent. These diagnostics contain fixed reason
 codes, not message content or exception text. They do not change fallback or
 authorization behavior.
+The provider proxy also logs one `OWNER_MODE_EXTENSION` warning for each
+request it answers with HTTP 502 because an
+[installed model adapter](../docs/extending.md) could not be loaded or
+registered; the warning names the route and the adapter's entry point, with
+nothing from the request and not the failure's own text.
 
 Use `flashalign why` to read the recent decision trail, or
 `flashalign why --log /path/to/owner-mode.log` when `audit_log` names a custom
