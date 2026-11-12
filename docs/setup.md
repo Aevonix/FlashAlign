@@ -83,6 +83,13 @@ are appended; changed arrays and scalar values use JSON formatting, so comments 
 replaced value or removed property are lost. Comments outside those spans
 remain. Backups retain the original file bytes.
 
+Only the harness files are patched. FlashAlign's own files (`openclaw-bridge.json`
+and `setup-result.json` under `~/.config/owner-mode/`, and the client
+configuration under `~/.config/flashalign/`) are written whole as strict JSON
+whenever setup writes them. An `openclaw-bridge.json` or `setup-result.json`
+that is empty, cut short or not UTF-8 does not stop setup and is replaced the
+next time setup writes it.
+
 Use `--no-restart` to save configuration for a later restart. `--no-color` or
 the `NO_COLOR` environment variable disables the Aevonix terminal colors.
 

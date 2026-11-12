@@ -84,7 +84,8 @@ def discover(home, which=shutil.which, probe=None):
                 if provider_name == 'owner-mode':
                     bridge_path = config.get('plugins',{}).get('entries',{}).get('owner-mode',{}).get('config',{}).get('bridgeConfig')
                     if bridge_path:
-                        upstream = load_config(Path(bridge_path)).get('routes',{}).get('head',{}).get('upstream')
+                        try:upstream = load_config(Path(bridge_path)).get('routes',{}).get('head',{}).get('upstream')
+                        except ValueError:upstream = None  # Setup writes this file whole again.
                         if isinstance(upstream,str): urls.append(upstream)
                     continue
                 if isinstance(provider,dict) and isinstance(provider.get('baseUrl'),str): urls.append(provider['baseUrl'])
@@ -152,14 +153,24 @@ def free_port(preferred):
 
 
 def save_config(path, config):
+    """Save a harness configuration the user keeps: YAML stays YAML, existing JSON or JSON5 is patched."""
+    _save(path, config, True)
+
+
+def save_own(path, value):
+    """Write one of FlashAlign's own files whole as strict JSON, whatever the file held before."""
+    _save(path, value, False)
+
+
+def _save(path, config, patch):
     suffix = path.suffix.lower()
     transaction = current_transaction()
     if transaction is not None:path = transaction.stage_file(path)
     path.parent.mkdir(parents=True,exist_ok=True)
-    if suffix in ('.yaml', '.yml'):
+    if patch and suffix in ('.yaml', '.yml'):
         import yaml
         text = yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
-    elif suffix in ('.json', '.json5') and path.exists():
+    elif patch and suffix in ('.json', '.json5') and path.exists():
         from owner_mode.config_edit import patch_json5
         text = patch_json5(path.read_text(encoding='utf-8'), config)
     else:
@@ -292,9 +303,9 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
         control=state/'openclaw-control.key'
         ensure_key(control)
         bridge_cfg=state/'openclaw-bridge.json'
-        save_config(bridge_cfg,{'port':ports['openclaw'],'approvals_file':str(store.path),
-                              'audit_log':str(state/'owner-mode.log'),
-                              'control_key_file':str(control),'key_file':str(key),'routes':{'head':route}})
+        save_own(bridge_cfg,{'port':ports['openclaw'],'approvals_file':str(store.path),
+                           'audit_log':str(state/'owner-mode.log'),
+                           'control_key_file':str(control),'key_file':str(key),'routes':{'head':route}})
         extension=current_transaction().stage_tree(home/'.openclaw/extensions/owner-mode')
         for filename in ['index.mjs','terminal.mjs','terminal-runner.mjs','model-params.mjs','package.json','openclaw.plugin.json','LICENSE','NOTICE.md']:
             shutil.copy2(setup_resource('openclaw-owner-mode')/filename,extension/filename)
@@ -345,9 +356,9 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
     client_path = home/'.config/flashalign/client.json'
     if client_path.exists() and load_config(client_path).get('gateway') is True:
         client_path = home/'.config/flashalign/engine-client.json'
-    save_config(client_path, client)
+    save_own(client_path, client)
     result['client_config'] = str(client_path)
-    save_config(state/'setup-result.json',result)
+    save_own(state/'setup-result.json',result)
     return result
 
 
@@ -460,7 +471,7 @@ def main(argv=None):
             result['status'] = 'configured' if success else 'restart_failed'
         else:
             success = not args.no_restart
-        save_config(args.home/'.config/owner-mode/setup-result.json', result)
+        save_own(args.home/'.config/owner-mode/setup-result.json', result)
         console.result('Setup prepared; activation pending' if args.no_restart else
                        'Direct engine verified' if args.engine_only else 'Engine verified and gateway restart requested',
                        ok=args.no_restart or success)
@@ -472,7 +483,7 @@ def main(argv=None):
             result['restart'] = restart_harnesses(args.home, gateway_harnesses, found)
             result['status'] = 'configured' if all(row['status'] == 'restarted' for row in result['restart'].values()) else 'restart_failed'
         if args.apply or args.activate:
-            save_config(args.home/'.config/owner-mode/setup-result.json', result)
+            save_own(args.home/'.config/owner-mode/setup-result.json', result)
         print(json.dumps(result, indent=2))
         return result
     if args.detect:
@@ -632,7 +643,7 @@ def main(argv=None):
     result['activation'] = (('gateway restart completed; Always On selected for all routed requests'
                              if mode == 'always_on' else 'gateway restart completed; native channel verification required')
                             if restarted else 'gateway restart required')
-    save_config(args.home/'.config/owner-mode/setup-result.json', result)
+    save_own(args.home/'.config/owner-mode/setup-result.json', result)
     for name, item in result['restart'].items():
         label = 'Hermes' if name == 'hermes' else 'OpenClaw'
         console.result(f"{label}: {item['status']}", ok=item['status'] == 'restarted')
