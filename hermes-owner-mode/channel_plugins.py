@@ -27,16 +27,33 @@ def _path(store_path):
     return Path(str(Path(store_path).expanduser()) + ".adapters.json")
 
 
-def _installed(group=ENTRYPOINT_GROUP):
+def _named(error, extension):
+    """The same failure with the installed extension named, in a type its callers already catch."""
+    error_type = (ValueError if isinstance(error, ValueError) else
+                  OSError if isinstance(error, OSError) else RuntimeError)
+    named = error_type(f"{extension}: {error}")
+    # The names alone, for a diagnostic that must not repeat the failure's own text.
+    named.extension = extension
+    return named
+
+
+def _installed(group=ENTRYPOINT_GROUP, *, named=False):
     entries = {}
     for entry in metadata.entry_points(group=group):
-        adapter_id(entry.name)
-        if entry.name in entries:
-            raise ValueError("Duplicate installed adapter entry point")
-        if entry.dist is None:
-            raise ValueError("An adapter needs installed distribution metadata")
-        name = opaque_id(entry.dist.name)
-        version = opaque_id(entry.dist.version)
+        try:
+            adapter_id(entry.name)
+            if entry.name in entries:
+                raise ValueError("Duplicate installed adapter entry point")
+            if entry.dist is None:
+                raise ValueError("An adapter needs installed distribution metadata")
+            name = opaque_id(entry.dist.name)
+            version = opaque_id(entry.dist.version)
+        except ValueError as error:
+            if not named:
+                raise
+            # Without a usable name or distribution, the group and the value still identify it.
+            extension = f"Adapter entry point {entry.name!r} ({entry.value!r}) in group {group!r}"
+            raise _named(error, extension) from error
         entries[entry.name] = (entry, name, version)
     return entries
 
@@ -118,13 +135,7 @@ def entry_point_context(entry):
     try:
         yield
     except Exception as error:
-        extension = f"Adapter entry point {entry.name!r} from distribution {entry.dist.name!r}"
-        error_type = (ValueError if isinstance(error, ValueError) else
-                      OSError if isinstance(error, OSError) else RuntimeError)
-        named = error_type(f"{extension}: {error}")
-        # The names alone, for a diagnostic that must not repeat the failure's own text.
-        named.extension = extension
-        raise named from error
+        raise _named(error, f"Adapter entry point {entry.name!r} from distribution {entry.dist.name!r}") from error
 
 
 def _load(entry, adapter_type=ChannelAdapter):
@@ -139,10 +150,12 @@ def _load(entry, adapter_type=ChannelAdapter):
 def load_adapters(group, adapter_type, *, with_sources=False):
     """Load trusted installed extensions with the channel loader's validation.
 
-    Load and factory exceptions propagate. Channel identity extensions still
-    use their separate explicit selection and distribution pins below.
+    Load and factory exceptions propagate, and a listing error names the group
+    and the entry point. Channel identity extensions still use their separate
+    explicit selection and distribution pins below.
     """
-    loaded = tuple((entry, _load(entry, adapter_type)) for entry, _, _ in _installed(group).values())
+    loaded = tuple((entry, _load(entry, adapter_type))
+                   for entry, _, _ in _installed(group, named=True).values())
     return loaded if with_sources else tuple(adapter for _, adapter in loaded)
 
 

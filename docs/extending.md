@@ -39,9 +39,11 @@ channel or approves a contact.
 Import errors, factory exceptions and wrong result types propagate to the
 caller, as they do for a selected channel plugin. These load errors, and a
 collision with an adapter already in the registry, name the entry point and
-its distribution. Errors found while the entry points are listed do not: an
-invalid entry-point name, the same name in two distributions, or missing or
-invalid distribution metadata. A failed load does not publish
+its distribution. An error found while the entry points of these three groups
+are listed (an invalid entry-point name, the same name in two distributions,
+or missing or invalid distribution metadata) names the group and the entry
+point's name and value instead. The same listing errors for channel plugins
+keep their short text without those names. A failed load does not publish
 a partial registry. Registries reject duplicate or ambiguous identities,
 including collisions with built-ins. Successful discovery is cached for the
 process; restart to pick up changed installed distributions.
@@ -50,9 +52,10 @@ A gateway loads the model group when a request arrives on a route saved with
 the legacy `request_compatibility` name. While an installed model adapter
 fails to load or collides, each of those requests is answered with HTTP 502
 `provider wrapper unavailable`, and the gateway logs one `OWNER_MODE_EXTENSION`
-warning that names the route, the entry point and its distribution. The warning
-holds nothing from the request and not the failure's own text. Other requests
-are served and log nothing.
+warning that names the route, the entry point and its distribution, or the
+entry point's value and group when it could not be listed. The warning holds
+nothing from the request and not the failure's own text. Other requests are
+served and log nothing.
 
 Trusted code that is already imported can also call `register_engine_adapter`,
 `register_model_adapter`, `register_operator` or `register_artifact_format`.
