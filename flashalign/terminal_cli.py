@@ -113,6 +113,25 @@ def _openclaw_root(explicit=None):
     return root
 
 
+def _openclaw_config(path):
+    """Read the configuration as setup does; the native runner parses strict JSON only."""
+    try:
+        text = path.read_text(encoding='utf-8')
+        try:
+            value = json.loads(text)
+        except ValueError:
+            import json5
+            value = json5.loads(text)
+        if not isinstance(value, dict):
+            raise ValueError('not an object')
+        json.dumps(value, allow_nan=False)
+    except ValueError:
+        # Fixed text: a parser message can quote the file, which may hold credentials.
+        raise ValueError('OpenClaw configuration is not a JSON or JSON5 object the native terminal can read: '
+                         + str(path)) from None
+    return value
+
+
 def native_terminal(args):
     from owner_mode import __version__
     if not sys.stdin.isatty() or not sys.stdout.isatty():
@@ -144,7 +163,9 @@ def native_terminal(args):
         if not launcher.is_file():
             raise ValueError('Install the FlashAlign OpenClaw terminal adapter through setup first')
         command = [node, str(launcher)]
-        extra = {'root':str(_openclaw_root(args.openclaw_root))}
+        # The parsed configuration travels in the receipt only: it may hold credentials.
+        extra = {'root':str(_openclaw_root(args.openclaw_root)),
+                 'config':_openclaw_config(home/'.openclaw/openclaw.json')}
     approvals.set_channels(sorted(set(approvals.channels()) | {CHANNEL}))
     approvals.set_contact(CHANNEL, args.harness, 'uid:'+str(os.getuid()), True)
     sessions = TerminalSessionStore(approvals)
@@ -161,9 +182,12 @@ def native_terminal(args):
         sys.stdout.flush()
         child = subprocess.Popen([*command, str(read_fd)], pass_fds=(read_fd,))
         os.close(read_fd); read_fd = None
-        with os.fdopen(write_fd, 'w') as stream:
-            write_fd = None
-            json.dump({'id':row['id'], 'home':str(home), 'approvals':str(approvals.path), **extra}, stream)
+        try:
+            with os.fdopen(write_fd, 'w') as stream:
+                write_fd = None
+                json.dump({'id':row['id'], 'home':str(home), 'approvals':str(approvals.path), **extra}, stream)
+        except BrokenPipeError:
+            pass  # The runner ended before reading the receipt; its exit status is the result.
         try:
             return child.wait()
         except KeyboardInterrupt:

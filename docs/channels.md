@@ -91,6 +91,13 @@ unrelated CLI, cron or API traffic. The local
 grant lasts one hour by default, expires when the launcher exits, and can be
 bounded with `--duration SECONDS` from 60 to 86400 seconds.
 
+For OpenClaw, the launcher reads `openclaw.json` as JSON or JSON5 and hands the
+parsed configuration to the terminal over a private pipe. Comments, trailing
+commas, single quotes, unquoted keys or a byte order mark in that file do not
+stop the terminal, and the file is not changed. A terminal runner started
+without that parsed configuration reads the file as strict JSON and otherwise
+ends with one message that names the file.
+
 The command displays a session ID for revocation. It is not a signing key.
 From another terminal:
 

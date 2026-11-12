@@ -10,6 +10,12 @@ const fd = Number(process.argv[2]);
 const receipt = JSON.parse(readFileSync(fd, 'utf8'));
 process.env.OPENCLAW_STATE_DIR = join(receipt.home, '.openclaw');
 process.env.OPENCLAW_CONFIG_PATH = join(receipt.home, '.openclaw', 'openclaw.json');
-await runNativeTerminal(receipt.root, receipt.id);
+try { await runNativeTerminal(receipt.root, receipt.id, receipt.config); }
+catch (error) {
+  if (error?.reason !== 'configuration_not_strict_json') throw error;
+  // One fixed line names the file and the cause; a stack trace adds nothing here.
+  console.error(error.message);
+  process.exit(1);
+}
 // The native runtime retains background handles after its awaited shutdown.
 process.exit(0);
