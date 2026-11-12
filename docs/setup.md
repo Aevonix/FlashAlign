@@ -237,7 +237,10 @@ identity format and capabilities in trusted adapter code.
 Use the main command for local access changes. `approve`, `revoke`, `mode`,
 `channels` and `tool` call the same operations as `manage.py`. Each accepts
 `--store /path/to/approvals.json`; without it they use
-`~/.config/owner-mode/approvals.json`.
+`~/.config/owner-mode/approvals.json`. A command the store refuses, such as an
+unknown channel or an empty contact, prints one line that starts with
+`Access command stopped:` on standard error, exits with status 1 and does not
+change the store.
 
 ```sh
 flashalign approve rcs +10000000000 --account default

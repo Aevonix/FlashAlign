@@ -86,7 +86,12 @@ def cli(argv=None):
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--store", type=Path, default=Path.home() / '.config/owner-mode/approvals.json')
     args, remaining = parser.parse_known_args(argv)
-    return main(["--store", str(args.store), *remaining])
+    try:
+        return main(["--store", str(args.store), *remaining])
+    except ValueError as error:
+        # A refused channel, contact or setting ends with the refusal's fixed text, not a traceback.
+        print("Access command stopped: " + str(error), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
