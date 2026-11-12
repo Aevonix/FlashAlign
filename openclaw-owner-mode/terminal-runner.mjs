@@ -7,7 +7,13 @@ import { join } from 'node:path';
 import { runNativeTerminal } from './terminal.mjs';
 
 const fd = Number(process.argv[2]);
-const receipt = JSON.parse(readFileSync(fd, 'utf8'));
+let receipt;
+try { receipt = JSON.parse(readFileSync(fd, 'utf8')); }
+catch {
+  // Fixed text: a parser message can quote the receipt, which holds the configuration.
+  console.error('The native terminal got no complete session receipt from the launcher');
+  process.exit(1);
+}
 process.env.OPENCLAW_STATE_DIR = join(receipt.home, '.openclaw');
 process.env.OPENCLAW_CONFIG_PATH = join(receipt.home, '.openclaw', 'openclaw.json');
 try { await runNativeTerminal(receipt.root, receipt.id, receipt.config); }
