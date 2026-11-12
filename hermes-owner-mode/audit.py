@@ -72,7 +72,7 @@ def recent_decisions(paths, limit=10):
                         selected = {key: value for key, value in row.items() if key in DECISION_FIELDS
                                     and (value is None or type(value) in (str, int, float, bool))}
                         recent.append((timestamp, selected))
-                    except (ValueError, TypeError, KeyError, OverflowError):
+                    except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
                         continue
         except OSError:
             pass

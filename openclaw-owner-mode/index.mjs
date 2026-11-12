@@ -57,7 +57,7 @@ export function createAdapter(api, config, request = fetch) {
         if (action !== 'ready') recordDecision('control_request_rejected');
         throw new Error('Owner Mode control request failed');
       }
-      const reason = typeof result.reason === 'string' && /^[a-z_]+$/.test(result.reason)
+      const reason = typeof result?.reason === 'string' && /^[a-z_]+$/.test(result.reason)
         ? result.reason : 'control_request_rejected';
       const error = new Error(`Owner Mode control request failed: ${reason}`);
       error.reason = reason;

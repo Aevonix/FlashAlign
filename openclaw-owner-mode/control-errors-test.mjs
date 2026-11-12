@@ -3,14 +3,18 @@
 // Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { createAdapter } from './index.mjs';
+
+const roots = [];
+after(() => { for (const root of roots) rmSync(root, {recursive:true, force:true}); });
 
 function fixture(request) {
   const root = mkdtempSync(join(tmpdir(), 'flashalign-control-'));
+  roots.push(root);
   const key = join(root, 'control.key');
   writeFileSync(key, randomBytes(32), {mode:0o600});
   const hooks = {};

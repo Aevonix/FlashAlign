@@ -26,7 +26,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True)
     args = parser.parse_args()
-    cfg = json.loads(Path(args.config).read_text())
+    cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
     audit = AuditLog(cfg.get("audit_log") or Path(cfg["approvals_file"]).parent / "owner-mode.log")
     bridge = Bridge(ApprovalStore(cfg["approvals_file"]), cfg["control_key_file"], cfg["routes"],
                     instance_id=os.environ.get('FLASHALIGN_BRIDGE_INSTANCE'), audit=audit)

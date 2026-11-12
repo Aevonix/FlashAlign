@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import socket
@@ -41,6 +42,7 @@ from owner_mode.runtime_files import runtime_files
 from owner_mode.resources import setup_resource
 
 MODULES = runtime_files(ROOT)
+YAML_1_2_NUMBER = re.compile(r'(?:[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|0o[0-7]+|0x[0-9a-fA-F]+)$')
 
 
 def load_config(path):
@@ -162,14 +164,24 @@ def save_own(path, value):
     _save(path, value, False)
 
 
+def _yaml_text(config):
+    """YAML with key order kept. A string that a YAML 1.2 reader takes for a number is quoted."""
+    import yaml
+
+    class Dumper(yaml.SafeDumper):
+        pass
+    # The library resolves YAML 1.1 numbers only and would write 1e3, 1.5e3, 08 or 0o17 as plain text.
+    Dumper.add_implicit_resolver('tag:yaml.org,2002:float', YAML_1_2_NUMBER, list('-+.0123456789'))
+    return yaml.dump(config, Dumper=Dumper, sort_keys=False, allow_unicode=True)
+
+
 def _save(path, config, patch):
     suffix = path.suffix.lower()
     transaction = current_transaction()
     if transaction is not None:path = transaction.stage_file(path)
     path.parent.mkdir(parents=True,exist_ok=True)
     if patch and suffix in ('.yaml', '.yml'):
-        import yaml
-        text = yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
+        text = _yaml_text(config)
     elif patch and suffix in ('.json', '.json5') and path.exists():
         from owner_mode.config_edit import patch_json5
         text = patch_json5(path.read_text(encoding='utf-8'), config)

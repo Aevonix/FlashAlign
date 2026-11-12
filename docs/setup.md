@@ -75,7 +75,9 @@ backups remain available.
 
 YAML configuration stays YAML, with mapping key order and unrelated values
 preserved. Writing YAML regenerates its formatting: comments, quoting style,
-layout and original anchor names are not preserved. JSON5 is patched only at
+layout and original anchor names are not preserved. A string that a YAML 1.2
+reader would take for a number, such as `1e3` or `08`, is written quoted.
+JSON5 is patched only at
 properties changed by setup, including nested properties. Unchanged text,
 comments, quoting and key order remain intact, except that CRLF line endings
 become LF. The files setup patches are read and written as UTF-8. New properties
@@ -193,7 +195,8 @@ By default it reads Hermes's `~/.hermes/logs/owner-mode.log`, the bridge's
 `~/.config/owner-mode/owner-mode.log`, and direct gateway logs beneath
 `~/.local/share/flashalign/gateways/`. Use `--home /path/to/home` for another
 home or repeat `--log` for custom locations. Missing or unreadable logs and
-malformed JSON lines are ignored; readable decision rows are still printed.
+malformed JSON lines, including a line nested too deep to parse, are ignored;
+readable decision rows are still printed.
 A changed request body records `request_changed`; a
 bridge request with no run capability records `no_run_context`.
 
