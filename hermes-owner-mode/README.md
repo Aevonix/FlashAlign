@@ -14,6 +14,14 @@ route's policy. See [setup](../docs/setup.md) for switching modes.
 
 Equivalent manual settings:
 
+Setup writes YAML with mapping key order preserved. It regenerates layout,
+quoting and anchor names and does not retain YAML comments; the backup keeps
+the original bytes. See [configuration preservation](../docs/setup.md#run-the-wizard).
+
+With an `identity_adapter`, a store without `enabled_channels` also admits voice
+and companion; run `flashalign channels --store /absolute/path/to/approvals.json --set whatsapp rcs`
+to limit this example to `whatsapp` and `rcs`.
+
 ```yaml
 plugins:
   entries:
@@ -24,7 +32,6 @@ plugins:
         port: 18034
         approvals_file: /absolute/path/to/approvals.json
         key_file: /absolute/path/to/engine.key
-        allowed_channels: [whatsapp, rcs]
         trust:
           system_prompt: host
           tools: host
@@ -47,6 +54,24 @@ approval store also requires an owned `0600` regular file. The wizard and
 administration command create the store. Authorization rereads its mode,
 approvals and tool flags. Contact revocation takes effect without a restart in
 Verified contacts mode; it does not disable Always On.
+Use `flashalign pause` and `flashalign resume` to suspend and restore profile
+selection for either mode. Pass `--store` for a nondefault approval store.
+These commands preserve the saved contacts, channels, mode and tool settings.
+While paused, no turn counts as the owner's, so other plugins see a non-owner
+and no tool inherits owner status; resume restores that status.
+
+Saved channel selections also take effect without a restart. The plugin admits
+installed channel adapters and the policy checks the approval store on each
+call. An older configuration with `allowed_channels` still limits the plugin
+to that list; remove the key and reload the plugin, or rerun setup, to use the
+live selection for every installed adapter.
+
+Plugin managers in the same process share the first active registration's
+policy, settings and proxy. Each manager receives the guarded hooks and
+middleware. Unloading one manager keeps that proxy open until the last
+registration unloads, including when a reload registers before unloading.
+After an in-process upgrade, a new registration leaves the previous release's
+registration running and registers nothing.
 
 ## Verified contacts
 
@@ -69,12 +94,51 @@ If the adapter depends on another host plugin's identity capture, declare and
 test that deployment-specific ordering. See
 [custom identity provider ordering](../docs/custom-identity-ordering.md).
 
-`owner_turn(session_id, turn_id, tool_name=None)` reports a personally verified
+`owner_turn(session_id, turn_id, tool_name="")` reports a personally verified
 turn, optionally subject to a tool flag. Delegated work follows its own
 inherited authority path. Tool middleware preserves arguments, results and
 exceptions while applying model-selection scope.
 This API reports identity; it does not report whether Always On applies to the
 provider's next request.
+
+Request tickets bind the whole request body except transport streaming flags.
+If later middleware changes that body, the request uses stock mode and the
+decision log records `request_changed`. It does not reuse the ticket's identity
+metadata for the changed request.
+
+The plugin also emits one warning and a decision entry when a loopback URL
+uses the proxy's port but does not match a route (`route_mismatch`), request
+middleware raises (`request_middleware_exception`), process arguments match
+the first `serve_argv` argument but differ after it (`serving_process_mismatch`),
+or native ingress observation raises unexpectedly (`ingress_observation_exception`).
+Other providers and deliberate native-message rejections do not emit these
+diagnostics. A command line whose first argument matches the first
+`serve_argv` argument warns with `serving_process_mismatch` when later
+configured arguments differ, including a one-shot command such as
+`gateway status` with `serve_argv: [gateway, run]`. Other one-shot commands
+remain silent. These diagnostics contain fixed reason
+codes, not message content or exception text. They do not change fallback or
+authorization behavior.
+The provider proxy also logs one `OWNER_MODE_EXTENSION` warning for each
+request it answers with HTTP 502 because an
+[installed model adapter](../docs/extending.md) could not be loaded or
+registered; the warning names the route and the adapter's entry point, with
+nothing from the request and not the failure's own text.
+
+Use `flashalign why` to read the recent decision trail, or
+`flashalign why --log /path/to/owner-mode.log` when `audit_log` names a custom
+location. Hermes defaults to `logs/owner-mode.log` beneath its home. The
+standalone bridge and direct gateway default to `owner-mode.log` beside their
+approval store; both accept `audit_log` in their configuration. The bridge
+also records control failures and returns a fixed `reason` alongside its error.
+See [setup diagnostics](../docs/setup.md#activate-and-verify) for the reader's
+fields and options.
+
+The provider proxy opens one upstream HTTP client on the first discovery or
+model request, reuses it for later requests, and closes it on shutdown.
+Route timeouts still apply per request;
+authorization headers remain request-specific and upstream cookies are not
+retained. Streaming responses are closed after forwarding or failure.
 
 ## Trust settings
 

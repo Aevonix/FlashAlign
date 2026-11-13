@@ -590,7 +590,7 @@ class HermesModelReasoning(unittest.TestCase):
                                         'model': {'default': 'previous-model'}}))
             result = wizard.provision(home, ['hermes'], 'http://127.0.0.1:12345/v1',
                                       DEEPSEEK_MODEL['id'], 'fixture-profile', [], False)
-            config = json.loads(path.read_text())
+            config = wizard.load_config(path)
             self.assertEqual(config['agent']['reasoning_overrides'][DEEPSEEK_MODEL['id']], 'low')
             self.assertEqual(config['agent']['reasoning_effort'], 'medium')
             self.assertEqual(result['hermes_reasoning']['status'], 'adjusted')

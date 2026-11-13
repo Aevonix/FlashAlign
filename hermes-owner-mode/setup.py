@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import socket
@@ -41,17 +42,18 @@ from owner_mode.runtime_files import runtime_files
 from owner_mode.resources import setup_resource
 
 MODULES = runtime_files(ROOT)
+YAML_1_2_NUMBER = re.compile(r'(?:[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?|0o[0-7]+|0x[0-9a-fA-F]+)$')
 
 
 def load_config(path):
     if not path.exists():
         return {}
-    text = path.read_text()
+    text = path.read_text(encoding='utf-8')
     try:
         value = json.loads(text)
     except ValueError:
         try:
-            if path.suffix == '.json':
+            if path.suffix in ('.json', '.json5'):
                 import json5
                 value = json5.loads(text)
             else:
@@ -84,7 +86,8 @@ def discover(home, which=shutil.which, probe=None):
                 if provider_name == 'owner-mode':
                     bridge_path = config.get('plugins',{}).get('entries',{}).get('owner-mode',{}).get('config',{}).get('bridgeConfig')
                     if bridge_path:
-                        upstream = load_config(Path(bridge_path)).get('routes',{}).get('head',{}).get('upstream')
+                        try:upstream = load_config(Path(bridge_path)).get('routes',{}).get('head',{}).get('upstream')
+                        except ValueError:upstream = None  # Setup writes this file whole again.
                         if isinstance(upstream,str): urls.append(upstream)
                     continue
                 if isinstance(provider,dict) and isinstance(provider.get('baseUrl'),str): urls.append(provider['baseUrl'])
@@ -152,15 +155,44 @@ def free_port(preferred):
 
 
 def save_config(path, config):
+    """Save a harness configuration the user keeps: YAML stays YAML, existing JSON or JSON5 is patched."""
+    _save(path, config, True)
+
+
+def save_own(path, value):
+    """Write one of FlashAlign's own files whole as strict JSON, whatever the file held before."""
+    _save(path, value, False)
+
+
+def _yaml_text(config):
+    """YAML with key order kept. A string that a YAML 1.2 reader takes for a number is quoted."""
+    import yaml
+
+    class Dumper(yaml.SafeDumper):
+        pass
+    # The library resolves YAML 1.1 numbers only and would write 1e3, 1.5e3, 08 or 0o17 as plain text.
+    Dumper.add_implicit_resolver('tag:yaml.org,2002:float', YAML_1_2_NUMBER, list('-+.0123456789'))
+    return yaml.dump(config, Dumper=Dumper, sort_keys=False, allow_unicode=True)
+
+
+def _save(path, config, patch):
+    suffix = path.suffix.lower()
     transaction = current_transaction()
     if transaction is not None:path = transaction.stage_file(path)
     path.parent.mkdir(parents=True,exist_ok=True)
+    if patch and suffix in ('.yaml', '.yml'):
+        text = _yaml_text(config)
+    elif patch and suffix in ('.json', '.json5') and path.exists():
+        from owner_mode.config_edit import patch_json5
+        text = patch_json5(path.read_text(encoding='utf-8'), config)
+    else:
+        text = json.dumps(config, indent=2) + '\n'
     if path.exists():
         stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
         shutil.copy2(path, path.with_name(path.name+'.before-owner-mode-'+stamp))
     temp=path.with_name(path.name+'.owner-mode-new-'+secrets.token_hex(6))
     fd=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-    with os.fdopen(fd,'w') as stream:json.dump(config,stream,indent=2);stream.write('\n')
+    with os.fdopen(fd,'w',encoding='utf-8') as stream:stream.write(text)
     os.replace(temp,path)
 
 
@@ -274,7 +306,7 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
         cfg.setdefault('plugins',{}).setdefault('entries',{})['owner-mode']={'enabled':True,'settings':{
             'serve_argv':['gateway','run'],'port':ports['hermes'],'approvals_file':str(store.path),
             'managed_provider':result['hermes_provider']['name'],
-            'key_file':str(key),'allowed_channels':sorted(pending_store.channels()),
+            'key_file':str(key),
             'trust':{'system_prompt':'host','tools':'host','turn_context':'host','history':'verified_owner'},
             'routes':{'head':route}}}
         cfg.setdefault('model',{}).update(default=model,base_url=f"http://127.0.0.1:{ports['hermes']}/head/v1")
@@ -283,8 +315,9 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
         control=state/'openclaw-control.key'
         ensure_key(control)
         bridge_cfg=state/'openclaw-bridge.json'
-        save_config(bridge_cfg,{'port':ports['openclaw'],'approvals_file':str(store.path),
-                              'control_key_file':str(control),'key_file':str(key),'routes':{'head':route}})
+        save_own(bridge_cfg,{'port':ports['openclaw'],'approvals_file':str(store.path),
+                           'audit_log':str(state/'owner-mode.log'),
+                           'control_key_file':str(control),'key_file':str(key),'routes':{'head':route}})
         extension=current_transaction().stage_tree(home/'.openclaw/extensions/owner-mode')
         for filename in ['index.mjs','terminal.mjs','terminal-runner.mjs','model-params.mjs','package.json','openclaw.plugin.json','LICENSE','NOTICE.md']:
             shutil.copy2(setup_resource('openclaw-owner-mode')/filename,extension/filename)
@@ -315,6 +348,7 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
         cfg.setdefault('plugins',{}).setdefault('entries',{})['owner-mode']={
             'enabled':True,'hooks':{'allowConversationAccess':True},'config':{
             'bridgeUrl':f"http://127.0.0.1:{ports['openclaw']}",'controlKeyFile':str(control),
+            'auditLog':str(state/'owner-mode.log'),
             'python':sys.executable,'corePath':str(release),'bridgeConfig':str(bridge_cfg),'model':descriptor,
             **({'requestPolicy':request_policy} if request_policy else {})}}
         cfg.setdefault('models',{}).setdefault('providers',{})['owner-mode']={
@@ -334,9 +368,9 @@ def provision(home, selected, base_url, model, profile, contacts, tools_default,
     client_path = home/'.config/flashalign/client.json'
     if client_path.exists() and load_config(client_path).get('gateway') is True:
         client_path = home/'.config/flashalign/engine-client.json'
-    save_config(client_path, client)
+    save_own(client_path, client)
     result['client_config'] = str(client_path)
-    save_config(state/'setup-result.json',result)
+    save_own(state/'setup-result.json',result)
     return result
 
 
@@ -449,7 +483,7 @@ def main(argv=None):
             result['status'] = 'configured' if success else 'restart_failed'
         else:
             success = not args.no_restart
-        save_config(args.home/'.config/owner-mode/setup-result.json', result)
+        save_own(args.home/'.config/owner-mode/setup-result.json', result)
         console.result('Setup prepared; activation pending' if args.no_restart else
                        'Direct engine verified' if args.engine_only else 'Engine verified and gateway restart requested',
                        ok=args.no_restart or success)
@@ -461,7 +495,7 @@ def main(argv=None):
             result['restart'] = restart_harnesses(args.home, gateway_harnesses, found)
             result['status'] = 'configured' if all(row['status'] == 'restarted' for row in result['restart'].values()) else 'restart_failed'
         if args.apply or args.activate:
-            save_config(args.home/'.config/owner-mode/setup-result.json', result)
+            save_own(args.home/'.config/owner-mode/setup-result.json', result)
         print(json.dumps(result, indent=2))
         return result
     if args.detect:
@@ -621,7 +655,7 @@ def main(argv=None):
     result['activation'] = (('gateway restart completed; Always On selected for all routed requests'
                              if mode == 'always_on' else 'gateway restart completed; native channel verification required')
                             if restarted else 'gateway restart required')
-    save_config(args.home/'.config/owner-mode/setup-result.json', result)
+    save_own(args.home/'.config/owner-mode/setup-result.json', result)
     for name, item in result['restart'].items():
         label = 'Hermes' if name == 'hermes' else 'OpenClaw'
         console.result(f"{label}: {item['status']}", ok=item['status'] == 'restarted')

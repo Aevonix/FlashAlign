@@ -18,6 +18,12 @@ def main(argv=None):
     if argv[:1] and argv[0] in ('status', 'doctor', 'dashboard'):
         from .operations import main as operations_main
         return operations_main(argv)
+    if argv[:1] == ['why']:
+        from owner_mode.audit import main as why_main
+        return why_main(argv[1:])
+    if argv[:1] and argv[0] in ('pause', 'resume', 'approve', 'revoke', 'mode', 'channels', 'tool'):
+        from owner_mode.manage import cli as manage_main
+        return manage_main(argv)
     if argv[:1] == ['benchmark']:
         from .benchmark import main as benchmark_main
         return benchmark_main(argv[1:])
@@ -35,7 +41,7 @@ def main(argv=None):
         from .terminal_cli import run
         return run(argv)
     parser=argparse.ArgumentParser(prog='flashalign-client',
-        epilog='Setup: flashalign setup. Interactive commands: chat (direct engine), terminal (native Hermes/OpenClaw), sessions (list/revoke).')
+        epilog='Setup: flashalign setup. Diagnostics: status, doctor, why. Access: approve, revoke, mode, channels, tool, pause, resume. Interactive commands: chat (direct engine), terminal (native Hermes/OpenClaw), sessions (list/revoke).')
     from owner_mode import __version__
     parser.add_argument('--version', action='version', version=__version__)
     parser.add_argument('--config',type=Path,default=Path.home()/'.config/flashalign/client.json')

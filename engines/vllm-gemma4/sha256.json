@@ -12,7 +12,7 @@
   "flashalign_vllm/flashalign_replay.py": "6e2730a89fc4d70636bf3b139c5ab5eb8d7b205483ac28684aa529df6f565162",
   "flashalign_vllm/generations.py": "8415f3d07ef09abf14d7748f6a18217a4c978df2ea7ea39a7c9acad6f1e251ae",
   "flashalign_vllm/lifecycle.py": "858b8419e50d45f73b8738c94b88e67cd6b51077a39c97c3bb1a9b140017d07a",
-  "flashalign_vllm/lifecycle_service.py": "3c1622e246dd375f1e095dbfa0919cda961ac977006f777e4b231bc1dc5349ee",
+  "flashalign_vllm/lifecycle_service.py": "fd48a4e524fec8496a4dcafa019d0eb0dc2c9734ecc0ed0337aee161849e6ec3",
   "flashalign_vllm/middleware.py": "4f7d1a56130c7036a1d30cb774c1a1cb5a4edcbba42e3d69c2188cc770dbc961",
   "flashalign_vllm/plugin.py": "6f1ab827dbd8864680a49a0b5cd27bc845758a135602a9dca28461165eff282e",
   "launch.py": "1dc2067c6a2a43b8e9879771b262acf1616c57f6f2b101713de27225523f334a",

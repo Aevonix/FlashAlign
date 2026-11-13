@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Aevonix Inc and the respective contributors
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Process ownership survives duplicate module loads without sharing new grants."""
+"""Duplicate registrations share the first policy and proxy until the last unload."""
 import importlib
 import importlib.util
 import os
@@ -122,45 +122,46 @@ class ProcessRegistrationTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def test_duplicate_context_is_not_read_and_registers_nothing(self):
+    def test_duplicate_context_is_not_read_and_shares_first_registration(self):
         first = self.context(port=8123)
         runtime = plugin.register(first)
         self.verify(runtime)
         duplicate = self.context(port=9456, routes={"different": {}})
-        self.assertIsNone(plugin.register(duplicate))
+        self.assertIs(plugin.register(duplicate), runtime)
         self.assertEqual(duplicate.config_reads, 0)
-        self.assertEqual((duplicate.hooks, duplicate.middleware, duplicate.unload), ({}, {}, []))
+        self.assertEqual((duplicate.hooks, duplicate.middleware, len(duplicate.unload)),
+                         (first.hooks, first.middleware, 1))
         self.assertEqual(len(Proxy.instances), 1)
         self.assertEqual(len(self.authorities), 1)
         duplicate.close()
         self.assertTrue(plugin.owner_turn("session", "turn"))
         self.assertTrue(runtime.proxy.started)
 
-    def test_distinct_import_uses_first_owner_and_never_creates_a_proxy(self):
+    def test_distinct_import_shares_first_owner_after_first_unload(self):
         first = self.context()
         runtime = plugin.register(first)
         self.verify(runtime)
         other = self.module_copy()
         with mock.patch.object(other, "ProviderProxy", side_effect=AssertionError("duplicate proxy")):
             duplicate = self.context()
-            self.assertIsNone(other.register(duplicate))
+            self.assertIs(other.register(duplicate), runtime)
         self.assertEqual(duplicate.config_reads, 0)
         self.assertTrue(other.owner_turn("session", "turn"))
         first.close()
-        self.assertFalse(other.owner_turn("session", "turn"))
+        self.assertTrue(other.owner_turn("session", "turn"))
 
-    def test_module_reload_keeps_owner_and_saved_accessor(self):
+    def test_module_reload_shares_owner_and_keeps_saved_accessor_after_first_unload(self):
         first = self.context()
         runtime = plugin.register(first)
         self.verify(runtime)
         saved_accessor = plugin.owner_turn
         reloaded = importlib.reload(plugin)
         duplicate = self.context()
-        self.assertIsNone(reloaded.register(duplicate))
+        self.assertIs(reloaded.register(duplicate), runtime)
         self.assertTrue(saved_accessor("session", "turn"))
         self.assertTrue(reloaded.owner_turn("session", "turn"))
         first.close()
-        self.assertFalse(saved_accessor("session", "turn"))
+        self.assertTrue(saved_accessor("session", "turn"))
 
     def test_start_failure_closes_partial_resources_and_stale_hooks_are_inert(self):
         first = self.context()
@@ -215,7 +216,7 @@ class ProcessRegistrationTests(unittest.TestCase):
         self.assertTrue(plugin.owner_turn("session", "turn"))
         self.assertEqual(runtime.proxy.closed, 0)
 
-    def test_concurrent_registrations_construct_one_runtime(self):
+    def test_concurrent_registrations_share_one_runtime(self):
         barrier = threading.Barrier(4)
         contexts = [self.context() for _ in range(4)]
         def register(ctx):
@@ -223,10 +224,10 @@ class ProcessRegistrationTests(unittest.TestCase):
             return plugin.register(ctx)
         with ThreadPoolExecutor(max_workers=4) as pool:
             results = list(pool.map(register, contexts))
-        self.assertEqual(sum(result is not None for result in results), 1)
+        self.assertEqual(sum(result is not None for result in results), 4)
         self.assertEqual(len(Proxy.instances), 1)
         self.assertEqual(len(self.authorities), 1)
-        self.assertEqual(sum(len(ctx.unload) for ctx in contexts), 1)
+        self.assertEqual(sum(len(ctx.unload) for ctx in contexts), 4)
 
     def test_failed_cleanup_blocks_replacement_until_retry_finishes(self):
         first = self.context()

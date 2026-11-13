@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 
+from .flashalign_admin_server import runtime_counters
+
 from .lifecycle_support import GENERATION, TRANSACTION, checked_profile, private_directory, recovery_generations, strict_json
 
 _RUNNERS = []
@@ -232,7 +234,8 @@ def _apply(scheduler, payload):
                   "fenced": getattr(scheduler, "_flashalign_fenced", False),
                   "active_requests": len(active_requests(scheduler)),
                   "idle": bool(scheduler.is_fully_idle() and not getattr(scheduler, "_flashalign_deferred", [])),
-                  "cancellation_matches_total": getattr(scheduler, "_flashalign_cancellation_matches", 0)}
+                  "cancellation_matches_total": getattr(scheduler, "_flashalign_cancellation_matches", 0),
+                  **runtime_counters("sglang")}
         graphs = [runner.flashalign_graph.status() for runner in _RUNNERS if getattr(runner, "flashalign_graph", None) is not None]
         detail["graph"] = graphs or [{"graph_mode": "eager"}]
         installed = set().union(*(set(getattr(runner, "flashalign_installed_sites", {}).values()) for runner in _RUNNERS))

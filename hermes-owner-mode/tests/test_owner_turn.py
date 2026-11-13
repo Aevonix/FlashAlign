@@ -165,7 +165,7 @@ class TestPublished(unittest.TestCase):
         first.policy.authority = Authority()
         first.policy.begin(session_id="s", turn_id="t", user_message=OWN, platform="whatsapp")
         old_unload = self.unload[:]
-        self.assertIsNone(self.register())
+        self.assertIs(self.register(), first)
         self.assertIs(plugin_module._POLICY, first.policy)
         self.assertTrue(plugin_module.owner_turn("s", "t"))
         self.assertTrue(first.proxy.thread.is_alive())

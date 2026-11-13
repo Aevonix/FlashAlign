@@ -20,7 +20,8 @@ verified claim. It does not mark callers as verified.
 The bridge is independent of Hermes and OpenClaw. Start
 `python hermes-owner-mode/serve.py --config /private/bridge.json` with a private
 configuration containing `approvals_file`, `control_key_file`, `key_file`, `port`
-and `routes`. The control and engine keys are distinct 32-byte `0600` files.
+and `routes`. The bridge reads this file as UTF-8, whatever the locale.
+The control and engine keys are distinct 32-byte `0600` files.
 The engine key signs upstream requests; the control key authenticates native
 harness events over loopback. See the [OpenClaw adapter](../openclaw-owner-mode/index.mjs)
 for a working non-Python integration.

@@ -12,6 +12,7 @@ import sys
 import httpx
 
 from . import Client
+from .benchmark_cli import input_error, read_input
 from .benchmark_io import atomic_json, canonical, loads, private_directory, read_bytes, read_json
 from .benchmark_judge import SCORERS, judge_run, score_run, validate_judge_config
 from .benchmark_protocol import (collect_calibration_sweep, collect_run, endpoint_fingerprint,
@@ -164,11 +165,11 @@ def main(argv=None):
             command.add_argument('--strengths', type=float, nargs='+', required=True)
     args = parser.parse_args(argv)
     try:
-        options = {name: read_json(getattr(args, name)) for name in ('config', 'manifest', 'settings')}
+        options = {name: read_input('--' + name, getattr(args, name)) for name in ('config', 'manifest', 'settings')}
         options.update(prepared=args.prepared, output=args.output)
         if args.command == 'evaluate':
             result = evaluate_profile(args.profile, **options, scale=args.scale, resume=args.resume,
-                                      judge_config=read_json(args.judge_config) if args.judge_config else None)
+                                      judge_config=read_input('--judge-config', args.judge_config) if args.judge_config else None)
             complete = result['collection_valid'] and (result['collection_only'] or result.get('final_behavioral_gate_valid', False))
         else:
             result = sweep_profile(args.profile, **options, strengths=args.strengths)
@@ -176,7 +177,7 @@ def main(argv=None):
         print(canonical(result))
         return 0 if complete else 1
     except (OSError, ValueError, KeyError, TypeError) as error:
-        print('Profile evaluation stopped: '+type(error).__name__+'. Inspect private inputs and receipts.', file=sys.stderr)
+        print('Profile evaluation stopped ('+args.command+'): '+input_error(error)+'. Inspect private inputs and receipts.', file=sys.stderr)
         return 1
 
 

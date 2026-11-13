@@ -8,6 +8,24 @@ does not change the engine or its caches.
 The included tooling records responses and timings. FR443 has a pinned semantic
 judge and scoring protocol; other suites retain their own scoring procedures.
 
+## Prepare a checkout
+
+Run all commands below from the repository root. First install this checkout
+in an isolated environment with Python 3.10 or later:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install .
+```
+
+Keep this environment active for the module commands and preparation scripts.
+The install supplies `owner_mode`, whose source directory in the checkout is
+named `hermes-owner-mode`. A bare checkout alone is not an importable install.
+Replace the example input and output paths with your own private files. The
+collection commands require a separately configured, running engine; corpus,
+judge and optional tool prerequisites are described with each workflow.
+
 ## Choose the measurement
 
 | Question | Tool | What to report |
@@ -27,6 +45,15 @@ XSTest prompts are CC-BY-4.0; generated responses have separate provenance.
 Start with a predeclared small subset. Report its size and selection seed,
 completed and failed cases, and both modes. Keep all selected cases in the
 aggregate, and label any demonstration clips as selected examples.
+
+## Input errors
+
+Benchmark, profile evaluation and calibration commands report the failed
+command and FlashAlign's fixed validation message. File parsing errors name
+the input option (for example, `--settings`) and JSON line and column when
+available. Diagnostics omit input contents, private filenames and server
+response bodies. Check the named input and retain incomplete receipts; a
+validation failure does not trigger a fallback or change generation settings.
 
 ## FR443 refusal comparison
 
@@ -135,12 +162,6 @@ scorers register through trusted Python interfaces in `benchmark_suites.py` and
 `benchmark_judge.py`; input files cannot supply executable plugins.
 
 ## Record a controlled comparison
-
-Install FlashAlign in an environment with Python 3.10 or later:
-
-```sh
-python -m pip install .
-```
 
 Use a direct engine client configuration from setup. It must point to the same
 engine for both modes and use `mode: "verified"`, with the deployment key in a

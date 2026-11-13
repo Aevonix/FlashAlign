@@ -7,39 +7,22 @@ from contextvars import ContextVar
 from functools import wraps
 import inspect
 import importlib.util
-import json
+from ipaddress import ip_address
 import logging
 import os
 from pathlib import Path
 import sys
 import threading
-import time
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 from .policy import Policy, TICKET_HEADER, CONTEXT_HEADER, VerifiedTurn, flatten_request
 from .proxy import ProviderProxy
 from .contacts import ApprovalStore
+from .audit import AuditLog, warn_fallback
 from .native_authority import NativeAuthority
 
 logger = logging.getLogger(__name__)
-
-
-class AuditLog:
-    """One JSON line per model call. Callers pass fixed fields only: no prompt text, key or header value."""
-
-    def __init__(self, path):
-        self.path = Path(path).expanduser()
-        self.lock = threading.Lock()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-
-    def __call__(self, row):
-        line = json.dumps(dict({"ts": time.strftime("%Y-%m-%dT%H:%M:%S%z")}, **row), sort_keys=True) + "\n"
-        with self.lock:
-            fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-            try:
-                os.write(fd, line.encode())
-            finally:
-                os.close(fd)
 
 
 class Runtime:
@@ -120,8 +103,18 @@ class Runtime:
                 result["extra_headers"][CONTEXT_HEADER] = self.policy.context_ticket(
                     flatten_request(result), session_id=session_id, turn_id=turn_id, route=route, info=info)
                 break
+            else:
+                url = urlsplit(base_url)
+                try:
+                    loopback = ip_address(url.hostname or "").is_loopback
+                except ValueError:
+                    loopback = (url.hostname or "").rstrip(".") == "localhost"
+                if loopback and any(url.port == urlsplit(self.proxy.base_url(route)).port
+                                    for route in self.proxy.routes):
+                    warn_fallback(getattr(self.proxy, "audit", None), "route_mismatch")
         except Exception:
             result["extra_headers"].pop(TICKET_HEADER, None)
+            warn_fallback(getattr(self.proxy, "audit", None), "request_middleware_exception")
         return {"request": result, "source": "owner-mode"}
 
 def load_authority(path, settings=None):
@@ -263,28 +256,71 @@ def _retire_registration(state, owner):
             pass
 
 
+def _attach_registration(ctx, state, owner):
+    if not hasattr(owner, "registrations"):
+        return None
+    registration = object()
+    owner.registrations.add(registration)
+
+    def unload():
+        if state.pid != os.getpid():
+            return
+        with state.lock:
+            owner.registrations.discard(registration)
+            if owner.registrations:
+                return
+            owner.active = False
+        _retire_registration(state, owner)
+
+    try:
+        ctx.on_unload(unload)
+        runtime, policy = owner.runtime, owner.runtime.policy
+        ctx.register_hook("pre_llm_call", runtime.begin)
+        ctx.register_hook("post_llm_call", policy.end)
+        if owner.authority and callable(getattr(owner.authority, "hear", None)):
+            ctx.register_hook("pre_gateway_dispatch", _guard_callback(state, owner, owner.authority.hear))
+        ctx.register_hook("subagent_start", runtime.adopt)
+        ctx.register_hook("pre_tool_call", policy.steered)
+        ctx.register_middleware("llm_request", runtime.request)
+        ctx.register_middleware("tool_execution", runtime.execute_tool)
+    except BaseException:
+        unload()
+        raise
+    return owner.runtime
+
+
 def register(ctx):
     global _POLICY
     state = _process_state(create=True)
     with state.lock:
         if state.owner is not None:
-            return None
+            return _attach_registration(ctx, state, state.owner) if state.owner.active else None
         from hermes_constants import get_hermes_home
         approvals = ApprovalStore(ctx.get_config("approvals_file", "") or
                                   Path(get_hermes_home()) / "owner-mode" / "approvals.json")
+        audit = None
+        try:
+            audit = AuditLog(ctx.get_config("audit_log", "") or Path(get_hermes_home()) / "logs" / "owner-mode.log")
+        except Exception:
+            pass
         from .terminal import current_binding, TerminalAuthority
         terminal = current_binding(approvals.path)
-        if terminal is None and not serving_process(ctx.get_config("serve_argv", None)):
-            return None
+        if terminal is None:
+            expected = ctx.get_config("serve_argv", None)
+            if not serving_process(expected):
+                if isinstance(expected, list) and expected and sys.argv[1:2] == [str(expected[0])]:
+                    warn_fallback(audit, "serving_process_mismatch")
+                return None
         owner = SimpleNamespace(active=False, closed=False, closing=False,
-                                runtime=None, proxy=None, authority=None, terminal=terminal)
+                                runtime=None, proxy=None, authority=None, terminal=terminal,
+                                registrations=set())
         state.owner = owner
         try:
             try:
                 adapter = ctx.get_config("identity_adapter", "")
                 authority = (TerminalAuthority(terminal, VerifiedTurn) if terminal is not None else
                              load_authority(adapter, ctx.get_config("identity_settings", {})) if adapter
-                             else NativeAuthority(approvals.path, VerifiedTurn))
+                             else NativeAuthority(approvals.path, VerifiedTurn, audit=audit))
             except Exception as error:
                 authority = None
                 try:
@@ -294,11 +330,6 @@ def register(ctx):
             owner.authority = authority
             registry = getattr(authority, 'registry', approvals.registry)
             approvals = ApprovalStore(approvals.path, registry=registry)
-            audit = None
-            try:
-                audit = AuditLog(ctx.get_config("audit_log", "") or Path(get_hermes_home()) / "logs" / "owner-mode.log")
-            except Exception:
-                audit = None
             channels = ctx.get_config("allowed_channels", None)
             if not isinstance(channels, list):
                 channels = list(registry.ids())
@@ -327,15 +358,7 @@ def register(ctx):
                 setattr(policy, name, _guard_callback(state, owner, getattr(policy, name)))
             runtime.request = _guard_callback(state, owner, runtime.request, kind="request")
             runtime.execute_tool = _guard_callback(state, owner, runtime.execute_tool, kind="tool")
-            ctx.on_unload(lambda: _retire_registration(state, owner))
-            ctx.register_hook("pre_llm_call", runtime.begin)
-            ctx.register_hook("post_llm_call", policy.end)
-            if authority and callable(getattr(authority, "hear", None)):
-                ctx.register_hook("pre_gateway_dispatch", _guard_callback(state, owner, authority.hear))
-            ctx.register_hook("subagent_start", runtime.adopt)
-            ctx.register_hook("pre_tool_call", policy.steered)
-            ctx.register_middleware("llm_request", runtime.request)
-            ctx.register_middleware("tool_execution", runtime.execute_tool)
+            _attach_registration(ctx, state, owner)
             proxy.start()
             if state.owner is not owner or owner.closed:
                 raise RuntimeError("FlashAlign registration withdrawn during startup")

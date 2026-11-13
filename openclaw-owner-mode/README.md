@@ -4,12 +4,21 @@ Run the [setup wizard](../docs/setup.md) and select OpenClaw. It installs the
 extension, configures its model provider and registers the Python bridge as a
 harness-managed service.
 
+Setup patches changed properties in JSON5 configuration without rewriting
+unrelated text, comments or key order. Comments inside replaced values or
+removed properties are not preserved; new and replaced values use JSON
+formatting. CRLF line endings become LF, and configuration is read and written
+as UTF-8. Backups keep the original bytes.
+
 Verified contacts is the default. Always On applies the configured profile to
 every request routed through the FlashAlign provider, including all tools and
 subagents even when their alignment flags are off. It persists across restarts
 until the operator changes the mode. OpenClaw still controls message admission
 and tool execution permissions. Always On does not make a sender verified, and
 requests sent to a different provider are outside this route's policy.
+`flashalign pause` suspends profile selection, including Always On, on the next
+request. `flashalign resume` restores the saved policy. Both accept `--store`
+for an approval store outside `~/.config/owner-mode/approvals.json`.
 
 ## Verified contacts
 
@@ -45,6 +54,26 @@ accepting readiness. An existing listener from another deployment cannot stand
 in for its bridge. The service owns only the bridge process it starts. In
 Verified contacts mode, a tool scope that cannot close stays in standard mode
 until that run ends.
+
+The bridge writes model decisions and control rejection reasons to
+`owner-mode.log` beside its approval store. The extension records control
+connection failures there too (beside the control key by default), as
+`control_unavailable`. Setup gives
+both the same path; custom installations can set the bridge's `audit_log` and
+the extension's `auditLog` to the same file. Terminal bridges use the same
+audit configuration. Bridge errors carry a fixed `reason` code, without
+message content or exception details.
+Readiness polls write no failure rows; startup records `bridge_startup_failed`
+if it gives up. A non-JSON error reply to another control operation records
+`control_request_rejected` and reports `Owner Mode control request failed`.
+
+Use `flashalign why --limit 20` to read recent decisions, including the channel,
+reason and effective profile. For a custom log path, use
+`flashalign why --log /path/to/owner-mode.log`. The reader prints decision
+fields only; see [setup diagnostics](../docs/setup.md#activate-and-verify).
+The Python proxy opens an upstream HTTP client on its first forwarded request
+and reuses it until shutdown, with separate request headers and route timeouts.
+It does not retain upstream cookies.
 
 The integration targets the OpenClaw 2026.10.8 plugin interface. See
 [compatibility](../docs/compatibility.md) for runtime requirements and activation

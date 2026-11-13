@@ -26,24 +26,29 @@ authority. Their names do not make them native chat transports.
 List installed adapters and their enabled state:
 
 ```sh
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json channels
+flashalign channels
 ```
 
 The wizard offers installed adapters. To change an existing selection, supply
 the complete list you want to keep enabled, then approve the exact contact:
 
 ```sh
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  channels --set whatsapp rcs telegram
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  approve telegram 123456789 --account default
+flashalign channels --set whatsapp rcs telegram
+flashalign approve telegram 123456789 --account default
 ```
+
+These commands use `~/.config/owner-mode/approvals.json`; add `--store` to select
+another deployment. Use `flashalign revoke` with the same channel, account and
+contact to remove approval.
 
 Use the account ID supplied by your harness. Disable a channel by leaving it
 out of `channels --set`. Existing capabilities from that channel become invalid.
 SMS is also opt-in. After verifying the provider's sender authentication, add
 `sms` to the complete channel selection you want to keep, then approve the
 contact. Saved explicit channel selections are preserved across upgrades.
+Changes take effect as soon as the selection is saved. For an older Hermes
+configuration that still has `allowed_channels`, remove that setting and reload
+the plugin, or rerun setup; the saved list otherwise remains an additional limit.
 These controls apply to Verified mode. Always On uses its configured profile
 for every routed request without claiming a verified identity.
 
@@ -85,6 +90,13 @@ covered by this text binding and use standard mode. It does not authorize
 unrelated CLI, cron or API traffic. The local
 grant lasts one hour by default, expires when the launcher exits, and can be
 bounded with `--duration SECONDS` from 60 to 86400 seconds.
+
+For OpenClaw, the launcher reads `openclaw.json` as JSON or JSON5 and hands the
+parsed configuration to the terminal over a private pipe. Comments, trailing
+commas, single quotes, unquoted keys or a byte order mark in that file do not
+stop the terminal, and the file is not changed. A terminal runner started
+without that parsed configuration reads the file as strict JSON and otherwise
+ends with one message that names the file.
 
 The command displays a session ID for revocation. It is not a signing key.
 From another terminal:

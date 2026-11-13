@@ -3,6 +3,7 @@
 # Commercial licensing: see COMMERCIAL.md in the FlashAlign repository.
 """Commands for pinned corpus preparation, strict collection and scoring."""
 import argparse
+import json
 from pathlib import Path
 import sys
 
@@ -14,6 +15,39 @@ from .benchmark_suites import SUITES, prepare_suite
 
 
 COMMANDS = {"prepare", "run", "judge", "report", "compare"}
+
+
+class InputError(ValueError):
+    """A CLI input role with a diagnostic safe to display."""
+
+
+def input_error(error):
+    if isinstance(error, InputError):
+        return str(error)
+    if isinstance(error, json.JSONDecodeError):
+        return f'Invalid JSON at line {error.lineno}, column {error.colno}'
+    if isinstance(error, UnicodeError):
+        return 'Input is not valid UTF-8'
+    if isinstance(error, OSError):
+        return error.strerror or type(error).__name__
+    if isinstance(error, ValueError):
+        trace = error.__traceback__
+        while trace is not None and trace.tb_next is not None:
+            trace = trace.tb_next
+        # Only fixed validation messages from our code are public. Dynamic
+        # exception text can include a filename, response body or input value.
+        if (trace is not None
+                and trace.tb_frame.f_globals.get('__package__') in ('flashalign', 'owner_mode')
+                and str(error) in trace.tb_frame.f_code.co_consts):
+            return str(error)
+    return type(error).__name__
+
+
+def read_input(label, path, reader=read_json):
+    try:
+        return reader(path)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise InputError(label + ': ' + input_error(error)) from error
 
 
 def main(argv=None):
@@ -49,18 +83,18 @@ def main(argv=None):
             print(canonical({"suite": args.suite, "prepared": True, "model_requests": 0}))
             return 0
         if args.command == "run":
-            result = collect_run(args.prepared, read_json(args.config), read_json(args.manifest),
-                                 read_json(args.settings), args.output, scale=args.scale,
+            result = collect_run(args.prepared, read_input("--config", args.config), read_input("--manifest", args.manifest),
+                                 read_input("--settings", args.settings), args.output, scale=args.scale,
                                  attempts=args.attempts, resume=args.resume,
-                                 limits=read_json(args.limits) if args.limits is not None else None)
+                                 limits=read_input("--limits", args.limits) if args.limits is not None else None)
             print(canonical(result))
             return 0 if result["collection_valid"] else 1
         if args.command == "judge":
-            result = judge_run(args.run, read_json(args.config), args.output, resume=args.resume)
+            result = judge_run(args.run, read_input("--config", args.config), args.output, resume=args.resume)
             print(canonical({"final_behavioral_gate_valid": result["final_behavioral_gate_valid"], "modes": result["modes"]}))
             return 0 if result["final_behavioral_gate_valid"] else 1
         if args.command == "compare":
-            result = compare_reports([read_json(path) for path in args.reports])
+            result = compare_reports([read_input(f"--reports input {index + 1}", path) for index, path in enumerate(args.reports)])
         else:
             result = score_run(args.run, args.judgments)
             performance = performance_summary(args.run)
@@ -78,7 +112,7 @@ def main(argv=None):
         print(canonical({"written": True, "schema": result["schema"], "complete": complete}))
         return 0 if complete is not False else 1
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        print("Evaluation stopped: " + type(exc).__name__ + ". Inspect private inputs and receipts.", file=sys.stderr)
+        print("Evaluation stopped (" + args.command + "): " + input_error(exc) + ". Inspect private inputs and receipts.", file=sys.stderr)
         return 1
 
 

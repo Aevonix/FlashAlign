@@ -749,10 +749,10 @@ def _check_python_backend(home, spec, profile, *, model_id, proc_root=Path('/pro
     model = inspect_model(spec.get('model_path', ''))
     kit, metadata = _select_kit(kind, model, profile, spec.get('variant'))
     python = select_backend_python(spec, metadata)
-    if metadata.get('runtime') == 'docker':
-        startup_timeout = spec.get('startup_timeout', metadata.get('startup_timeout', 3600))
-        if type(startup_timeout) is not int or not 60 <= startup_timeout <= 7200:
-            raise SetupError('Native Docker startup_timeout must be an integer from 60 to 7200 seconds')
+    startup_timeout = spec.get('startup_timeout', metadata.get(
+        'startup_timeout', 3600 if metadata.get('runtime') == 'docker' else 900))
+    if type(startup_timeout) is not int or not 60 <= startup_timeout <= 7200:
+        raise SetupError('Engine startup_timeout must be an integer from 60 to 7200 seconds')
     if metadata.get('requires_private_opt_in') and spec.get('allow_research') is not True:
         raise SetupError('This CPU-prepared private engine requires explicit allow_research=true; no GPU qualification is claimed')
     if 'allow_research' in spec and type(spec['allow_research']) is not bool:
@@ -1299,7 +1299,9 @@ def _prepare_python_backend(home, spec, profile_path, *, model_id, key_file=None
               'commands': [{'argv': argv, 'env': env}], 'base_url': f'http://127.0.0.1:{port}/v1',
               'model': model_id, 'profile': profile['name'], 'key_file': str(key), 'profile_path': str(staged),
               'integration_files': files, 'drafting': drafting, 'status': 'prepared', 'install_dependencies': False,
-              'python': python, 'requirements': []}
+              'python': python, 'requirements': [],
+              'startup_timeout': spec.get('startup_timeout', checked['metadata'].get(
+                  'startup_timeout', 3600 if runtime.get('container_runtime') == 'docker' else 900))}
     result.update(control)
     if checked.get('gguf_binding'):
         result['gguf_model'] = checked['gguf_binding']
@@ -1310,7 +1312,6 @@ def _prepare_python_backend(home, spec, profile_path, *, model_id, key_file=None
     if runtime.get('container_runtime') == 'docker':
         result.update(container_runtime='docker', image=runtime.get('image'),
                       image_id=runtime.get('image_id'),
-                      startup_timeout=spec.get('startup_timeout', checked['metadata'].get('startup_timeout', 3600)),
                       replay_file=str(state/'replay/nonces.sqlite3'))
         if (staged/'RESPONSIBLE_USE.md').is_file():
             result['profile_source_terms'] = str(staged/'RESPONSIBLE_USE.md')

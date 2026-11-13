@@ -73,6 +73,25 @@ profile it runs
 harnesses. A restart failure is reported separately; saved configuration and
 backups remain available.
 
+YAML configuration stays YAML, with mapping key order and unrelated values
+preserved. Writing YAML regenerates its formatting: comments, quoting style,
+layout and original anchor names are not preserved. A string that a YAML 1.2
+reader would take for a number, such as `1e3` or `08`, is written quoted.
+JSON5 is patched only at
+properties changed by setup, including nested properties. Unchanged text,
+comments, quoting and key order remain intact, except that CRLF line endings
+become LF. The files setup patches are read and written as UTF-8. New properties
+are appended; changed arrays and scalar values use JSON formatting, so comments inside a
+replaced value or removed property are lost. Comments outside those spans
+remain. Backups retain the original file bytes.
+
+Only the harness files are patched. FlashAlign's own files (`openclaw-bridge.json`
+and `setup-result.json` under `~/.config/owner-mode/`, and the client
+configuration under `~/.config/flashalign/`) are written whole as strict JSON
+whenever setup writes them. An `openclaw-bridge.json` or `setup-result.json`
+that is empty, cut short or not UTF-8 does not stop setup and is replaced the
+next time setup writes it.
+
 Use `--no-restart` to save configuration for a later restart. `--no-color` or
 the `NO_COLOR` environment variable disables the Aevonix terminal colors.
 
@@ -157,6 +176,30 @@ send a message through the approved direct channel.
 Check that the engine response reports the installed profile in
 `X-Owner-Mode-Effective`, including when the HTTP status is 200.
 
+Read the latest routing decisions without displaying message content:
+
+```sh
+flashalign why
+flashalign why --limit 20
+flashalign why --log /path/to/owner-mode.log
+```
+
+`why` prints one JSON decision per line, oldest first, with the most recent ten
+by default. It includes the channel (`platform`), reason (`decision` and
+`identity_reason`), requested and effective profile, and timing/status fields
+when available. It never prints request bodies, messages, contact IDs, session
+IDs, credentials or unknown log fields. No rows means no recorded decisions
+were found; it does not prove that a turn used the profile.
+
+By default it reads Hermes's `~/.hermes/logs/owner-mode.log`, the bridge's
+`~/.config/owner-mode/owner-mode.log`, and direct gateway logs beneath
+`~/.local/share/flashalign/gateways/`. Use `--home /path/to/home` for another
+home or repeat `--log` for custom locations. Missing or unreadable logs and
+malformed JSON lines, including a line nested too deep to parse, are ignored;
+readable decision rows are still printed.
+A changed request body records `request_changed`; a
+bridge request with no run capability records `no_run_context`.
+
 In Verified contacts mode, check an unapproved contact too: its effective mode
 should be `off`. Try one enabled and one disabled tool, then revoke a test
 contact and confirm that subsequent requests use the standard model.
@@ -172,22 +215,49 @@ or media support in your harness. See [message bindings](message-bindings.md).
 
 ## Manage contacts and tools
 
+Pause or resume profile selection without changing the saved mode, contacts,
+channels or tool settings:
+
+```sh
+flashalign pause
+flashalign resume
+flashalign pause --store /path/to/approvals.json
+```
+
+These commands set the approval store's existing `enabled` flag. They take
+effect on subsequent requests without a restart and do not cancel requests
+already running. Pausing makes routed requests use stock mode, including in
+Always On. Resuming restores the saved policy; it does not add any approvals.
+While paused, no turn counts as the owner's, so other plugins see a non-owner
+and no tool inherits owner status; resume restores that status.
+The default store is `~/.config/owner-mode/approvals.json`. For a direct gateway
+or another installation, pass that deployment's approval-store path.
+
 Use [channel administration](channels.md) to inspect installed adapters or
 change the enabled channel selection. New transports can register their own
 identity format and capabilities in trusted adapter code.
 
-Use the included administration command with your approval-store path:
+Use the main command for local access changes. `approve`, `revoke`, `mode`,
+`channels` and `tool` call the same operations as `manage.py`. Each accepts
+`--store /path/to/approvals.json`; without it they use
+`~/.config/owner-mode/approvals.json`. A command the store refuses, such as an
+unknown channel or an empty contact, prints one line that starts with
+`Access command stopped:` on standard error, exits with status 1 and does not
+change the store.
+
+```sh
+flashalign approve rcs +10000000000 --account default
+flashalign revoke rcs +10000000000 --account default
+flashalign channels --set whatsapp rcs telegram
+flashalign tool sessions_spawn off
+flashalign mode always_on
+flashalign mode verified
+```
+
+List the full stored state with the original administration entry point:
 
 ```sh
 python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json list
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  approve rcs +15550000011 --account default
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  tool sessions_spawn off
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  mode always_on
-python3 hermes-owner-mode/manage.py --store ~/.config/owner-mode/approvals.json \
-  mode verified
 ```
 
 Use `revoke` with the same channel, account and contact to remove contact approval

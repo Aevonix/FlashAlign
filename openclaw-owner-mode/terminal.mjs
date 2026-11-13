@@ -65,10 +65,23 @@ async function nativeModule(root, prefix, marker, name) {
   throw new Error(`This OpenClaw installation has no supported native terminal ${name} interface`);
 }
 
-async function privateTerminalConfig() {
+function strictConfig(path) {
+  const text = readFileSync(path, 'utf8');
+  try { return JSON.parse(text); }
+  catch {
+    // Fixed text: a parser message can quote the file, which may hold credentials.
+    const error = new Error(`The native terminal cannot read ${path}: the file is not strict JSON ` +
+      'and the launcher supplied no parsed configuration');
+    error.reason = 'configuration_not_strict_json';
+    throw error;
+  }
+}
+
+async function privateTerminalConfig(supplied) {
   const original = process.env.OPENCLAW_CONFIG_PATH;
   if (!original) throw new Error('OpenClaw configuration path is required');
-  const config = JSON.parse(readFileSync(original, 'utf8'));
+  // The launcher reads the user's file as JSON5 and supplies the result; the file keeps its text.
+  const config = supplied ?? strictConfig(original);
   const entry = config.plugins?.entries?.['owner-mode']?.config;
   if (!entry?.bridgeConfig || !entry.corePath || !entry.python || !entry.controlKeyFile) {
     throw new Error('Configure the FlashAlign OpenClaw plugin before opening a native terminal');
@@ -130,9 +143,9 @@ async function startTerminalBridge(prepared) {
   } catch (error) { await stop(); throw error; }
 }
 
-export async function runNativeTerminal(root, session) {
+export async function runNativeTerminal(root, session, config) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('Native terminal sessions require an interactive terminal');
-  const prepared = await privateTerminalConfig();
+  const prepared = await privateTerminalConfig(config);
   try {
     const ui = await nativeModule(root, 'tui-', 'runTui', 'runTui');
     const runtime = await nativeModule(root, 'embedded-backend-', 'EmbeddedTuiBackend', 'EmbeddedTuiBackend');

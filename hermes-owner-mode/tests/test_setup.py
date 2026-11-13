@@ -195,7 +195,7 @@ class SetupFlow(unittest.TestCase):
         self.assertEqual(result['engine_check']['status'], 'active')
         self.assertEqual(result['engine_check']['standard_mode'], 'off')
         self.assertEqual(validate_profile(result['profile_path'])['name'], 'custom-owner')
-        hermes = json.loads((self.home/'.hermes/config.yaml').read_text())
+        hermes = wizard.load_config(self.home/'.hermes/config.yaml')
         openclaw = json.loads((self.home/'.openclaw/openclaw.json').read_text())
         self.assertEqual(hermes['plugins']['entries']['owner-mode']['settings']['routes']['head']['profile'], 'custom-owner')
         self.assertEqual(openclaw['agents']['defaults']['model']['primary'], 'owner-mode/bench')
@@ -273,7 +273,7 @@ class SetupFlow(unittest.TestCase):
         token = 'synthetic-test-token'
         result = wizard.provision(self.home, ['hermes'], self.engine.base_url, 'bench', 'custom-owner', [], False,
                                   self.key, api_key=token)
-        cfg = json.loads((self.home/'.hermes/config.yaml').read_text())
+        cfg = wizard.load_config(self.home/'.hermes/config.yaml')
         routes = cfg['plugins']['entries']['owner-mode']['settings']['routes']
         self.assertNotIn(token, json.dumps(cfg))
         self.assertEqual(read_api_key(routes['head']['api_key_file']), token)

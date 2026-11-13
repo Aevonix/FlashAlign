@@ -170,15 +170,35 @@ DEFAULT_ARTIFACT_FORMATS = ArtifactFormatRegistry((
 ))
 _operators = DEFAULT_OPERATORS
 _formats = DEFAULT_ARTIFACT_FORMATS
+_loaded = False
 _lock = threading.RLock()
 
 
+def _load_installed():
+    global _operators, _formats, _loaded
+    if not _loaded:
+        from .channel_plugins import entry_point_context, load_adapters
+        operators, formats = _operators, _formats
+        for entry, adapter in load_adapters('flashalign.profile_adapters', (OperatorAdapter, ArtifactFormatAdapter),
+                                           with_sources=True):
+            with entry_point_context(entry):
+                if isinstance(adapter, OperatorAdapter):
+                    operators = operators.with_adapter(adapter)
+                else:
+                    formats = formats.with_adapter(adapter)
+        _operators, _formats, _loaded = operators, formats, True
+
+
 def operator_adapters():
-    return _operators
+    with _lock:
+        _load_installed()
+        return _operators
 
 
 def artifact_formats():
-    return _formats
+    with _lock:
+        _load_installed()
+        return _formats
 
 
 def register_operator(adapter):
@@ -196,15 +216,16 @@ def register_artifact_format(adapter):
 @contextmanager
 def using_profile_adapters(*, operators=None, formats=None):
     """Scoped registry injection for trusted setup code and contract tests."""
-    global _operators, _formats
+    global _operators, _formats, _loaded
     if operators is not None and not isinstance(operators, OperatorRegistry):
         raise ValueError('Invalid operator registry')
     if formats is not None and not isinstance(formats, ArtifactFormatRegistry):
         raise ValueError('Invalid artifact registry')
     with _lock:
-        previous = _operators, _formats
+        previous = _operators, _formats, _loaded
         _operators, _formats = operators or _operators, formats or _formats
+        _loaded = True
         try:
             yield
         finally:
-            _operators, _formats = previous
+            _operators, _formats, _loaded = previous

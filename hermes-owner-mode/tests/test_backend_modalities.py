@@ -69,7 +69,7 @@ class BackendModalities(unittest.TestCase):
               mock.patch('owner_mode.automation.check_engine', return_value={'status':'active'}),
               mock.patch('owner_mode.automation.register_openclaw')):
             result = run_plan(plan, self.home, found, wizard.provision, activate=True)
-        hermes = json.loads((self.home/'.hermes/config.yaml').read_text())
+        hermes = wizard.load_config(self.home/'.hermes/config.yaml')
         openclaw = json.loads((self.home/'.openclaw/openclaw.json').read_text())
         return result, hermes, openclaw, before
 

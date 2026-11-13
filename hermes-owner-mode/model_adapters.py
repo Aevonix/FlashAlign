@@ -69,11 +69,20 @@ DEFAULT_MODEL_ADAPTERS = ModelAdapterRegistry((
 ))
 
 _registry = DEFAULT_MODEL_ADAPTERS
+_loaded = False
 _lock = threading.RLock()
 
 
 def model_adapters():
+    global _registry, _loaded
     with _lock:
+        if not _loaded:
+            from .channel_plugins import entry_point_context, load_adapters
+            registry = _registry
+            for entry, adapter in load_adapters('flashalign.model_adapters', ModelAdapter, with_sources=True):
+                with entry_point_context(entry):
+                    registry = registry.with_adapter(adapter)
+            _registry, _loaded = registry, True
         return _registry
 
 
@@ -86,12 +95,13 @@ def register_model_adapter(adapter):
 
 @contextmanager
 def using_model_adapters(registry):
-    global _registry
+    global _registry, _loaded
     if not isinstance(registry, ModelAdapterRegistry):
         raise TypeError('Expected trusted model registry')
     with _lock:
-        previous, _registry = _registry, registry
+        previous = _registry, _loaded
+        _registry, _loaded = registry, True
         try:
             yield registry
         finally:
-            _registry = previous
+            _registry, _loaded = previous

@@ -320,7 +320,7 @@ class Policy:
             return token
 
     def consume_context(self, token, body, route):
-        """Return bound audit metadata once; absent or altered capabilities give no metadata."""
+        """Return bound metadata once, or only a fixed reason if the body changed."""
         with self.lock:
             row = self.contexts.pop(token, None)
             info = self.context_infos.pop(token, {})
@@ -328,8 +328,10 @@ class Policy:
                 return {}
             issued, sid, tid, intended_route, bound = row
             actual = {k: v for k, v in body.items() if k not in {"stream", "stream_options"}}
-            if self.clock() - issued > self.ticket_ttl or intended_route != route or bound != digest(actual):
+            if self.clock() - issued > self.ticket_ttl or intended_route != route:
                 return {}
+            if bound != digest(actual):
+                return {"decision": "request_changed"}
             return dict(info)
 
     ALLOWED_KEYS = frozenset(STRUCTURAL_FIELDS | DEFAULT_REQUEST_CAPABILITIES.rules.keys())
@@ -488,7 +490,7 @@ class Policy:
     def issue(self, body, *, session_id, turn_id, profile, route):
         return self.decide(body, session_id=session_id, turn_id=turn_id, profile=profile, route=route)[0]
 
-    def consume(self, token, body, route):
+    def consume(self, token, body, route, *, info=None):
         with self.lock:
             row = self.tickets.pop(token, None)
             if not row:
@@ -499,7 +501,11 @@ class Policy:
                     or not self._active(turn)):
                 return "off"
             actual = {k: v for k, v in body.items() if k not in {"stream", "stream_options"}}
-            if digest(actual) != bound or self.check(body, turn.proof, sid, anchored):
+            if digest(actual) != bound:
+                if info is not None:
+                    info["decision"] = "request_changed"
+                return "off"
+            if self.check(body, turn.proof, sid, anchored):
                 return "off"
             return profile
 

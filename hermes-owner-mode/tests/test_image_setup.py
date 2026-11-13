@@ -61,7 +61,7 @@ class ImageSetup(unittest.TestCase):
             result=wizard.provision(home,['hermes','openclaw'],'http://127.0.0.1:12345/v1',
                 'fixture-model','fixture-profile',[],False,
                 model_info={'input':['text','image'],'contextWindow':65536,'maxTokens':32000})
-            hermes=json.loads((home/'.hermes/config.yaml').read_text())
+            hermes=wizard.load_config(home/'.hermes/config.yaml')
             openclaw=json.loads((home/'.openclaw/openclaw.json').read_text())
             self.assertTrue(hermes['model']['supports_vision'])
             self.assertTrue(result['hermes_images']['native_images'])

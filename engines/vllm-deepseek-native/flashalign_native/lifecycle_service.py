@@ -10,7 +10,7 @@ import secrets
 import threading
 from types import SimpleNamespace
 
-from owner_mode.profile_admin_server import LocalAdminServer
+from owner_mode.profile_admin_server import LocalAdminServer, runtime_counters
 from owner_mode.profile_lifecycle import GenerationBusy, LifecycleError, LifecycleManager
 from owner_mode.profile_staging import stage_validated_profile
 from .native_profile import NativeProfile as Profile
@@ -76,10 +76,8 @@ class LifecycleService:
         try:
             if self.manager.journal_was_present:
                 self.manager.recover(self.permit)
-            else:
-                for path in paths:
-                    generation = self.manager.stage(self.permit, path)
-                    self.manager.activate(self.permit, generation.artifact.name, generation.id, expected_revision=0)
+            for path, profile in zip(paths, initial):
+                self.manager.activate_configured(self.permit, path, name=profile.name)
         except BaseException:
             self.manager.close()
             raise
@@ -128,7 +126,7 @@ class LifecycleService:
             raise LifecycleError('Worker status inventory changed')
         result = {'schema':'flashalign.runtime-status.v1', 'engine':'vllm',
                   'model':self.identity[0], 'instance_id':self.instance_id,
-                  'numerical_attestation':False}
+                  'numerical_attestation':False, **runtime_counters('vllm')}
         active = {row['generation'] for row in snapshot['aliases'].values() if row['generation'] is not None}
         inventory = {row['id']:row for row in snapshot['generations']}
         if len(active) == 1:

@@ -35,6 +35,7 @@ import httpx
 
 from .auth import read_key, read_api_key
 from .contacts import ApprovalStore
+from .audit import AuditLog
 from . import engine_setup as lifecycle
 from .policy import Policy
 from .proxy import ProviderProxy
@@ -289,7 +290,8 @@ def serve(config_path):
             if body.get('model') != config['model']:
                 raise ValueError('Gateway request does not name its configured model')
             return super().prepare(route, body, ticket, info=info)
-    proxy = ConfiguredProxy(Policy(), config['routes'], config['key_file'], port=config['port'], approvals=store)
+    proxy = ConfiguredProxy(Policy(), config['routes'], config['key_file'], port=config['port'], approvals=store,
+                            audit=AuditLog(config.get('audit_log') or store.path.parent / 'owner-mode.log'))
     original = proxy.server.RequestHandlerClass
     class ReadyHandler(original):
         def do_GET(self):
