@@ -6,7 +6,6 @@ from http.cookiejar import CookieJar, DefaultCookiePolicy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
-import math
 import threading
 import time
 from urllib.parse import urlsplit
@@ -16,6 +15,8 @@ import httpx
 from .auth import read_api_key, read_key, sign
 from .policy import TICKET_HEADER, CONTEXT_HEADER, canonical, strict_json, safe_identity_reason
 from .model_metadata import compatible_request, checked_request_compatibility
+from .profile_sets import (applied, digest_check, label, route_profiles, scales_sent, selected,
+                           verified_label, wire)
 
 
 logger = logging.getLogger("owner_mode.proxy")
@@ -34,6 +35,7 @@ OWNER_400_CASES = {
     'owner_mode must be "off" or an owner-mode profile name': "bad_owner_mode_type",
 }
 MAX_ERROR_BODY = 64 * 1024
+MAX_DISCOVERY_BODY = 1024 * 1024
 
 
 def owner_400_case(raw):
@@ -45,16 +47,6 @@ def owner_400_case(raw):
         return OWNER_400_CASES.get(error.get("message"), "other_owner_mode")
     except Exception:
         return "other"
-
-
-def route_scale(route):
-    """Configured per-route gain, or None. Invalid values disable owner mode on the route (fail closed)."""
-    if "owner_mode_scale" not in route:
-        return None
-    value = route["owner_mode_scale"]
-    if type(value) not in (int, float) or not math.isfinite(value) or not 0 < value <= 1.0:
-        raise ValueError("invalid owner_mode_scale")
-    return float(value)
 
 
 def loopback_request(headers):
@@ -93,7 +85,7 @@ class ProviderProxy:
         self.policy, self.routes, self.key_file, self.audit = policy, dict(routes), key_file, audit
         self.bridge = bridge
         self.approvals = approvals if approvals is not None else getattr(bridge, "store", None)
-        self.scales, self.disabled = {}, set()
+        self.disabled = set()
         for name, route in self.routes.items():
             if not name or not name.replace("-", "").isalnum():
                 raise ValueError("invalid route")
@@ -102,11 +94,10 @@ class ProviderProxy:
                 raise ValueError("invalid upstream")
             checked_request_compatibility(route.get('request_compatibility'))
             try:
-                self.scales[name] = route_scale(route)
+                route_profiles(route)
             except ValueError:
                 # Keep serving stock traffic; this route can never sign.
                 self.disabled.add(name)
-                self.scales[name] = None
         proxy = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -168,7 +159,7 @@ class ProviderProxy:
                     return
                 route_name = path[1]
                 started = time.monotonic()
-                info, effective, actual, status = {}, "off", "none", 0
+                info, effective, actual, status, identity = {}, "off", "none", 0, {}
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
                     if not 0 < length <= MAX_BODY or self.headers.get("Transfer-Encoding"):
@@ -181,6 +172,9 @@ class ProviderProxy:
                     if proxy.bridge:
                         ticket = proxy.bridge.ticket(self.headers.get("X-Owner-Mode-Run", ""), body, route_name, info=info)
                     outbound, headers, effective = proxy.prepare(route_name, body, ticket, info=info)
+                    declared = proxy.declared(route_name)
+                    always_on = info.get("activation_mode") == "always_on"
+                    sent = selected(declared, effective)
                     # Deliberately never forward caller-supplied owner authentication.
                     authorization = self.headers.get("Authorization")
                     if authorization:
@@ -208,28 +202,74 @@ class ProviderProxy:
                                     break
                             response.close()
                             case = owner_400_case(buffered)
-                            if (effective != "off" and case == "no_profiles"
-                                    and info.get("activation_mode") != "always_on"):
-                                # Owner mode unavailable on the engine: resend the same request ONCE as stock
-                                # (owner fields removed, unsigned). This 400 never reaches the client.
-                                logger.warning("OWNER_MODE_UNAVAILABLE route=%s: engine started without owner-mode "
-                                               "profiles answered HTTP 400; resent once with owner_mode off", route_name)
-                                info = dict(info, decision="owner_mode_unavailable")
-                                effective = "off"
+                            must = always_on or any(rule.fail == "required" for rule in sent)
+                            if case == "unknown_profile" and len(sent) > 1 and not always_on:
+                                # One profile of the set is not loaded. Keep the profiles the engine has, and
+                                # every required one, and resend ONCE. A required profile the engine lacks
+                                # is rejected again and surfaced below.
+                                loaded = proxy.loaded_profiles(route_name, headers)
+                                kept = tuple(rule for rule in sent if rule.fail == "required"
+                                             or (loaded is not None and rule.name in loaded))
+                                if kept != sent:
+                                    logger.error("OWNER_MODE_PROFILE_DROPPED route=%s dropped=%s kept=%s: the engine "
+                                                 "does not have every profile of the set; resent once without the "
+                                                 "optional profiles it lacks", route_name,
+                                                 label(tuple(rule for rule in sent if rule not in kept)), label(kept))
+                                    info = dict(info, decision="owner_mode_profile_dropped")
+                                    outbound, headers, effective = proxy.signed(route_name, body, kept, headers)
+                                    sent = kept
+                                    response = send(outbound, headers)
+                                    buffered, case = None, "other"
+                                    if response.status_code == 400:
+                                        buffered = b""
+                                        for chunk in response.iter_raw():
+                                            buffered += chunk
+                                            if len(buffered) > MAX_ERROR_BODY:
+                                                buffered = buffered[:MAX_ERROR_BODY]
+                                                break
+                                        response.close()
+                                        case = owner_400_case(buffered)
+                            if (effective != "off" and not must
+                                    and case in ("no_profiles", "unknown_profile")):
+                                # The engine has none of the optional profiles sent: resend the same request
+                                # ONCE as stock (owner fields removed, unsigned). This 400 never reaches the client.
+                                if case == "no_profiles":
+                                    logger.warning("OWNER_MODE_UNAVAILABLE route=%s: engine started without owner-mode "
+                                                   "profiles answered HTTP 400; resent once with owner_mode off",
+                                                   route_name)
+                                    info = dict(info, decision="owner_mode_unavailable")
+                                else:
+                                    logger.error("OWNER_MODE_PROFILE_DROPPED route=%s dropped=%s kept=off: the engine "
+                                                 "does not have the optional profile; resent once with owner_mode off",
+                                                 route_name, effective)
+                                    info = dict(info, decision="owner_mode_profile_dropped")
+                                effective, sent = "off", ()
                                 headers = {k: v for k, v in headers.items() if k != "X-Owner-Mode-Auth"}
                                 response, buffered = send(canonical(proxy.stock(body, route_name)), headers), None
                             elif case != "other":
                                 # Never retried: a bad scale or profile must not be silently demoted to stock.
                                 logger.error("OWNER_MODE_REJECTED route=%s case=%s owner_mode_sent=%s: engine answered "
-                                             "HTTP 400; surfaced to the caller, not retried", route_name, case, effective)
+                                             "HTTP 400; surfaced to the caller, not retried%s", route_name, case,
+                                             effective, " (this engine accepts one profile per request)"
+                                             if case == "bad_owner_mode_type" and len(sent) > 1 else "")
                                 info = dict(info, decision="owner_mode_rejected_" + case)
                         status = response.status_code
                         actual = response.headers.get("X-Owner-Mode-Effective", "none")
-                        if (info.get("activation_mode") == "always_on" and 200 <= status < 300
-                                and actual != effective):
-                            info["decision"] = "always_on_unconfirmed"
-                            status = 502
-                            raise ValueError("Always On profile was not confirmed")
+                        if 200 <= status < 300 and actual != effective:
+                            confirmed = applied(sent, actual)
+                            missing = tuple(rule for rule in sent if rule not in confirmed)
+                            if always_on:
+                                info["decision"] = "always_on_unconfirmed"
+                                status = 502
+                                raise ValueError("Always On profile was not confirmed")
+                            if any(rule.fail == "required" for rule in missing):
+                                info["decision"] = "required_profile_unconfirmed"
+                                status = 502
+                                raise ValueError("Required profile was not confirmed")
+                            if missing:
+                                logger.warning("OWNER_MODE_UNCONFIRMED route=%s sent=%s effective=%s: the engine did "
+                                               "not confirm every optional profile", route_name, effective,
+                                               "off" if actual == "none" else label(confirmed))
                         from .client import response_metadata
                         identity = response_metadata(response, actual)
                         self.send_response(response.status_code)
@@ -270,7 +310,8 @@ class ProviderProxy:
                         pass
                 finally:
                     proxy.record(route_name, effective, actual, info=info, status=status,
-                                 ms=int((time.monotonic() - started) * 1000))
+                                 ms=int((time.monotonic() - started) * 1000),
+                                 digest=identity.get("profile_digest"))
 
         self.server = ThreadingHTTPServer(("127.0.0.1", int(port)), Handler)
         self.server.daemon_threads = True
@@ -318,7 +359,7 @@ class ProviderProxy:
                     self._client_context.__exit__(None, None, None)
                     self._client_context = None
 
-    def record(self, route, requested, effective, *, info=None, status=0, ms=0):
+    def record(self, route, requested, effective, *, info=None, status=0, ms=0, digest=None):
         if self.audit:
             # No prompt, caller/session identifier, key, token, header value, or
             # caller-controlled reason. Identity is used for routing, not logging.
@@ -329,8 +370,18 @@ class ProviderProxy:
             row.update({k: v for k, v in (info or {}).items() if k in row})
             row["identity_reason"] = safe_identity_reason(row["identity_reason"])
             row.update({"owner_mode_sent": requested,
-                        "owner_mode_scale_sent": self.scales.get(route) if requested != "off" else None,
-                        "effective": effective, "status": status, "ms": ms})
+                        "owner_mode_scale_sent": (scales_sent(selected(self.declared(route), requested))
+                                                  if requested != "off" else None),
+                        "effective": effective, "status": status, "ms": ms,
+                        "profile_digest": None, "digest_drift": None, "digest_unchecked": None})
+            if requested != "off":
+                # The engine's own digest for each applied profile, checked against the route's pins.
+                drifted, unchecked = digest_check(selected(self.declared(route), requested), effective, digest)
+                row.update(profile_digest=digest, digest_drift=",".join(drifted) or None,
+                           digest_unchecked=",".join(unchecked) or None)
+                if drifted:
+                    logger.error("OWNER_MODE_DIGEST_DRIFT route=%s profiles=%s: the engine applied profile content "
+                                 "that differs from the digest this route pins", route, row["digest_drift"])
             try:
                 self.audit(row)
             except Exception:
@@ -341,8 +392,47 @@ class ProviderProxy:
         result = {k: v for k, v in body.items() if k not in OWNER_FIELDS}
         return compatible_request(result, self.routes[route].get('request_compatibility')) if route else result
 
+    def declared(self, route):
+        """The route's current profile rules. A disabled or invalid route declares none."""
+        if route in self.disabled:
+            return ()
+        try:
+            return route_profiles(self.routes[route])
+        except (KeyError, ValueError):
+            return ()
+
+    def loaded_profiles(self, route, headers):
+        """Names the engine reports as loaded, or None when it cannot be asked."""
+        try:
+            auth = {"Authorization": headers["Authorization"]} if headers.get("Authorization") else {}
+            with self.client.stream("GET", self.routes[route]["upstream"].rstrip("/") + "/owner-mode/profiles",
+                                    headers=auth, timeout=httpx.Timeout(10, connect=5)) as response:
+                if response.status_code != 200:
+                    return None
+                raw = b""
+                for chunk in response.iter_bytes():
+                    raw += chunk
+                    if len(raw) > MAX_DISCOVERY_BODY:
+                        return None
+            rows = json.loads(raw)["data"]
+            return frozenset(row["name"] for row in rows if isinstance(row.get("name"), str)
+                             and row.get("loaded", True) is True)
+        except Exception:
+            return None
+
+    def signed(self, route, body, rules, headers):
+        """Final wire bytes for an already selected subset of the route's profiles; stock when it is empty."""
+        headers = {k: v for k, v in headers.items() if k != "X-Owner-Mode-Auth"}
+        if not rules:
+            return canonical(self.stock(body, route)), headers, "off"
+        final = self.stock(body, route)
+        final.update(wire(rules))
+        raw = canonical(final)
+        headers["X-Owner-Mode-Auth"] = sign(read_key(self.key_file), raw)
+        return raw, headers, label(rules)
+
     def prepare(self, route, body, ticket="", *, info=None):
-        mode = "off"
+        rules = ()
         headers = {"Content-Type": "application/json"}
         # Read the local operator policy on every request, including requests
         # without harness middleware. No identity proof is manufactured here.
@@ -357,34 +447,44 @@ class ProviderProxy:
                 info["decision"] = "always_on"
         if not enabled:
             return canonical(self.stock(body, route)), headers, "off"
+        declared = self.declared(route)
+        if always_on:
+            rules = declared
+        else:
+            # A ticket grants exactly this route's verified profiles. Profiles with the
+            # "always" rule need no ticket and no identity. A ticket is spent even when
+            # the route has nothing to grant.
+            wanted = verified_label(declared)
+            try:
+                granted = self.policy.consume(ticket, body, route, info=info) if ticket else "off"
+            except Exception:
+                granted = "off"
+            verified = wanted != "off" and granted == wanted
+            rules = tuple(rule for rule in declared if rule.access == "always" or verified)
+        required = always_on or any(rule.fail == "required" for rule in rules)
         try:
-            if always_on:
-                candidate = self.routes[route].get("profile")
-            else:
-                candidate = self.policy.consume(ticket, body, route, info=info) if ticket else "off"
-            if (candidate == self.routes[route].get("profile") and candidate != "off"
-                    and isinstance(candidate, str) and candidate
-                    and route not in self.disabled):
+            if rules:
                 key = read_key(self.key_file)
-                mode = candidate
         except Exception:
             if always_on:
                 raise ValueError("Always On requires a usable profile and signing key") from None
-            mode = "off"
-        if mode == "off":
+            if required:
+                raise ValueError("A required profile needs a usable signing key") from None
+            rules = ()
+        if not rules:
             if always_on:
                 raise ValueError("Always On requires an enabled profile for this route")
             return canonical(self.stock(body, route)), headers, "off"
         final = self.stock(body, route)
-        final["owner_mode"] = mode
-        # Gain comes ONLY from this route's configuration; any client-supplied value was dropped above.
-        if self.scales.get(route) is not None:
-            final["owner_mode_scale"] = self.scales[route]
+        # Profiles and strengths come ONLY from this route's configuration; any client-supplied value was dropped above.
+        final.update(wire(rules))
         try:
             raw = canonical(final)
             headers["X-Owner-Mode-Auth"] = sign(key, raw)
         except Exception:
             if always_on:
                 raise ValueError("Always On request could not be signed") from None
+            if required:
+                raise ValueError("A required profile could not be signed") from None
             return canonical(self.stock(body, route)), {"Content-Type": "application/json"}, "off"
-        return raw, headers, mode
+        return raw, headers, label(rules)

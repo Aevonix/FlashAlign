@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 
 from .policy import Policy, TICKET_HEADER, CONTEXT_HEADER, VerifiedTurn, flatten_request
 from .proxy import ProviderProxy
+from .profile_sets import route_profiles, verified_label
 from .contacts import ApprovalStore
 from .audit import AuditLog, warn_fallback
 from .native_authority import NativeAuthority
@@ -84,9 +85,12 @@ class Runtime:
                 if base_url.rstrip("/") != self.proxy.base_url(route):
                     continue
                 verified = self.policy.is_owner_work(session_id, turn_id)
-                profile = config.get("profile", "off")
+                try:
+                    profile = verified_label(route_profiles(config))
+                except ValueError:
+                    profile = "off"
                 ticket, reason = None, "route_profile_off"
-                if profile and profile != "off":
+                if profile != "off":
                     if any(not self.policy.inherits(name) for name in self.tool_context.get()):
                         reason = "tool_owner_mode_disabled"
                     else:

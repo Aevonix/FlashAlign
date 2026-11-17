@@ -60,6 +60,9 @@ class Engine:
         self.fail_models = {}
         self.required_authorization = None
         self.refuse_owner_mode = False  # head started with an unusable key: 400 on ANY non-off owner_mode
+        self.accept_sets = False  # True: owner_mode may be an ordered list of profile names
+        self.unapplied = set()  # profiles this engine accepts but leaves out of its effective header
+        self.digests = {}  # profile name -> digest reported for it; reported only when every applied profile has one
         engine = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -68,6 +71,9 @@ class Engine:
 
             def do_GET(self):
                 payload = json.dumps({"object": "list", "data": [{"id": "bench", "object": "model"}]}).encode()
+                if self.path.endswith("/owner-mode/profiles"):
+                    payload = json.dumps({"data": [{"name": name, "loaded": True}
+                                                   for name in sorted(engine.profiles)]}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
@@ -104,7 +110,11 @@ class Engine:
                     self.wfile.write(b'{"error":{"message":"model unavailable","type":"invalid_request_error","code":"model_not_found"}}')
                     return
                 self.send_response(200)
+                effective = ",".join(name for name in effective.split(",") if name not in engine.unapplied) or "off"
                 self.send_header("X-Owner-Mode-Effective", effective)
+                if effective != "off" and all(name in engine.digests for name in effective.split(",")):
+                    self.send_header("X-FlashAlign-Profile-Digest",
+                                     ",".join(engine.digests[name] for name in effective.split(",")))
                 with engine.lock:
                     script = engine.scripts.get(body.get("model"), [])
                     action = script.pop(0) if script else None
@@ -141,16 +151,26 @@ class Engine:
     def owner_400(self, body, effective):
         """Checks in the live engine's order d, b, a, c."""
         mode = body.get("owner_mode", "off")
-        if not isinstance(mode, str):
+        names = [mode]
+        if self.accept_sets and isinstance(mode, list):
+            names = mode
+            if not 2 <= len(names) <= 8 or len(set(map(str, names))) != len(names) or "off" in names:
+                return "d"
+        if any(not isinstance(name, str) for name in names):
             return "d"
         if "owner_mode_scale" in body:
-            scale = body["owner_mode_scale"]
-            if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not math.isfinite(scale) \
-                    or not 0 < scale <= 2.0:
+            scales = body["owner_mode_scale"]
+            if not isinstance(mode, list):
+                scales = [scales]
+            elif not isinstance(scales, list) or len(scales) != len(names):
                 return "b"
+            for scale in scales:
+                if isinstance(scale, bool) or not isinstance(scale, (int, float)) or not math.isfinite(scale) \
+                        or not 0 < scale <= 2.0:
+                    return "b"
         if mode != "off" and self.refuse_owner_mode:
             return "a"
-        if effective != "off" and effective not in self.profiles:
+        if effective != "off" and any(name not in self.profiles for name in names):
             return "c"
         return None
 
@@ -175,7 +195,7 @@ class Engine:
                 if len(self.nonces) >= 4096:
                     return "off", "nonce_capacity"
                 self.nonces[nonce] = int(ts) + 60
-            return mode, "valid"
+            return (",".join(mode) if isinstance(mode, list) else mode), "valid"
         except Exception:
             return "off", "missing_or_format"
 

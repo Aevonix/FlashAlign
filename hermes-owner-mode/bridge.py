@@ -18,6 +18,7 @@ from .auth import read_key
 from .contacts import pair as contact_pair
 from .content import content_digest, snapshot
 from .policy import Policy, VerifiedTurn, strict_json
+from .profile_sets import route_profiles, verified_label
 
 
 CONTROL_REASONS = {
@@ -291,7 +292,10 @@ class Bridge:
     def ticket(self, capability, body, route, *, info=None):
         with self.lock:
             pair = self.runs.get(capability)
-            profile = self.routes.get(route, {}).get("profile", "off")
+            try:
+                profile = verified_label(route_profiles(self.routes.get(route, {})))
+            except ValueError:
+                profile = "off"
             ticket, reason = None, "no_run_context"
             if pair:
                 if profile == "off":

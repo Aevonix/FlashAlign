@@ -139,13 +139,23 @@ def snapshot(config, *, client_factory=Client.from_config, monotonic=time.monoto
     with client_factory(config) as client:
         observed = _PROBES[adapter](client).snapshot()
     profile = settings.get('profile')
+    names = [profile] if isinstance(profile, str) else profile if isinstance(profile, list) else []
+    names = [name for name in names if _label(name)]
+    pinned = settings.get('profile_digest')
+    pinned = pinned if isinstance(pinned, str) and _DIGEST.fullmatch(pinned) else None
+    reported = (observed.get('runtime') or {}).get('profile_digest')
     inventory = observed['profiles']
-    loaded = None if inventory is None or not profile else any(row['name'] == profile and row['loaded'] for row in inventory)
+    loaded = None if inventory is None or not names else all(
+        any(row['name'] == name and row['loaded'] for row in inventory) for name in names)
     return {'schema': 'flashalign.status.v1',
             'observed_at': datetime.now(timezone.utc).isoformat(),
             'sample_time': monotonic(), 'model': _label(settings.get('model')),
-            'configured_profile': _label(profile), 'mode': settings.get('mode', 'verified'),
-            'profile_loaded': loaded, 'effective_profile': None, **observed}
+            'configured_profile': ','.join(names) or None, 'mode': settings.get('mode', 'verified'),
+            'profile_loaded': loaded, 'effective_profile': None,
+            # True only when the engine reports a digest and it differs from the configured pin.
+            'pinned_profile_digest': pinned,
+            'profile_digest_drift': None if pinned is None or reported is None else reported != pinned,
+            **observed}
 
 
 def rates(previous, current):
@@ -185,22 +195,28 @@ def doctor(config, *, probe=False, client_factory=Client.from_config):
         issues.append({'code': 'model_not_listed', 'action': 'Select a model advertised by this engine.'})
     if value['profile_loaded'] is False:
         issues.append({'code': 'profile_not_loaded', 'action': 'Load the compatible profile before selecting it.'})
+    if value['profile_digest_drift']:
+        issues.append({'code': 'profile_digest_drift',
+                       'action': 'The engine reports profile content that differs from the pinned digest. '
+                                 'Inspect the installed profile, then reinstall it or update the pin.'})
     if probe and value['reachable']:
         settings = read_json(config)
         checks = []
         with client_factory(config) as client:
-            profiles = list(dict.fromkeys([settings.get('profile')] if client.mode == 'always_on'
-                                          else [None, settings.get('profile')]))
+            configured = settings.get('profile')
+            configured = tuple(configured) if isinstance(configured, list) else configured
+            profiles = list(dict.fromkeys([configured] if client.mode == 'always_on' else [None, configured]))
             for profile in profiles:
                 if profile is None and client.mode == 'always_on':
                     continue
+                requested = ','.join(profile) if isinstance(profile, tuple) else profile or 'off'
                 try:
                     response = client.chat_response([{'role': 'user', 'content': 'Reply OK.'}],
                                                     profile=profile, max_tokens=1, temperature=0)
-                    checks.append({'requested_profile': profile or 'off', 'confirmed': True,
+                    checks.append({'requested_profile': requested, 'confirmed': True,
                                    'effective_profile': response.metadata['effective_profile']})
                 except Exception as error:
-                    checks.append({'requested_profile': profile or 'off', 'confirmed': False,
+                    checks.append({'requested_profile': requested, 'confirmed': False,
                                    'error': type(error).__name__})
                     issues.append({'code': 'activation_probe_failed',
                                    'action': 'Check profile compatibility, signing configuration and engine status.'})
@@ -218,6 +234,9 @@ def _display(value, ui):
     loaded = value.get('profile_loaded')
     ui.line('PROFILE  ' + ('Loaded' if loaded else 'Not loaded' if loaded is False else 'Inventory unavailable'))
     runtime = value.get('runtime') or {}
+    drift = value.get('profile_digest_drift')
+    ui.line('PROFILE DIGEST  ' + ('Not pinned' if not value.get('pinned_profile_digest') else 'Differs from pin'
+                                  if drift else 'Matches pin' if drift is False else 'Not reported by engine'))
     for name, label in (('graph_mode', 'GRAPH MODE'), ('generation', 'GENERATION')):
         ui.line(label + '  ' + (runtime.get(name) or 'Unavailable'))
     for name, label, unit in (('expected_sites', 'EXPECTED SITES', ''),
