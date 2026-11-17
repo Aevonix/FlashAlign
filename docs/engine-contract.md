@@ -88,11 +88,14 @@ The adapter recognizes these exact HTTP 400 messages for `invalid_owner_mode`:
 
 The engine error string for scale is matched verbatim. This adapter accepts
 only `(0, 1]`. In Verified contacts mode, a profiles-unavailable or
-unknown-profile response drops the optional profiles the engine lacks and
-causes one retry with the profiles that remain, or in standard mode when none
-remain. A missing required profile and every Always On failure are returned
-without that retry. Other errors are returned to the caller. Recheck this
-contract when upgrading an engine.
+unknown-profile response drops optional profiles and retries. For a set, the
+adapter asks the engine which profiles it has and retries once with those. An
+engine that cannot answer keeps none of the optional profiles. When no profile
+remains, or the engine rejects the reduced set as well, the adapter retries
+once in standard mode. One request causes at most two retries. A missing
+required profile and every Always On failure are returned without a retry in
+standard mode. Other errors are returned to the caller. Recheck this contract
+when upgrading an engine.
 
 ## Profile sets
 

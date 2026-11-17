@@ -23,8 +23,9 @@ logger = logging.getLogger("owner_mode.proxy")
 MAX_BODY = 64 * 1024 * 1024
 OWNER_FIELDS = ("owner_mode", "owner_mode_scale")
 # The engine's owner-related 400s share type/param/code; only `message` tells them apart. Exactly one of them means
-# "owner mode is unavailable on this server" (started without a usable key/profiles): that one alone is retried as
-# stock. Any other 400 (bad scale, unknown profile, bad type) is a configuration error and is surfaced, never demoted.
+# "owner mode is unavailable on this server" (started without a usable key/profiles): that one is retried as stock.
+# An unknown profile follows the profile's fail rule: optional profiles are dropped, a required one is surfaced.
+# Any other 400 (bad scale, bad type) is a configuration error and is surfaced, never demoted.
 # Exact full-string match, pinned to the engine build this was verified against. Any new engine build must re-check
 # these strings; a changed message means no retry and a loud surfaced 400 (the safe direction).
 UNAVAILABLE_MESSAGE = 'this server was started without owner-mode profiles: owner_mode must be "off"'
@@ -203,10 +204,13 @@ class ProviderProxy:
                             response.close()
                             case = owner_400_case(buffered)
                             must = always_on or any(rule.fail == "required" for rule in sent)
+                            reduced = False
                             if case == "unknown_profile" and len(sent) > 1 and not always_on:
-                                # One profile of the set is not loaded. Keep the profiles the engine has, and
-                                # every required one, and resend ONCE. A required profile the engine lacks
-                                # is rejected again and surfaced below.
+                                # One profile of the set is not loaded. Keep the profiles the engine lists, and
+                                # every required one, and resend. A required profile the engine lacks is
+                                # rejected again and surfaced below. If the engine rejects a set of optional
+                                # profiles again (a profile left between the two calls, or its list is wrong),
+                                # the stock resend below still serves the request: at most two resends.
                                 loaded = proxy.loaded_profiles(route_name, headers)
                                 kept = tuple(rule for rule in sent if rule.fail == "required"
                                              or (loaded is not None and rule.name in loaded))
@@ -217,7 +221,7 @@ class ProviderProxy:
                                                  label(tuple(rule for rule in sent if rule not in kept)), label(kept))
                                     info = dict(info, decision="owner_mode_profile_dropped")
                                     outbound, headers, effective = proxy.signed(route_name, body, kept, headers)
-                                    sent = kept
+                                    sent, reduced = kept, True
                                     response = send(outbound, headers)
                                     buffered, case = None, "other"
                                     if response.status_code == 400:
@@ -231,8 +235,8 @@ class ProviderProxy:
                                         case = owner_400_case(buffered)
                             if (effective != "off" and not must
                                     and case in ("no_profiles", "unknown_profile")):
-                                # The engine has none of the optional profiles sent: resend the same request
-                                # ONCE as stock (owner fields removed, unsigned). This 400 never reaches the client.
+                                # The engine takes none of the optional profiles sent: resend the same request
+                                # as stock (owner fields removed, unsigned). This 400 never reaches the client.
                                 if case == "no_profiles":
                                     logger.warning("OWNER_MODE_UNAVAILABLE route=%s: engine started without owner-mode "
                                                    "profiles answered HTTP 400; resent once with owner_mode off",
@@ -240,14 +244,16 @@ class ProviderProxy:
                                     info = dict(info, decision="owner_mode_unavailable")
                                 else:
                                     logger.error("OWNER_MODE_PROFILE_DROPPED route=%s dropped=%s kept=off: the engine "
-                                                 "does not have the optional profile; resent once with owner_mode off",
-                                                 route_name, effective)
+                                                 "%s; resent once with owner_mode off", route_name, effective,
+                                                 "rejected the profiles it listed" if reduced
+                                                 else "does not have the optional profile")
                                     info = dict(info, decision="owner_mode_profile_dropped")
                                 effective, sent = "off", ()
                                 headers = {k: v for k, v in headers.items() if k != "X-Owner-Mode-Auth"}
                                 response, buffered = send(canonical(proxy.stock(body, route_name)), headers), None
                             elif case != "other":
-                                # Never retried: a bad scale or profile must not be silently demoted to stock.
+                                # Never retried: a bad scale, a bad type or a missing required profile must not
+                                # be silently demoted to stock.
                                 logger.error("OWNER_MODE_REJECTED route=%s case=%s owner_mode_sent=%s: engine answered "
                                              "HTTP 400; surfaced to the caller, not retried%s", route_name, case,
                                              effective, " (this engine accepts one profile per request)"

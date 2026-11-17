@@ -272,6 +272,22 @@ class FailureRules(SetProxy):
         self.assertEqual(self.rows[-1]['decision'], 'owner_mode_profile_dropped')
         self.assertEqual(self.rows[-1]['owner_mode_sent'], 'off')
 
+    def test_a_reduced_set_the_engine_rejects_again_is_served_as_stock_after_two_resends(self):
+        # The engine lists a profile it then rejects, as when a profile leaves between the two calls.
+        self.engine.profiles = {'focus', 'careful'}
+        self.engine.listed = {'focus', 'owner-test'}
+        before = len(self.engine.records)
+        with self.assertLogs('owner_mode.proxy', 'ERROR') as logs:
+            response = self.send(verified=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers['X-Owner-Mode-Effective'], 'off')
+        self.assertEqual([row['body'].get('owner_mode') for row in self.engine.records[before:]],
+                         [['focus', 'careful', 'owner-test'], ['focus', 'owner-test'], None])
+        self.assertEqual(self.rows[-1]['decision'], 'owner_mode_profile_dropped')
+        self.assertEqual(self.rows[-1]['owner_mode_sent'], 'off')
+        self.assertIn('dropped=careful kept=focus,owner-test', logs.output[0])
+        self.assertIn('dropped=focus,owner-test kept=off: the engine rejected the profiles it listed', logs.output[1])
+
     def test_an_engine_without_profiles_serves_optional_sets_as_stock(self):
         self.engine.refuse_owner_mode = True
         with self.assertLogs('owner_mode.proxy', 'WARNING'):

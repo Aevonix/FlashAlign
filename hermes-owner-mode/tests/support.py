@@ -63,6 +63,7 @@ class Engine:
         self.accept_sets = False  # True: owner_mode may be an ordered list of profile names
         self.unapplied = set()  # profiles this engine accepts but leaves out of its effective header
         self.digests = {}  # profile name -> digest reported for it; reported only when every applied profile has one
+        self.listed = None  # names the discovery endpoint reports; None reports the loaded profiles
         engine = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -73,7 +74,8 @@ class Engine:
                 payload = json.dumps({"object": "list", "data": [{"id": "bench", "object": "model"}]}).encode()
                 if self.path.endswith("/owner-mode/profiles"):
                     payload = json.dumps({"data": [{"name": name, "loaded": True}
-                                                   for name in sorted(engine.profiles)]}).encode()
+                                                   for name in sorted(engine.profiles if engine.listed is None
+                                                                      else engine.listed)]}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(payload)))
