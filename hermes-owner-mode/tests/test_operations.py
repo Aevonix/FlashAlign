@@ -66,6 +66,32 @@ class OperationsTests(unittest.TestCase):
         new['runtime']['output_tokens_total'] = 0
         self.assertIsNone(rates(old, new)['output_tokens_per_second'])
 
+    def test_a_pinned_profile_digest_is_compared_with_the_engine_report(self):
+        reported = {'value': 'a' * 64}
+        def reply(request):
+            if request.url.path.endswith('/flashalign/status'):
+                body = {'schema': 'flashalign.runtime-status.v1'}
+                if reported['value']:
+                    body['profile_digest'] = reported['value']
+                return httpx.Response(200, json=body)
+            return self.reply(request)
+        factory = lambda p: Client.from_config(p, transport=httpx.MockTransport(reply))
+        self.assertIsNone(doctor(self.config, client_factory=factory)['profile_digest_drift'])
+        self.config.write_text(json.dumps({'base_url': 'http://localhost/v1', 'model': 'model', 'profile': 'profile',
+                                           'profile_digest': 'a' * 64}))
+        result = doctor(self.config, client_factory=factory)
+        self.assertIs(result['profile_digest_drift'], False)
+        self.assertTrue(result['ok'])
+        reported['value'] = 'b' * 64
+        result = doctor(self.config, client_factory=factory)
+        self.assertIs(result['profile_digest_drift'], True)
+        self.assertIn('profile_digest_drift', [issue['code'] for issue in result['issues']])
+        # An engine that reports no digest cannot be compared; that is not drift.
+        reported['value'] = None
+        result = doctor(self.config, client_factory=factory)
+        self.assertIsNone(result['profile_digest_drift'])
+        self.assertTrue(result['ok'])
+
     def test_unknown_data_is_not_treated_as_zero_or_numerical_attestation(self):
         def reply(request):
             if request.url.path.endswith('/flashalign/status'):

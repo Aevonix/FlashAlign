@@ -14,6 +14,7 @@ import httpx
 
 import test_owner_mode  # noqa: F401  (loads the plugin package as owner_mode)
 from owner_mode.policy import Policy, VerifiedTurn, digest, flatten_request
+from owner_mode.profile_sets import ProfileRule
 from owner_mode.proxy import ProviderProxy, UNAVAILABLE_MESSAGE, owner_400_case
 from owner_mode.plugin import Runtime, serving_process
 from support import Engine
@@ -289,7 +290,8 @@ class TestOwner400(GateBase):
                           audit["effective"], audit["status"]), ("owner_mode_unavailable", "off", None, "off", 200))
 
     def test_bad_scale_400_surfaces_and_is_never_demoted(self):
-        self.proxy.scales["head"] = 2.5  # e.g. an engine whose accepted range differs from the wrapper's
+        # e.g. an engine whose accepted range differs from the wrapper's
+        self.proxy.declared = lambda route: (ProfileRule("owner-test", scale=2.5),)
         with self.assertLogs("owner_mode.proxy", "ERROR") as logs:
             response, _ = self.owner_turn()
         self.assertEqual(response.status_code, 400)
@@ -299,9 +301,24 @@ class TestOwner400(GateBase):
         self.assertIn("case=bad_scale", "".join(logs.output))
         self.assertEqual((self.rows[-1]["decision"], self.rows[-1]["status"]), ("owner_mode_rejected_bad_scale", 400))
 
-    def test_unknown_profile_400_surfaces_without_retry(self):
+    def test_unknown_optional_profile_is_dropped_and_retried_once_as_stock(self):
         self.engine.profiles = set()
-        response, _ = self.owner_turn()
+        with self.assertLogs("owner_mode.proxy", "ERROR") as logs:
+            response, _ = self.owner_turn()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-Owner-Mode-Effective"], "off")
+        self.assertEqual(len(self.engine.records), 2)
+        self.assertNotIn("owner_mode", self.engine.records[-1]["body"])
+        self.assertEqual(self.engine.records[-1]["auth_reason"], "off")  # unsigned
+        self.assertIn("OWNER_MODE_PROFILE_DROPPED", "".join(logs.output))
+        self.assertEqual((self.rows[-1]["decision"], self.rows[-1]["owner_mode_sent"], self.rows[-1]["status"]),
+                         ("owner_mode_profile_dropped", "off", 200))
+
+    def test_unknown_required_profile_400_surfaces_without_retry(self):
+        self.engine.profiles = set()
+        self.proxy.declared = lambda route: (ProfileRule("owner-test", fail="required", scale=0.6),)
+        with self.assertLogs("owner_mode.proxy", "ERROR"):
+            response, _ = self.owner_turn()
         self.assertEqual(response.status_code, 400)
         self.assertEqual(len(self.engine.records), 1)
         self.assertEqual(self.rows[-1]["decision"], "owner_mode_rejected_unknown_profile")

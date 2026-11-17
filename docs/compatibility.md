@@ -112,6 +112,10 @@ serving format, operator and output sites. Compact profiles also require a
 supported basis rank; native tensor profiles require their declared storage
 format and parallel layout.
 
+A [profile set](../hermes-owner-mode/README.md#profile-sets) needs an engine
+that accepts several profiles in one request. None of the bundled engine kits
+accepts a set yet; each takes one profile per request and rejects a set.
+
 For compact profiles, setup checks each backend's `maximum_rank` before
 installation. The current GLM Flash and Qwen Flash Next SGLang adapters accept
 rank one; the other packaged vLLM, SGLang and llama.cpp adapters accept ranks up

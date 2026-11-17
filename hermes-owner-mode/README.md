@@ -49,6 +49,62 @@ Set the model base URL to `http://127.0.0.1:18034/head/v1`. Use the profile name
 installed for that engine and model. The request scale is configuration-owned
 and lies in `(0, 1]`. Client-supplied selection overrides are stripped.
 
+### Profile sets
+
+A route can apply several profiles to one request, each with its own rules.
+Replace `profile` and `owner_mode_scale` with a `profiles` list:
+
+```yaml
+        routes:
+          head:
+            upstream: http://127.0.0.1:8030/v1
+            profiles:
+              - name: FIRST_PROFILE
+                access: always
+              - name: SECOND_PROFILE
+                access: verified
+                fail: required
+                scale: 1.0
+```
+
+| Key | Values | Meaning |
+| --- | --- | --- |
+| `name` | An installed profile | Letters, digits, `.`, `_` and `-`; up to 64 characters. |
+| `access` | `verified` (default), `always` | `verified` applies the profile to turns from an approved contact, and to tools that inherit the profile. `always` applies it to every request on the route and needs no identity. |
+| `fail` | `optional` (default), `required` | When the engine does not have an `optional` profile, the request continues without it and the proxy logs `OWNER_MODE_PROFILE_DROPPED`. When the engine does not apply a `required` profile, the request fails. |
+| `scale` | A number in `(0, 1]` | Strength for this profile. The engine default applies when omitted. |
+| `digest` | 64 lowercase hex characters | Pins the profile content. See [digest pins](#digest-pins). |
+
+A route with one `profile` is a list of one `verified`, `optional` profile.
+Profiles are sent in list order, and a list holds up to eight. Always On
+applies every listed profile to every request and requires each of them.
+`flashalign pause` turns all of them off.
+
+An `always` profile changes requests from every sender, including unapproved
+contacts. Give that rule only to profiles you intend for all traffic.
+
+The engine must accept profile sets; see [compatibility](../docs/compatibility.md).
+An engine that takes one profile per request rejects a set with HTTP 400.
+
+### Digest pins
+
+An engine can report a content digest for each profile it applies. Each audit
+row records that value as `profile_digest`; a set records one digest per
+profile, in list order, joined with commas. `flashalign why` shows it.
+
+To pin a profile, copy its digest from a request you trust into the rule's
+`digest` key. A route with one profile uses a `profiles` list of one rule. The
+proxy then compares every later response with the pin:
+
+- A different digest sets `digest_drift` to the affected profile names and logs
+  `OWNER_MODE_DIGEST_DRIFT` at error level. The request still completes, so a
+  changed profile is reported and never silently stops replies.
+- A pinned profile the engine applied without reporting a digest is listed in
+  `digest_unchecked`.
+
+The digest is the engine's own identifier for the loaded content. Engines
+compute it in different ways, so pin the value your engine reports.
+
 The signing key contains 32 raw bytes in an owned `0600` regular file. The
 approval store also requires an owned `0600` regular file. The wizard and
 administration command create the store. Authorization rereads its mode,

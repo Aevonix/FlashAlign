@@ -65,6 +65,11 @@ and checks the engine's effective profile response. It raises `ProfileNotActive`
 if the requested profile was not activated. `stream_chat` provides the same check
 before exposing streamed events.
 
+With an engine that accepts [profile sets](engine-contract.md#profile-sets),
+pass an ordered list such as `profile=["first-profile", "second-profile"]`.
+`scale` is then one strength for every profile or a list with one strength per
+profile. The client requires the engine to confirm the whole set.
+
 The client expires idle pooled connections after one second. Override this with
 `Client(..., keepalive_expiry=10.0)` when the server's connection lifetime is
 known. The client does not automatically retry a request after a transport error.
