@@ -35,8 +35,11 @@ def response_metadata(response, profile):
             value[field] = item
     generation = response.headers.get('X-FlashAlign-Generation')
     if generation is not None:
-        if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,127}(,[A-Za-z0-9][A-Za-z0-9._:-]{0,127}){0,7}',
-                        generation) is None:
+        # A profile set reports one generation per profile, in set order, joined with commas.
+        # A profile without a generation leaves its position empty.
+        positions = generation.split(',')
+        if (len(positions) > 8 or not any(positions) or any(
+                item and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,127}', item) is None for item in positions)):
             raise ValueError('Invalid engine generation metadata')
         value['generation'] = generation
     return MappingProxyType(value)

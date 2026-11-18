@@ -133,6 +133,7 @@ def register():
         from vllm.models.deepseek_v4_1.attention import DeepseekV4Attention
         from .native_attach import wrap_native_setup
         wrap_native_setup(DeepseekV4Attention)
+    low_rank_paths = json.loads(os.environ.get('FLASHALIGN_DEEPSEEK_LOW_RANK_PROFILES', '[]'))
     from vllm.v1.worker.gpu.model_runner import GPUModelRunner
     from vllm.v1.worker.gpu.mm.encoder_runner import EncoderRunner
     from vllm.v1.worker.gpu.mm.encoder_cache import EncoderCache
@@ -143,6 +144,11 @@ def register():
     def load(self, *args, **kwargs):
         result = original_load(self, *args, **kwargs)
         attach(self, load_profiles(json.loads(os.environ['FLASHALIGN_DEEPSEEK_PROFILES'])))
+        if low_rank_paths:
+            # Low-rank profiles sit beside the one matrix or projection profile and can be combined with it.
+            from .delta_profile import load_delta_profiles
+            from .delta_runtime import attach_deltas
+            attach_deltas(self, load_delta_profiles(low_rank_paths))
         return result
     GPUModelRunner.load_model = load
 
@@ -153,6 +159,15 @@ def register():
         for request in scheduler_output.scheduled_new_reqs:
             self._flashalign_selections.pop(request.req_id, None)
             extra = getattr(request.sampling_params, 'extra_args', None) or {}
+            low_rank = getattr(self, '_flashalign_delta_selections', None)
+            if low_rank is not None:
+                low_rank.pop(request.req_id, None)
+            if extra.get('_flashalign_low_rank') is not None:
+                if low_rank is None:
+                    raise ValueError('Worker has no low-rank profile')
+                from .delta_runtime import parse_selection
+                low_rank[request.req_id] = parse_selection(extra['_flashalign_low_rank'],
+                                                          self._flashalign_delta_profiles)
             name = extra.get('_flashalign_profile')
             if name is not None:
                 generation = extra.get('_flashalign_generation')
@@ -182,6 +197,7 @@ def register():
     @wraps(original_remove)
     def remove(self, request_id):
         self._flashalign_selections.pop(request_id, None)
+        getattr(self, '_flashalign_delta_selections', {}).pop(request_id, None)
         return original_remove(self, request_id)
     GPUModelRunner._remove_request = remove
 
@@ -194,6 +210,9 @@ def register():
             native.prepare(batch, self._flashalign_selections)
         else:
             self._flashalign_runtime.prepare(batch, self._flashalign_selections)
+        low_rank = getattr(self, '_flashalign_delta_runtime', None)
+        if low_rank is not None:
+            low_rank.prepare(batch, self._flashalign_delta_selections)
         return batch
     GPUModelRunner.prepare_inputs = prepare
 

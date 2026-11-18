@@ -113,8 +113,11 @@ supported basis rank; native tensor profiles require their declared storage
 format and parallel layout.
 
 A [profile set](../hermes-owner-mode/README.md#profile-sets) needs an engine
-that accepts several profiles in one request. None of the bundled engine kits
-accepts a set yet; each takes one profile per request and rejects a set.
+that accepts several profiles in one request. The DeepSeek native kit accepts a
+set of its native profile and the
+[low-rank profiles](../engines/vllm-deepseek-native/README.md#low-rank-profiles-and-profile-sets)
+loaded beside it. The other bundled kits take one profile per request and
+reject a set.
 
 For compact profiles, setup checks each backend's `maximum_rank` before
 installation. The current GLM Flash and Qwen Flash Next SGLang adapters accept

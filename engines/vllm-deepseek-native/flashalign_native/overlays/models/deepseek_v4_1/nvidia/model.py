@@ -318,7 +318,12 @@ class DeepseekV4DecoderLayer(nn.Module):
                 input_ids = gather_rows(input_ids, ced_indices)
         owner_rows = ced_indices if ced_indices is not None else flashalign_row_indices
         native = getattr(self, "_flashalign_native_runtime", None)
-        if native is None:
+        if native is None and getattr(self, "_flashalign_delta", None) is not None:
+            # A layer with a low-rank profile needs its row map inside the
+            # attention operation, as the native path below already passes it.
+            x = self.attn(positions, x, None, global_kv_ready=global_kv_ready,
+                          owner_row_indices=owner_rows)
+        elif native is None:
             x = self.attn(positions, x, None, global_kv_ready=global_kv_ready)
         else:
             descriptor = get_forward_context().batch_descriptor

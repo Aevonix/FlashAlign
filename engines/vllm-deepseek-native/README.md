@@ -43,6 +43,52 @@ Create the deployment key with the main FlashAlign setup tools. The key must con
 
 `--arguments-json` accepts only bounded context, batch, capture-size and GPU-memory overrides. Unsupported flags fail before activation. Existing speculative settings must match this backend's supported DSpark7 configuration; setup does not disable speculation to make an incompatible configuration run.
 
+## Low-rank profiles and profile sets
+
+This backend can load up to seven low-rank profiles beside the native profile.
+A low-rank profile uses the `input_low_rank_delta_v1` operator. It stands for a
+low-rank change `strength * scale * Q^T B` to a writer matrix. Two sites are
+supported, with a rank of up to 128:
+
+| Site | Writer matrix | Input width |
+| --- | --- | --- |
+| `attn_out` | `layers.N.attn.wo_b.weight` | 8192 |
+| `shared_expert_out` | `layers.N.ffn.shared_experts.w2.weight` | 2304 |
+
+The model weights stay as loaded. The engine adds each selected profile's term
+to the writer's output, only on the rows of the requests that selected it.
+
+Add one `--low-rank-profile` argument per profile to the launch command:
+
+```sh
+  --low-rank-profile /path/to/first-low-rank-profile \
+  --low-rank-profile /path/to/second-low-rank-profile \
+```
+
+A request can then name one profile or a
+[profile set](../../docs/engine-contract.md#profile-sets). A set holds at most
+one native profile and any of the loaded low-rank profiles. Each low-rank
+profile takes its own strength in `(0, 1]`. The native profile still takes 1.0
+only. The engine applies every named profile or rejects the request.
+
+- The engine applies low-rank profiles in the order of the launch arguments.
+  The order of the names in a request does not change the result.
+- Rows of requests that selected no profile are not read or written by a
+  profile's kernel.
+- Prefix caches are separated by the whole set: each member's digest, its
+  strength and the order of the names.
+- `X-Owner-Mode-Effective` lists the applied names in request order. When a
+  low-rank profile is applied, `X-FlashAlign-Profile-Digest` carries one digest
+  per name in the same order.
+- Low-rank profiles load at start and are not part of profile updates. Changing
+  them needs a restart.
+- Each loaded low-rank profile adds a fixed amount of work per targeted layer
+  to every request, including requests that did not select it.
+
+The low-rank path has CPU tests for loading, authorization, cache keys and the
+four-rank arithmetic, and its kernels were checked through Triton's CPU
+interpreter in the pinned image. It has not been qualified on GPUs yet.
+
 ## Validation
 
 Run the CPU contract and lifecycle tests with:

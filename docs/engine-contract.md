@@ -112,7 +112,8 @@ The engine applies every profile of the set or rejects the request. It never
 applies part of a set. It returns `X-Owner-Mode-Effective` as the applied names
 in request order, joined with commas. When it reports profile digests or
 generations, `X-FlashAlign-Profile-Digest` and `X-FlashAlign-Generation` carry
-one value per profile in the same order, joined with commas.
+one value per profile in the same order, joined with commas. A profile without
+a generation holds an empty value at its position.
 
 An engine that takes one profile per request answers an array with the
 invalid-type error above. The adapter returns that error to the caller.
