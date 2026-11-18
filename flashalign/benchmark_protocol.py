@@ -12,7 +12,7 @@ import secrets
 import time
 
 from . import Client
-from .benchmark import RESERVED_OPTIONS, metrics, validate_manifest, validate_options
+from .benchmark import RESERVED_OPTIONS, metrics, requested, validate_manifest, validate_options
 from .benchmark_io import atomic_json, canonical, digest, private_directory, read_json, run_lock, text_digest
 from .benchmark_suites import SUITES, load_prepared
 from .evaluation_limits import LEGACY_LIMITS, LIMITED_PROTOCOL, UPPER_LIMITS, limits_for_run, validate_limits
@@ -22,24 +22,42 @@ PROTOCOL = "flashalign.strict-completion.v1"
 RECORD_SCHEMA = "flashalign.evaluation-record.v1"
 MAX_ANSWER_BYTES = 4 * 1024 * 1024
 IDENTITY_FIELDS = {"effective_profile", "profile_digest", "model_digest", "generation"}
+PROFILE_EXTRAS = ("content_digest", "format", "allowed_strengths")
 
 
 def validate_evaluation_manifest(value):
     """Keep v1 manifests usable while declaring optional runtime identity."""
-    if not isinstance(value, dict) or not isinstance(value.get("profile"), dict):
+    if not isinstance(value, dict) or not isinstance(value.get("profile"), (dict, list)):
         raise ValueError("Invalid evaluation manifest")
-    extra = {key: value["profile"][key] for key in ("content_digest", "format", "allowed_strengths") if key in value["profile"]}
-    clean = {**value, "profile": {key: item for key, item in value["profile"].items() if key not in extra}}
-    validate_manifest(clean)
-    if "content_digest" in extra and not re.fullmatch(r"[0-9a-f]{64}", str(extra["content_digest"])):
-        raise ValueError("Invalid runtime profile digest")
-    if "format" in extra and (not isinstance(extra["format"], str) or len(extra["format"]) > 128):
-        raise ValueError("Invalid profile format")
-    allowed = extra.get("allowed_strengths")
-    if allowed is not None and (not isinstance(allowed, list) or not allowed or any(
-            type(item) not in (int, float) or not math.isfinite(item) or not 0 < item <= 1 for item in allowed)):
-        raise ValueError("Invalid declared profile strengths")
+    # A profile set is a list of profile sections; each one declares its own runtime identity.
+    profiles = value["profile"] if isinstance(value["profile"], list) else [value["profile"]]
+    if any(not isinstance(profile, dict) for profile in profiles):
+        raise ValueError("Invalid evaluation manifest")
+    clean = [{key: item for key, item in profile.items() if key not in PROFILE_EXTRAS} for profile in profiles]
+    validate_manifest({**value, "profile": clean if isinstance(value["profile"], list) else clean[0]})
+    for profile in profiles:
+        extra = {key: profile[key] for key in PROFILE_EXTRAS if key in profile}
+        if "content_digest" in extra and not re.fullmatch(r"[0-9a-f]{64}", str(extra["content_digest"])):
+            raise ValueError("Invalid runtime profile digest")
+        if "format" in extra and (not isinstance(extra["format"], str) or len(extra["format"]) > 128):
+            raise ValueError("Invalid profile format")
+        allowed = extra.get("allowed_strengths")
+        if allowed is not None and (not isinstance(allowed, list) or not allowed or any(
+                type(item) not in (int, float) or not math.isfinite(item) or not 0 < item <= 1 for item in allowed)):
+            raise ValueError("Invalid declared profile strengths")
     return value
+
+
+def label(profile):
+    """The effective profile an engine reports: one name, or the names of a set joined with commas."""
+    return ",".join(profile) if isinstance(profile, list) else profile
+
+
+def digest_confirmed(reported, expected):
+    """One declared digest, or for a set one per profile in set order. None leaves a position unchecked."""
+    wanted = expected if isinstance(expected, list) else [expected]
+    parts = reported.split(",") if isinstance(reported, str) else []
+    return len(parts) == len(wanted) and all(want is None or want == part for want, part in zip(wanted, parts))
 
 
 def validate_settings(options):
@@ -76,10 +94,10 @@ def collect(client, case, profile, options, *, scale, expected_digest=None, cloc
     try:
         with client.stream_chat_response([{"role": "user", "content": case["prompt"]}],
                                          profile=profile, scale=scale, **options) as stream:
-            if not isinstance(stream.metadata, Mapping) or stream.metadata.get("effective_profile") != profile:
+            if not isinstance(stream.metadata, Mapping) or stream.metadata.get("effective_profile") != label(profile):
                 raise ValueError("EffectiveProfileMismatch")
             metadata = {key: stream.metadata[key] for key in IDENTITY_FIELDS if key in stream.metadata}
-            if expected_digest is not None and metadata.get("profile_digest") != expected_digest:
+            if expected_digest is not None and not digest_confirmed(metadata.get("profile_digest"), expected_digest):
                 raise ValueError("ProfileDigestMismatch")
             for item in stream:
                 if not isinstance(item, dict):
@@ -222,7 +240,7 @@ def _attempts(root, ordinal, expected, fingerprint, run_id, model, *, limits=Non
         if record["status"] == "valid" and (not record.get("answer", "").strip() or
                 record.get("transport_complete") is not True or record.get("metrics", {}).get("finish_reason") != "stop" or
                 record.get("response_models") != [model] or
-                record.get("metadata", {}).get("effective_profile") != expected["requested_profile"]):
+                record.get("metadata", {}).get("effective_profile") != label(expected["requested_profile"])):
             raise ValueError("Invalid completed collection record")
         output.append(record)
     if {item.name for item in files if item.name.endswith(".end.json")} - {start.name.replace(".begin.", ".end.") for start in starts}:
@@ -246,7 +264,7 @@ def read_collection(root, *, registry=SUITES):
     suite, cases, prepared = load_prepared(root / "corpus", registry=registry)
     if descriptor.get("suite") != suite.identity() or descriptor.get("cases_sha256") != prepared["cases_sha256"]:
         raise ValueError("Run corpus mismatch")
-    expected = records_for(suite, cases, descriptor["manifest"]["profile"]["name"])
+    expected = records_for(suite, cases, requested(descriptor["manifest"], descriptor.get("scale"))[0])
     attempts_root = root / "attempts"
     if any(not re.fullmatch(r"[0-9]{6}", item.name) or int(item.name) >= len(expected) for item in attempts_root.iterdir()):
         raise ValueError("Unexpected collection record")
@@ -286,14 +304,24 @@ def collect_run(prepared_path, config, manifest, settings, output, *, scale=1., 
         raise ValueError("Declare one to three collection attempts before starting")
     if type(scale) not in (int, float) or not math.isfinite(scale) or not 0 < scale <= 1:
         raise ValueError("Invalid requested profile strength")
-    declared_strengths = manifest["profile"].get("allowed_strengths")
-    if declared_strengths is not None and scale not in declared_strengths:
-        raise ValueError("Requested strength is outside the artifact declaration")
-    if manifest["profile"].get("format") == "flashalign.native_wo_b.v1" and scale != 1:
-        raise ValueError("Native matrix profiles require strength one")
+    if isinstance(manifest["profile"], list) and scale != 1:
+        raise ValueError("Give each profile of a set its strength in the manifest")
+    profile, strength = requested(manifest, scale)
+    sections = manifest["profile"] if isinstance(manifest["profile"], list) else [manifest["profile"]]
+    for section, item in zip(sections, strength if isinstance(strength, list) else [strength]):
+        declared_strengths = section.get("allowed_strengths")
+        if declared_strengths is not None and item not in declared_strengths:
+            raise ValueError("Requested strength is outside the artifact declaration")
+        if section.get("format") == "flashalign.native_wo_b.v1" and item != 1:
+            raise ValueError("Native matrix profiles require strength one")
+    declared_digests = [section.get("content_digest") for section in sections]
+    if not any(declared_digests):
+        declared_digests = None
+    elif not isinstance(manifest["profile"], list):
+        declared_digests = declared_digests[0]
     suite, cases, prepared = load_prepared(prepared_path, registry=registry)
     descriptor = {"suite": suite.identity(), "cases_sha256": prepared["cases_sha256"], "manifest": manifest,
-                  "settings": settings, "scale": scale, "maximum_attempts": attempts,
+                  "settings": settings, "scale": strength, "maximum_attempts": attempts,
                   "subject_endpoint_sha256": endpoint_fingerprint(config["base_url"]),
                   "order": "alternating-pairs-source-order-v1", "protocol": protocol}
     if declared_limits is not None:
@@ -332,11 +360,12 @@ def collect_run(prepared_path, config, manifest, settings, output, *, scale=1., 
                     begin = {"fingerprint": run["fingerprint"], "run_id": run["run_id"], "record": expected, "attempt": attempt,
                              "started_utc": datetime.now(timezone.utc).isoformat()}
                     atomic_json(folder / f"{attempt:03d}.begin.json", begin, replace=False)
-                    result = collect(client, expected, expected["requested_profile"], settings, scale=scale,
-                                     expected_digest=manifest["profile"].get("content_digest") if expected["mode"] == "profile" else None,
-                                     limits=declared_limits)
+                    active = expected["mode"] == "profile"
+                    result = collect(client, expected, expected["requested_profile"], settings,
+                                     scale=strength if active else 1.,
+                                     expected_digest=declared_digests if active else None, limits=declared_limits)
                     record = {"schema": RECORD_SCHEMA, "run_id": run["run_id"], "fingerprint": run["fingerprint"],
-                              **expected, "attempt": attempt, "scale": scale if expected["mode"] == "profile" else None,
+                              **expected, "attempt": attempt, "scale": strength if active else None,
                               **result}
                     record["record_sha256"] = digest(record)
                     if declared_limits is not None and len((canonical(record) + "\n").encode()) > declared_limits["max_record_bytes"]:
@@ -374,7 +403,9 @@ def collect_calibration_sweep(prepared, config, manifest, settings, output, *, s
     suite, _, _ = load_prepared(prepared, registry=registry)
     if suite.purpose != "calibration":
         raise ValueError("Strength calibration requires a separate calibration corpus")
-    declared = manifest.get("profile", {}).get("allowed_strengths")
+    if not isinstance(manifest.get("profile"), dict):
+        raise ValueError("Strength calibration takes one profile, not a profile set")
+    declared = manifest["profile"].get("allowed_strengths")
     if not isinstance(strengths, list) or not strengths or not isinstance(declared, list):
         raise ValueError("Calibration needs explicit artifact-supported candidate strengths")
     if len(strengths) > 32 or any(type(value) not in (int, float) or not math.isfinite(value) for value in strengths):

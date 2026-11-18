@@ -5,6 +5,7 @@
 - Profile sets: a route can apply up to eight profiles to one request, each with its own access rule, failure rule and strength.
 - An optional profile the engine does not have is dropped and logged; the request continues with the remaining profiles. Mark a profile `fail: required` to fail the request instead. This replaces the HTTP 400 that Verified contacts mode returned for an unknown profile.
 - The direct client accepts a list of profile names and a strength per profile.
+- Benchmarks measure a profile set: the manifest lists the profiles of the set with their strengths, for the paired recorder and for the FR443 collection, report and comparison.
 - Digest pins: a profile rule can pin the content digest the engine reports. Audit rows record the reported digests, and a mismatch is logged as `OWNER_MODE_DIGEST_DRIFT`. `status` and `doctor` compare a pinned `profile_digest` in the client configuration.
 
 ## 1.2.0
