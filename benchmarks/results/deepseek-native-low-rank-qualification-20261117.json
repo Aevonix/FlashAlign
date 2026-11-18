@@ -340,9 +340,49 @@
      "change_percent": -5.9
     }
    }
+  },
+  "low_rank_loaded_against_kit_without": {
+   "method": "the same recorder on the kit without low-rank profiles and on the kit with both loaded, one engine start each; no low-rank profile selected",
+   "selections": {
+    "none": {
+     "requests_per_kit": 60,
+     "completed_per_kit": [
+      60,
+      60
+     ],
+     "first_token_seconds": {
+      "without_low_rank_median": 0.2681,
+      "low_rank_loaded_median": 0.2746,
+      "change_percent": 2.4
+     },
+     "decode_tokens_per_second": {
+      "without_low_rank_median": 351.4482,
+      "low_rank_loaded_median": 360.765,
+      "change_percent": 2.7
+     }
+    },
+    "native": {
+     "requests_per_kit": 60,
+     "completed_per_kit": [
+      60,
+      60
+     ],
+     "first_token_seconds": {
+      "without_low_rank_median": 0.2703,
+      "low_rank_loaded_median": 0.2768,
+      "change_percent": 2.4
+     },
+     "decode_tokens_per_second": {
+      "without_low_rank_median": 350.6554,
+      "low_rank_loaded_median": 349.9809,
+      "change_percent": -0.2
+     }
+    }
+   }
   }
  },
  "limits": {
+  "speed_spread_between_engine_starts_measured": false,
   "equal_text_for_unselected_rows_shown": false,
   "log_probability_checks_beyond_first_token": false,
   "native_with_one_low_rank_profile_tested": false,

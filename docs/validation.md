@@ -287,6 +287,14 @@ Decode speed with profiles selected was 3% to 7% lower than with none in the
 paired recorder (20 cases, three repetitions, one request at a time). Time to
 first token changed by less than 1%.
 
+The same recorder also ran on the kit without low-rank profiles, one engine
+start per kit. With nothing selected, the kit with both profiles loaded reached
+the first token in 0.275 seconds against 0.268 and decoded 361 tokens per
+second against 351. With the native profile selected, decode speed on the two
+kits was within 0.2%. Loading low-rank profiles that a request does not select
+showed no decode cost in this comparison. The spread between engine starts was
+not measured, so differences of this size are not attributed to the profiles.
+
 GPU activation through Docker, tensor-parallel partitions that need padding,
 ranks above 24 inside the engine, more than two low-rank profiles and the two
 selections of the native profile with a single low-rank profile were outside
