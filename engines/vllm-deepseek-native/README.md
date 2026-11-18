@@ -81,7 +81,8 @@ only. The engine applies every named profile or rejects the request.
   low-rank profile is applied, `X-FlashAlign-Profile-Digest` carries one digest
   per name in the same order.
 - Low-rank profiles load at start and are not part of profile updates. Changing
-  them needs a restart.
+  them needs a restart. They stay selectable while a profile update has the
+  native profile deactivated.
 - Each loaded low-rank profile adds a fixed amount of work per targeted layer
   to every request, including requests that did not select it.
 

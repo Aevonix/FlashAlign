@@ -149,6 +149,39 @@ def test_a_name_an_update_loaded_a_second_time_is_rejected_not_guessed():
     assert authorize({'owner_mode': ['main', 'careful']}, gate=gate, nonce='9' * 32).names == ('main', 'careful')
 
 
+def test_low_rank_profiles_stay_reachable_while_the_other_profile_is_deactivated():
+    # A profile update can leave the gate without any profile; the static low-rank profiles are still loaded.
+    gate = Gate({}, KEY)
+    applied = authorize({'owner_mode': ['focus', 'careful'], 'owner_mode_scale': [1, 0.5]}, gate=gate, nonce='1' * 32)
+    assert (applied.primary, applied.names) == (None, ('focus', 'careful'))
+    assert authorize({'owner_mode': 'focus'}, gate=gate, nonce='2' * 32).low_rank == (Selection('focus', '2' * 64, 1.0),)
+    # The same checks as ever: no signature, a replayed nonce and a signature over other bytes are served as stock.
+    assert authorize({'owner_mode': ['focus', 'careful']}, gate=gate, sign=False) == Applied()
+    assert authorize({'owner_mode': 'focus'}, gate=gate, nonce='2' * 32) == Applied()
+    raw, headers = signed({'owner_mode': 'focus'}, '3' * 32)
+    assert authorize_set(gate, LOW_RANK, raw + b' ', {'owner_mode': 'focus'}, headers) == Applied()
+    # The deactivated profile is unknown, not a reason to call the whole server empty.
+    for index, mode in enumerate(('main', ['main', 'focus'])):
+        with pytest.raises(FieldError, match='names no profile this server loaded'):
+            authorize({'owner_mode': mode}, gate=gate, nonce=str(index + 4) * 32)
+
+
+def test_a_server_without_any_profile_says_so():
+    for mode in ('main', ['main', 'focus']):
+        raw, headers = signed({'owner_mode': mode})
+        with pytest.raises(FieldError, match='started without owner-mode profiles'):
+            authorize_set(Gate({}, KEY), {}, raw, {'owner_mode': mode}, headers)
+
+
+def test_the_gate_authenticates_without_naming_a_profile():
+    gate = Gate({}, KEY)
+    raw, headers = signed({'owner_mode': 'anything'}, '5' * 32)
+    assert gate.authenticate(raw + b' ', headers) is False
+    assert gate.authenticate(raw, []) is False
+    assert gate.authenticate(raw, headers) is True
+    assert gate.authenticate(raw, headers) is False
+
+
 def test_no_caller_salt_reaches_a_set_namespace():
     applied = Applied(None, (Selection('focus', '2' * 64, 1.0),), ('focus',))
     target = set_cache_key(applied, PRIMARY, 'model', None)

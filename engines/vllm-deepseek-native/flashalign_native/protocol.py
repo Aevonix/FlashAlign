@@ -53,23 +53,27 @@ class Gate:
             return None
         if not self.profiles:
             raise FieldError('this server was started without owner-mode profiles: owner_mode must be "off"')
-        now = self.clock()
-        auth = authenticate_header(self.key, raw, headers, now=now)
-        if auth is None:
+        if not self.authenticate(raw, headers):
             return None
-        stamp, nonce = auth.timestamp, auth.nonce
-        if self.replay_store is not None:
-            if not self.replay_store.consume(nonce, int(stamp)+61, now=now):
-                return None
-        else:
-            with self.lock:
-                self.nonces = {n:until for n,until in self.nonces.items() if until >= now}
-                if nonce in self.nonces or len(self.nonces) >= 100_000:
-                    return None
-                self.nonces[nonce] = int(stamp)+61
         if mode not in self.profiles:
             raise FieldError('owner_mode names no profile this server loaded')
         return Selection(mode, self.profiles[mode].digest, float(scale))
+
+    def authenticate(self, raw, headers):
+        """Check the signature header over the raw body and consume its nonce. Names no profile."""
+        now = self.clock()
+        auth = authenticate_header(self.key, raw, headers, now=now)
+        if auth is None:
+            return False
+        stamp, nonce = auth.timestamp, auth.nonce
+        if self.replay_store is not None:
+            return bool(self.replay_store.consume(nonce, int(stamp)+61, now=now))
+        with self.lock:
+            self.nonces = {n:until for n,until in self.nonces.items() if until >= now}
+            if nonce in self.nonces or len(self.nonces) >= 100_000:
+                return False
+            self.nonces[nonce] = int(stamp)+61
+        return True
 
 
 class Profile:

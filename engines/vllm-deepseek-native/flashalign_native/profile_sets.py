@@ -60,20 +60,21 @@ def authorize_set(gate, low_rank, raw, body, headers):
     mode = body.get('owner_mode', 'off')
     if isinstance(mode, list):
         names, scales = parse_set(body)
-    elif isinstance(mode, str) and mode in low_rank:
+    elif isinstance(mode, str) and mode != 'off' and low_rank:
         scale = body.get('owner_mode_scale', 1.)
         scale = 1. if scale is None else scale
         if type(scale) not in (int, float) or not math.isfinite(scale) or not 0 < scale <= 1:
             raise FieldError('owner_mode_scale must be a number in (0, 1]')
         names, scales = [mode], [float(scale)]
     else:
+        # Stock requests, malformed fields and a server without low-rank profiles: the gate's own path.
         selection = gate.authorize(raw, body, headers)
         return Applied() if selection is None else Applied(selection, (), (selection.name,))
-    if not gate.profiles:
+    if not gate.profiles and not low_rank:
         raise FieldError('this server was started without owner-mode profiles: owner_mode must be "off"')
-    # The signature covers the raw bytes, not the parsed fields. The gate's own check (header
-    # grammar, time window, HMAC, replay) therefore runs unchanged; it only needs a loaded name.
-    if gate.authorize(raw, {'owner_mode': next(iter(gate.profiles))}, headers) is None:
+    # Low-rank profiles stay loaded while a profile update has the other profile deactivated, so
+    # authentication must not depend on a name the gate holds. The signature covers the raw bytes.
+    if not gate.authenticate(raw, headers):
         return Applied()
     primary, added = None, []
     for name, scale in zip(names, scales):
