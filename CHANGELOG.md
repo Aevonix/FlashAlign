@@ -6,7 +6,7 @@
 - An optional profile the engine does not have is dropped and logged; the request continues with the remaining profiles. Mark a profile `fail: required` to fail the request instead. This replaces the HTTP 400 that Verified contacts mode returned for an unknown profile.
 - The direct client accepts a list of profile names and a strength per profile.
 - Digest pins: a profile rule can pin the content digest the engine reports. Audit rows record the reported digests, and a mismatch is logged as `OWNER_MODE_DIGEST_DRIFT`. `status` and `doctor` compare a pinned `profile_digest` in the client configuration.
-- DeepSeek native kit: low-rank profiles (`input_low_rank_delta_v1` at `attn_out` and `shared_expert_out`) load beside the native profile with `--low-rank-profile`, and one request can select a set of them. GPU qualification is pending.
+- DeepSeek native kit: low-rank profiles (`input_low_rank_delta_v1` at `attn_out` and `shared_expert_out`) load beside the native profile with `--low-rank-profile`, and one request can select a set of them. Checked on four SM120 GPUs; see `docs/validation.md`.
 
 ## 1.2.0
 
