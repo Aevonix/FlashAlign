@@ -17,6 +17,11 @@
   "speculation": "adaptive DSpark7",
   "max_num_seqs": 8
  },
+ "kit": {
+  "path": "engines/vllm-deepseek-native",
+  "commit": "3eb8577b91bbd2e5772983debefed5fd0af0fa9a",
+  "git_tree": "54ad879e8a3f6c0e7f8ff50cc110043a394eb8b0"
+ },
  "profiles": {
   "native": {
    "name": "deepseek41-flash1017-v1",
@@ -64,7 +69,8 @@
   ],
   "largest_batch_rows": 4096,
   "unselected_rows": "filled with NaN before the kernel ran; every bit unchanged after it",
-  "selected_rows": "within one BF16 unit of the CPU reference"
+  "selected_rows": "within BF16 rounding of the CPU reference",
+  "selected_rows_tolerance": "2^-7 of the larger of reference and input, plus 1e-6"
  },
  "engine_checks": {
   "startup_seconds": 370.1,
@@ -240,6 +246,10 @@
    "none": "2 of 8",
    "native": "1 of 8"
   },
+  "kit_with_low_rank_loaded_repeated_texts": {
+   "none": "0 of 8",
+   "native": "0 of 8"
+  },
   "max_tokens": 384
  },
  "speed": {
@@ -334,6 +344,9 @@
  },
  "limits": {
   "equal_text_for_unselected_rows_shown": false,
+  "log_probability_checks_beyond_first_token": false,
+  "native_with_one_low_rank_profile_tested": false,
+  "prefix_cache_unselected_after_profile_tested": false,
   "gpu_docker_activation_tested": false,
   "padded_tensor_parallel_partition_tested": false,
   "ranks_above_24_in_engine_tested": false,

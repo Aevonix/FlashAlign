@@ -88,14 +88,16 @@ only. The engine applies every named profile or rejects the request.
 
 The low-rank path has CPU tests for loading, authorization, cache keys and the
 four-rank arithmetic. On four SM120 GPUs its kernels left unselected rows
-unchanged bit for bit and matched the CPU reference on selected rows, and the
-engine served two low-rank profiles beside the native profile in every
-combination. See [validation results](../../docs/validation.md#low-rank-profiles).
+unchanged bit for bit and matched the CPU reference on selected rows within
+BF16 rounding, and the engine served two low-rank profiles beside the native
+profile in six of the eight possible selections. See
+[validation results](../../docs/validation.md#low-rank-profiles).
 
-This engine does not repeat its own text at temperature 0. Equal output for
-requests that select no low-rank profile is therefore shown by the kernel
-checks and by a comparison against the kit without low-rank profiles, not by
-equal text.
+No change was found for requests that select no low-rank profile. The kernels
+left those rows unchanged bit for bit, and the first generated token's
+log-probabilities matched the kit without low-rank profiles within run-to-run
+spread. Equal text could not be checked, because this engine does not repeat
+its own text at temperature 0.
 
 ## Validation
 
