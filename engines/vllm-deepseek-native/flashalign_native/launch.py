@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 
 from .core import load_key, load_profiles
+from .delta_profile import load_delta_profiles
 
 MODEL = 'deepseek-ai/DeepSeek-V4.1-Flash-1017'
 
@@ -30,6 +31,8 @@ def served_names(arguments):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--profile', type=Path, required=True)
+    parser.add_argument('--low-rank-profile', type=Path, action='append', default=[],
+                        help='A low-rank profile to load beside --profile; repeat for up to seven')
     parser.add_argument('--key-file', type=Path, required=True)
     parser.add_argument('--profile-state-dir', type=Path)
     parser.add_argument('--profile-admin-socket', type=Path)
@@ -48,6 +51,10 @@ def main(argv=None):
     names = served_names(native)
     load_key(args.key_file)
     profiles = load_profiles([args.profile], allow_research=args.allow_research)
+    low_rank_paths = [str(path.resolve()) for path in args.low_rank_profile]
+    # The order given here is the order the engine applies them in.
+    if set(load_delta_profiles(low_rank_paths)) & set(profiles):
+        parser.error('Profile names must be distinct')
     native_requested = any(getattr(profile, 'is_native_wo', False) for profile in profiles.values())
     if native_requested:
         directory = args.native_receipts
@@ -78,6 +85,7 @@ def main(argv=None):
         existing = ['flashalign_native']
     os.environ.update(
         FLASHALIGN_DEEPSEEK_PROFILES=json.dumps([str(args.profile.resolve())]),
+        FLASHALIGN_DEEPSEEK_LOW_RANK_PROFILES=json.dumps(low_rank_paths),
         FLASHALIGN_DEEPSEEK_KEY_FILE=str(args.key_file.resolve()),
         FLASHALIGN_DEEPSEEK_MODEL_ID=args.canonical_model,
         FLASHALIGN_NATIVE_SERVED_MODELS=json.dumps(names),

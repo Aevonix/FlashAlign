@@ -157,6 +157,8 @@
     "fresh_dependency_install_gpu_tested": false,
     "executed_core_tree_sha256": "c7eee72ffa6430f62910dfd5a21a8a49ffb8293d0d41f1c12f9981316ce361b7",
     "evidence": "benchmarks/results/deepseek-native-qualification-20261101.json",
+    "low_rank_gpu_qualification": "passed: kernel checks on four SM120 GPUs; two low-rank profiles beside the native profile in six selections, mixed batches, separate prefix caches and active DSpark7",
+    "low_rank_evidence": "benchmarks/results/deepseek-native-low-rank-qualification-20261117.json",
     "docker_cpu_qualification": "passed: owned key, full artifact, plugin discovery and read-only HF snapshot mount",
     "gpu_environment": "host process using pinned image libraries; Docker GPU activation not tested",
     "image_requests_tested": false

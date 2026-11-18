@@ -22,6 +22,7 @@ from engine_config import DEFAULT_ARGUMENTS, DEFAULT_SPECULATION, ENVIRONMENT, I
 from prepare import docker_image
 from supervisor import (available_memory, docker_daemon_identity, healthy, native_coverage, owned_container,
                         private_directory, process_identity, resources, run, save, stop_owned)
+from flashalign_native.delta_profile import read_manifest
 from flashalign_native.native_profile import NativeProfile
 from flashalign_native.protocol import load_key
 from flashalign_native.verify_checkpoint import verify
@@ -45,6 +46,8 @@ def parser():
     p.add_argument('--allow-untested-memory', action='store_true')
     p.add_argument('--dry-run', action='store_true')
     p.add_argument('--profile-admin-socket', type=Path)
+    p.add_argument('--low-rank-profile', type=Path, action='append', default=[],
+                   help='A low-rank profile to load beside --profile; repeat for up to seven')
     return p
 
 
@@ -170,7 +173,21 @@ def model_mount_plan(model):
     return {'source': model, 'target': MODEL_MOUNT, 'model': MODEL_MOUNT}
 
 
-def container_command(args, run_dir, *, name, labels, model, key, replay, profile, devices, model_layout=None):
+def low_rank_profiles(paths, primary_name):
+    """(name, digest, directory) of each low-rank profile, in the order given: the engine's application order."""
+    result = []
+    for path in paths:
+        directory = path.expanduser().resolve(strict=True)
+        name, digest, _, _ = read_manifest(directory)
+        result.append((name, digest, directory))
+    names = [primary_name, *(name for name, _, _ in result)]
+    if len(result) > 7 or len(set(names)) != len(names):
+        raise ValueError('Up to seven low-rank profiles with distinct names are supported')
+    return result
+
+
+def container_command(args, run_dir, *, name, labels, model, key, replay, profile, devices, model_layout=None,
+                      low_rank=()):
     import owner_mode
     owner_package = Path(next(iter(owner_mode.__path__))).resolve(strict=True)
     lifecycle_state = run_dir.parent.parent / 'profiles'
@@ -193,6 +210,8 @@ def container_command(args, run_dir, *, name, labels, model, key, replay, profil
             (run_dir / 'receipts', '/fa-native-receipts', False),
             (run_dir / 'diagnostics', '/fa-diagnostics', False)):
         command += mount(source, target, readonly)
+    for index, (_, _, directory) in enumerate(low_rank):
+        command += mount(directory, '/fa-low-rank/' + str(index), True)
     if profile_socket.parent != lifecycle_state:
         command += mount(profile_socket.parent, str(profile_socket.parent), False)
     environment = {**ENVIRONMENT, 'PYTHONPATH':'/fa-package:/fa-python',
@@ -206,7 +225,9 @@ def container_command(args, run_dir, *, name, labels, model, key, replay, profil
     for field, value in sorted(environment.items()):
         command += ['--env', field + '=' + value]
     return command + [IMAGE, '/opt/venv/bin/python', '-m', 'flashalign_native',
-        '--profile', '/fa-profile', '--key-file', '/fa-private/key',
+        '--profile', '/fa-profile',
+        *(item for index in range(len(low_rank)) for item in ('--low-rank-profile', '/fa-low-rank/' + str(index))),
+        '--key-file', '/fa-private/key',
         '--replay-file', '/fa-replay/' + replay.name, '--canonical-model', MODEL_ID,
         '--native-receipts', '/fa-native-receipts',
         '--profile-state-dir', str(lifecycle_state),
@@ -255,6 +276,7 @@ def main(argv=None):
         private_directory(args.profile_admin_socket.parent)
     profile = NativeProfile(args.profile)
     profile.validate_payload()
+    low_rank = low_rank_profiles(args.low_rank_profile, profile.name)
     model = args.model.expanduser().resolve(strict=True)
     model_layout = model_mount_plan(model)
     pins = json.loads((ROOT / 'flashalign_native/model-pins.json').read_text())
@@ -279,9 +301,11 @@ def main(argv=None):
               'io.aevonix.flashalign.run': run_dir.name}
     name = 'flashalign-native-' + run_dir.name
     command = container_command(args, run_dir, name=name, labels=labels, model=model,
-        key=key, replay=replay, profile=profile.directory, devices=devices, model_layout=model_layout)
+        key=key, replay=replay, profile=profile.directory, devices=devices, model_layout=model_layout,
+        low_rank=low_rank)
     if args.dry_run:
         print(json.dumps({'image': IMAGE, 'profile': profile.name, 'digest': profile.digest,
+                          'low_rank_profiles': [{'name': name, 'digest': digest} for name, digest, _ in low_rank],
                           'devices': devices, 'resources': resource, 'starts_engine': False}))
         return 0
     private_directory(state / 'runs')
@@ -337,7 +361,8 @@ def main(argv=None):
                 raise RuntimeError('Host/cgroup memory fell below the runtime floor')
             try:
                 step = 'engine health and profile discovery'
-                context = healthy(args.host, args.port, args.served_model_name, profile, require_profile=not ready)
+                context = healthy(args.host, args.port, args.served_model_name, profile, require_profile=not ready,
+                                  low_rank=[name for name, _, _ in low_rank])
                 step = 'native worker coverage'
                 coverage = native_coverage(run_dir / 'receipts', profile,
                                            started_unix=record['started_unix'])
@@ -354,6 +379,7 @@ def main(argv=None):
                 if not ready:
                     data = {'ready': True, 'container_id': container_id, 'profile': profile.name,
                             'profile_digest': profile.digest, 'context_window': context,
+                            'low_rank_profiles': [{'name': name, 'digest': digest} for name, digest, _ in low_rank],
                             'native_coverage': coverage, **control}
                     save(run_dir / 'ready.json', data)
                     print(json.dumps(data), flush=True)

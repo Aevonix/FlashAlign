@@ -7,13 +7,17 @@ import os
 import asyncio
 from pathlib import Path
 
-from .core import FieldError, Selection, cache_key, load_key, load_profiles
+from .core import FieldError, Selection, load_key, load_profiles
 from .authentication import PersistentGate
+from .delta_profile import load_delta_profiles
+from .profile_sets import Applied, authorize_set, set_cache_key
 from .flashalign_replay import deployment_replay_store
 from .compatibility import normalize_chat_request
 
 
 class OwnerMiddleware:
+    low_rank = {}
+
     def __init__(self, app):
         from .plugin import REGISTERED
         if not REGISTERED:
@@ -25,6 +29,10 @@ class OwnerMiddleware:
         self._initializing = asyncio.Lock()
         key_path=Path(os.environ['FLASHALIGN_DEEPSEEK_KEY_FILE'])
         key=load_key(key_path)
+        # Low-rank profiles are static: they load once and are not part of the profile lifecycle.
+        self.low_rank = load_delta_profiles(json.loads(os.environ.get('FLASHALIGN_DEEPSEEK_LOW_RANK_PROFILES', '[]')))
+        if set(self.low_rank) & set(self.profiles):
+            raise ValueError('Duplicate profile name')
         self.gate = PersistentGate(self.profiles,key,deployment_replay_store(key))
         self.model = os.environ['FLASHALIGN_DEEPSEEK_MODEL_ID']
         self.served_models = json.loads(os.environ['FLASHALIGN_NATIVE_SERVED_MODELS'])
@@ -78,7 +86,7 @@ class OwnerMiddleware:
             return await self.reply(send,200,value)
         if scope.get('method') == 'GET' and path == '/v1/owner-mode/profiles':
             return await self.reply(send,200,{'data':[{'name':p.name,'model':p.meta['model'],'loaded':True}
-                                                       for p in self.profiles.values()]})
+                                                       for p in (*self.profiles.values(),*self.low_rank.values())]})
         if scope.get('method') != 'POST':
             return await self.app(scope,receive,send)
         routes=('/v1/chat/completions','/v1/completions')
@@ -106,7 +114,8 @@ class OwnerMiddleware:
         headers=[v.decode('ascii','replace') for k,v in scope.get('headers',[]) if k.lower()==b'x-owner-mode-auth']
         lease = None
         try:
-            selection=self.gate.authorize(raw,body,headers) if path in routes else None
+            applied=authorize_set(self.gate,self.low_rank,raw,body,headers)
+            selection=applied.primary
             if selection is not None and getattr(self.profiles[selection.name], 'is_native_wo', False):
                 from .native_profile import validate_native_selection
                 try:
@@ -117,9 +126,10 @@ class OwnerMiddleware:
                 lease = self.lifecycle.pin(selection.name)
                 generation = lease.generation
                 selection = Selection(selection.name, generation.artifact.digest, selection.scale, generation.id)
+                applied = Applied(selection, applied.low_rank, applied.names)
             if path == '/v1/chat/completions':
                 normalize_chat_request(body)
-            if selection is not None and ('prompt_embeds' in body or 'prompt_embeddings' in body):
+            if applied.names and ('prompt_embeds' in body or 'prompt_embeddings' in body):
                 raise FieldError('Owner mode does not accept precomputed input embeddings')
             for message in messages:
                 content=message.get('content') if isinstance(message,dict) else None
@@ -133,7 +143,7 @@ class OwnerMiddleware:
                         # Processor and GPU encoder caches inherit an authenticated
                         # model/profile/strength namespace; callers cannot forge it.
                         source=part.get('image_url',part.get('input_image'))
-                        part['uuid']=cache_key(selection,self.profiles,self.model,['image',part.get('uuid'),source])
+                        part['uuid']=set_cache_key(applied,self.profiles,self.model,['image',part.get('uuid'),source])
         except FieldError as error:
             if lease is not None: lease.close()
             return await self.reply(send,400,{'error':{'code':'invalid_owner_mode','type':'invalid_request_error',
@@ -162,13 +172,16 @@ class OwnerMiddleware:
         extra={k:v for k,v in extra.items() if not k.startswith('_flashalign_')}
         body.pop('owner_mode',None);body.pop('owner_mode_scale',None)
         # Even caller-supplied salts are wrapped in the effective namespace.
-        body['cache_salt']=cache_key(selection,self.profiles,self.model,body.get('cache_salt'))
+        body['cache_salt']=set_cache_key(applied,self.profiles,self.model,body.get('cache_salt'))
         if path in routes:
             if selection is not None:
                 extra.update(_flashalign_profile=selection.name,_flashalign_digest=selection.digest,
                              _flashalign_scale=selection.scale)
                 if selection.generation is not None:
                     extra['_flashalign_generation'] = selection.generation
+            if applied.low_rank:
+                extra['_flashalign_low_rank'] = json.dumps(
+                    [[row.name, row.digest, row.scale] for row in applied.low_rank], separators=(',',':'))
         if extra:body['vllm_xargs']=extra
         else:body.pop('vllm_xargs',None)
         data=json.dumps(body,separators=(',',':')).encode()
@@ -178,13 +191,23 @@ class OwnerMiddleware:
             if not consumed:
                 consumed=True;return {'type':'http.request','body':data,'more_body':False}
             return await receive()
-        effective='off' if selection is None else selection.name
+        effective=','.join(applied.names) or 'off'
+        digests={row.name:row.digest for row in applied.low_rank}
+        if selection is not None:
+            digests[selection.name]=selection.digest
         async def updated_send(message):
             if message['type']=='http.response.start':
                 message=dict(message)
                 message['headers']=[(k,v) for k,v in message.get('headers',[]) if k.lower() not in (b'x-owner-mode-effective',b'x-flashalign-generation',b'x-flashalign-profile-digest',b'x-flashalign-model-digest')]
                 message['headers'].append((b'x-owner-mode-effective',effective.encode()))
-                if selection is not None and selection.generation is not None:
+                if applied.low_rank:
+                    # One value per applied profile, in request order. A static profile has no generation.
+                    message['headers'].append((b'x-flashalign-profile-digest',
+                                               ','.join(digests[name] for name in applied.names).encode()))
+                    if selection is not None and selection.generation is not None:
+                        message['headers'].append((b'x-flashalign-generation', ','.join(
+                            selection.generation if name == selection.name else '' for name in applied.names).encode()))
+                elif selection is not None and selection.generation is not None:
                     message['headers'].extend([(b'x-flashalign-profile-digest', selection.digest.encode()),
                                                (b'x-flashalign-generation', selection.generation.encode())])
             await send(message)

@@ -28,12 +28,18 @@ def response_metadata(response, profile):
                           ('X-FlashAlign-Model-Digest', 'model_digest')):
         item = response.headers.get(header)
         if item is not None:
-            if re.fullmatch(r'[0-9a-f]{64}', item) is None:
+            # A profile set reports one digest per profile, in set order, joined with commas.
+            pattern = r'[0-9a-f]{64}(,[0-9a-f]{64}){0,7}' if field == 'profile_digest' else r'[0-9a-f]{64}'
+            if re.fullmatch(pattern, item) is None:
                 raise ValueError('Invalid engine identity metadata')
             value[field] = item
     generation = response.headers.get('X-FlashAlign-Generation')
     if generation is not None:
-        if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,127}', generation) is None:
+        # A profile set reports one generation per profile, in set order, joined with commas.
+        # A profile without a generation leaves its position empty.
+        positions = generation.split(',')
+        if (len(positions) > 8 or not any(positions) or any(
+                item and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,127}', item) is None for item in positions)):
             raise ValueError('Invalid engine generation metadata')
         value['generation'] = generation
     return MappingProxyType(value)
@@ -88,6 +94,26 @@ class StreamResponse:
         # certify either a partial event or a completed generation.
 
 
+def profile_names(profile):
+    """One profile name, or an ordered set of two to eight names, as a tuple."""
+    if isinstance(profile, str):
+        names = (profile,)
+    elif isinstance(profile, (list, tuple)) and 2 <= len(profile) <= 8:
+        names = tuple(profile)
+        if any(not isinstance(name, str) or name == 'off' or ',' in name for name in names) or len(set(names)) != len(names):
+            raise ValueError('A profile set lists distinct profile names')
+    else:
+        raise ValueError('A profile name, a profile set or off is required')
+    if any(not name or len(name) > 256 for name in names):
+        raise ValueError('A profile name, a profile set or off is required')
+    return names
+
+
+def profile_label(profile):
+    """The effective-profile header an engine returns for this selection."""
+    return ','.join(profile_names(profile))
+
+
 class Client:
     """A signing capability. Keep it in trusted application code, away from tools.
 
@@ -107,8 +133,13 @@ class Client:
             raise ValueError('gateway must be true or false')
         if type(keepalive_expiry) not in (int, float) or not math.isfinite(keepalive_expiry) or keepalive_expiry < 0:
             raise ValueError('keepalive_expiry must be a finite nonnegative number')
-        if mode == 'always_on' and (not isinstance(profile, str) or not profile or profile == 'off' or len(profile)>256):
-            raise ValueError('Always On requires a configured profile')
+        if mode == 'always_on':
+            try:
+                configured = profile_names(profile)
+            except ValueError:
+                configured = ('off',)
+            if configured == ('off',):
+                raise ValueError('Always On requires a configured profile')
         self.base_url, self.model = base_url.rstrip('/'), model
         self.mode, self.profile = mode, profile
         self.gateway = gateway
@@ -130,7 +161,7 @@ class Client:
 
     def _profile(self, profile):
         if self.mode == 'always_on':
-            if profile is not None and profile != self.profile:
+            if profile is not None and profile_names(profile) != profile_names(self.profile):
                 raise ValueError('Always On uses the configured profile; change the deployment mode to use another profile or off')
             return self.profile
         return 'off' if profile is None else profile
@@ -139,14 +170,16 @@ class Client:
         if not isinstance(payload, dict):
             raise ValueError('The request must be a JSON object')
         profile = self._profile(profile)
-        if not isinstance(profile, str) or not profile or len(profile)>256:
-            raise ValueError('A profile name or off is required')
-        if type(scale) not in (int,float) or not math.isfinite(scale) or not 0<scale<=1:
+        names = profile_names(profile)
+        # One strength applies to every profile of a set; a list gives each profile its own.
+        scales = list(scale) if isinstance(scale, (list, tuple)) else [scale] * len(names)
+        if len(scales) != len(names) or any(type(item) not in (int,float) or not math.isfinite(item)
+                                            or not 0<item<=1 for item in scales):
             raise ValueError('Scale must be in (0, 1]')
-        body = {**payload, 'model':self.model, 'owner_mode':profile}
+        body = {**payload, 'model':self.model, 'owner_mode':names[0] if len(names)==1 else list(names)}
         body.pop('owner_mode_scale', None)
         if profile!='off':
-            body['owner_mode_scale']=scale
+            body['owner_mode_scale']=scales[0] if len(names)==1 else scales
         raw=json.dumps(body,ensure_ascii=False,separators=(',',':'),allow_nan=False).encode()
         headers={'Content-Type':'application/json'}
         if self.api_key_file:
@@ -160,7 +193,7 @@ class Client:
     @staticmethod
     def _check(response, profile):
         response.raise_for_status()
-        if response.headers.get('X-Owner-Mode-Effective')!=profile:
+        if response.headers.get('X-Owner-Mode-Effective')!=profile_label(profile):
             raise ProfileNotActive('The engine did not confirm the requested profile')
 
     def chat(self, messages, *, profile=None, scale=1., **options):
@@ -174,7 +207,7 @@ class Client:
         data = response.json()
         if not isinstance(data, dict):
             raise ValueError('The engine response must be a JSON object')
-        return ChatResponse(data, response_metadata(response, profile))
+        return ChatResponse(data, response_metadata(response, profile_label(profile)))
 
     @contextmanager
     def stream_chat(self, messages, *, profile=None, scale=1., **options):
@@ -187,7 +220,7 @@ class Client:
         raw,headers=self.prepare({**options,'messages':messages,'stream':True},profile=profile,scale=scale)
         with self.http.stream('POST',self.base_url+'/chat/completions',content=raw,headers=headers) as response:
             self._check(response,profile)
-            stream = StreamResponse(response, response_metadata(response, profile), max_event_bytes=self.max_sse_event_bytes)
+            stream = StreamResponse(response, response_metadata(response, profile_label(profile)), max_event_bytes=self.max_sse_event_bytes)
             try:
                 yield stream
             finally:

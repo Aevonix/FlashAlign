@@ -38,6 +38,18 @@ class ResponseEnvelopeTests(unittest.TestCase):
                     response.metadata['generation'] = 'other'
             self.assertTrue(response.closed)
 
+    def test_a_set_may_leave_the_generation_of_a_profile_empty(self):
+        body = 'data: [DONE]\n\n'
+        for value in ('generation-2,,', ',generation-2', 'a,b,c,d,e,f,g,h'):
+            with self.subTest(value=value), self.client(body, {'X-FlashAlign-Generation': value}) as client:
+                with client.stream_chat_response([]) as response:
+                    self.assertEqual(response.metadata['generation'], value)
+        for value in ('', ',', ',,', 'a,b!', 'a, b', 'a,b,c,d,e,f,g,h,i', ',' * 8, 'a' * 129):
+            with self.subTest(value=value), self.client(body, {'X-FlashAlign-Generation': value}) as client:
+                with self.assertRaisesRegex(ValueError, 'Invalid engine generation metadata'):
+                    with client.stream_chat_response([]):
+                        pass
+
     def test_eof_or_partial_done_does_not_certify_completion(self):
         for suffix in ('', 'data: [DONE]', 'data: [DONE]\n'):
             with self.subTest(suffix=suffix), self.client('data: {"choices":[]}\n\n' + suffix) as client:

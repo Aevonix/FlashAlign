@@ -1827,6 +1827,12 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase):
             )
         if local.dtype != torch.bfloat16:
             raise TypeError("V4.1 WO projection must return BF16")
+        low_rank = getattr(self, "_flashalign_delta", None)
+        if low_rank is not None:
+            # binding.tmp holds this rank's stock WO-B input in every mode. A
+            # low-rank profile adds to the local result before the reduction.
+            low_rank.attention(self._flashalign_delta_layer, local, binding.tmp,
+                               owner_row_indices)
         l2_prefetch.issue(self._l2pf_ffn, rows)
         if get_tensor_model_parallel_world_size() > 1:
             local = get_tp_group().all_reduce(local)

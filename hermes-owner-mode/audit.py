@@ -50,7 +50,7 @@ def warn_fallback(audit, decision):
 DECISION_FIELDS = frozenset({
     "ts", "route", "platform", "owner_verified", "activation_mode", "decision",
     "identity_ms", "identity_reason", "owner_mode_sent", "owner_mode_scale_sent",
-    "effective", "status", "ms",
+    "effective", "status", "ms", "profile_digest", "digest_drift", "digest_unchecked",
 })
 
 

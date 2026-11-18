@@ -239,6 +239,68 @@ The pinned runtime uses adaptive DSpark with seven draft tokens. Its requested
 on this model. PIECEWISE execution is not supported by this path. Speculative
 decoding remained active in stock and native-profile tests.
 
+### Low-rank profiles
+
+The 17 November 2026 check ran the native kit with its native profile and two
+low-rank profiles on four SM120 GPUs, using the pinned image's libraries in a
+host process. One low-rank profile had 14 `attn_out` and 14 `shared_expert_out`
+sites at rank 24; the other had 14 `shared_expert_out` sites at rank 1. Both
+are private test profiles.
+
+Kernels, 31 checks on each of the four GPUs:
+
+- All 124 checks passed across both writer layouts, ranks 1, 2, 3, 4, 32 and
+  128, and batches of up to 4,096 rows.
+- Rows that selected nothing were filled with NaN before the kernel ran. Every
+  bit of those rows was unchanged afterwards.
+- Selected rows matched the CPU reference within BF16 rounding.
+
+Engine, with six selections (none, the native profile, each low-rank profile,
+both low-rank profiles, all three):
+
+- The engine became ready in 370 seconds with 104 native layer-rank bindings.
+- 96 requests sent as mixed batches each reported the selection they asked for.
+- One generated token with its log-probabilities was sent for all six
+  selections at the same moment. Each selection came out nearest its own
+  result alone, within run-to-run spread. The rank-24 profile moves this first
+  token only a little, so the probe separates it from no selection only
+  weakly.
+- A 10,518-token prompt reused 10,240 cached tokens on its second request
+  within each selection and none on its first. Each selection after the first
+  met the prompt already cached by the selections before it. The request with
+  nothing selected ran first, so that direction was not tested.
+- Adaptive DSpark7 stayed active. Accepted draft tokens were 55% of drafted
+  tokens with nothing selected and 46% to 53% with profiles selected.
+
+This engine does not repeat its own text at temperature 0: the kit without
+low-rank profiles repeated 3 of 16 answers exactly, and the kit with both
+loaded repeated none of 16. The check for requests that select no low-rank
+profile therefore compared the first generated token's log-probabilities
+between the two kits, 12 repeats on nine prompts. Both kits showed the same
+run-to-run spread, about 0.4 in log-probability. Differences between the kits
+stayed within chance: at p < 0.05, 3 and 5 of 45 tokens, where chance gives
+about 2; the largest was 2.9 standard errors. A shift well below that spread
+would not show in this comparison, and it covers the first generated token
+only.
+
+Decode speed with profiles selected was 3% to 7% lower than with none in the
+paired recorder (20 cases, three repetitions, one request at a time). Time to
+first token changed by less than 1%.
+
+The same recorder also ran on the kit without low-rank profiles, one engine
+start per kit. With nothing selected, the kit with both profiles loaded reached
+the first token in 0.275 seconds against 0.268 and decoded 361 tokens per
+second against 351. With the native profile selected, decode speed on the two
+kits was within 0.2%. Loading low-rank profiles that a request does not select
+showed no decode cost in this comparison. The spread between engine starts was
+not measured, so differences of this size are not attributed to the profiles.
+
+GPU activation through Docker, tensor-parallel partitions that need padding,
+ranks above 24 inside the engine, more than two low-rank profiles and the two
+selections of the native profile with a single low-rank profile were outside
+this run's scope. See the
+[aggregate record](../benchmarks/results/deepseek-native-low-rank-qualification-20261117.json).
+
 ## Previous DeepSeek projection profile
 
 The 85-site profile completed full-model wizard activation and shutdown on

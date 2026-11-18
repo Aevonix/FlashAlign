@@ -1,0 +1,396 @@
+{
+ "version": 1,
+ "date": "2026-11-17",
+ "kind": "native_low_rank_gpu_qualification",
+ "model": {
+  "id": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+  "revision": "1bae0e1088993b9b82de08f59de5be5a34e42170"
+ },
+ "engine": {
+  "backend": "vllm",
+  "variant": "deepseek-v41-native",
+  "image": "ghcr.io/local-inference-lab/vllm@sha256:f5f9efe1b10ec7b853a495e66b7dbf15ff54f62741e444dea0b44e16736a10a9",
+  "gpu_launch": "host process using the pinned image libraries",
+  "gpus": "4 x NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+  "gpu_architecture": "SM120",
+  "tensor_parallel_size": 4,
+  "speculation": "adaptive DSpark7",
+  "max_num_seqs": 8
+ },
+ "kit": {
+  "path": "engines/vllm-deepseek-native",
+  "commit": "3eb8577b91bbd2e5772983debefed5fd0af0fa9a",
+  "git_tree": "54ad879e8a3f6c0e7f8ff50cc110043a394eb8b0"
+ },
+ "profiles": {
+  "native": {
+   "name": "deepseek41-flash1017-v1",
+   "digest": "f58572af5fe03fa65dbd73e58b0dbb4cf7c151bf519e734f058572958dc6b005"
+  },
+  "low_rank_a": {
+   "transform": "input_low_rank_delta_v1",
+   "sites": {
+    "attn_out": 14,
+    "shared_expert_out": 14
+   },
+   "rank": 24,
+   "strength": 1.0,
+   "published": false
+  },
+  "low_rank_b": {
+   "transform": "input_low_rank_delta_v1",
+   "sites": {
+    "shared_expert_out": 14
+   },
+   "rank": 1,
+   "strength": 1.0,
+   "published": false
+  },
+  "load_order": [
+   "low_rank_a",
+   "low_rank_b"
+  ]
+ },
+ "kernel_checks": {
+  "devices": 4,
+  "checks": 124,
+  "failed": 0,
+  "layouts": [
+   "attention writer input, two local groups",
+   "shared expert writer input"
+  ],
+  "ranks": [
+   1,
+   2,
+   3,
+   4,
+   32,
+   128
+  ],
+  "largest_batch_rows": 4096,
+  "unselected_rows": "filled with NaN before the kernel ran; every bit unchanged after it",
+  "selected_rows": "within BF16 rounding of the CPU reference",
+  "selected_rows_tolerance": "2^-7 of the larger of reference and input, plus 1e-6"
+ },
+ "engine_checks": {
+  "startup_seconds": 370.1,
+  "layer_rank_bindings": 104,
+  "selections": [
+   "none",
+   "native",
+   "low_rank_a",
+   "low_rank_b",
+   "low_rank_a+low_rank_b",
+   "low_rank_a+low_rank_b+native"
+  ],
+  "mixed_batches": {
+   "none": {
+    "requests": 16,
+    "wrong_effective_profile": 0
+   },
+   "native": {
+    "requests": 16,
+    "wrong_effective_profile": 0
+   },
+   "low_rank_a": {
+    "requests": 16,
+    "wrong_effective_profile": 0
+   },
+   "low_rank_b": {
+    "requests": 16,
+    "wrong_effective_profile": 0
+   },
+   "low_rank_a+low_rank_b": {
+    "requests": 16,
+    "wrong_effective_profile": 0
+   },
+   "low_rank_a+low_rank_b+native": {
+    "requests": 16,
+    "wrong_effective_profile": 0
+   }
+  },
+  "prefix_cache_tokens": {
+   "none": {
+    "first_cached_tokens": 0,
+    "second_cached_tokens": 10240,
+    "prompt_tokens": 10518
+   },
+   "native": {
+    "first_cached_tokens": 0,
+    "second_cached_tokens": 10240,
+    "prompt_tokens": 10518
+   },
+   "low_rank_a": {
+    "first_cached_tokens": 0,
+    "second_cached_tokens": 10240,
+    "prompt_tokens": 10518
+   },
+   "low_rank_b": {
+    "first_cached_tokens": 0,
+    "second_cached_tokens": 10240,
+    "prompt_tokens": 10518
+   },
+   "low_rank_a+low_rank_b": {
+    "first_cached_tokens": 0,
+    "second_cached_tokens": 10240,
+    "prompt_tokens": 10518
+   },
+   "low_rank_a+low_rank_b+native": {
+    "first_cached_tokens": 0,
+    "second_cached_tokens": 10240,
+    "prompt_tokens": 10518
+   }
+  },
+  "speculation": {
+   "none": {
+    "drafted_tokens": 840,
+    "accepted_tokens": 460,
+    "completion_tokens": 614
+   },
+   "low_rank_a": {
+    "drafted_tokens": 799,
+    "accepted_tokens": 426,
+    "completion_tokens": 574
+   },
+   "low_rank_b": {
+    "drafted_tokens": 1094,
+    "accepted_tokens": 502,
+    "completion_tokens": 723
+   },
+   "native": {
+    "drafted_tokens": 858,
+    "accepted_tokens": 433,
+    "completion_tokens": 591
+   },
+   "low_rank_a+low_rank_b": {
+    "drafted_tokens": 1193,
+    "accepted_tokens": 567,
+    "completion_tokens": 804
+   },
+   "low_rank_a+low_rank_b+native": {
+    "drafted_tokens": 1025,
+    "accepted_tokens": 496,
+    "completion_tokens": 708
+   }
+  }
+ },
+ "unselected_rows_against_stock_kit": {
+  "method": "one generated token with its top 20 log-probabilities, 12 repeats on 9 prompts, on the kit without low-rank profiles and on the kit with both loaded and neither selected; relabeling test on the five most likely tokens per prompt",
+  "selections": {
+   "none": {
+    "compared_tokens": 45,
+    "spread_with_low_rank_loaded": 0.3977,
+    "spread_without_low_rank": 0.4108,
+    "mean_absolute_difference": 0.1628,
+    "p_below_0.01_between_kits": 1,
+    "p_below_0.01_within_one_kit": [
+     0,
+     0
+    ],
+    "p_below_0.05_between_kits": 3,
+    "p_below_0.05_within_one_kit": [
+     2,
+     1
+    ]
+   },
+   "native": {
+    "compared_tokens": 45,
+    "spread_with_low_rank_loaded": 0.427,
+    "spread_without_low_rank": 0.4007,
+    "mean_absolute_difference": 0.1583,
+    "p_below_0.01_between_kits": 0,
+    "p_below_0.01_within_one_kit": [
+     1,
+     0
+    ],
+    "p_below_0.05_between_kits": 5,
+    "p_below_0.05_within_one_kit": [
+     1,
+     2
+    ]
+   }
+  }
+ },
+ "selections_in_one_batch": {
+  "method": "the same one-token probe, 8 rounds on 9 prompts: every selection alone, then all six sent at the same moment; distance between mean log-probabilities of the five most likely tokens",
+  "nearest_alone_selection": {
+   "none": "none",
+   "low_rank_a": "low_rank_a",
+   "low_rank_b": "low_rank_b",
+   "native": "native",
+   "low_rank_a+low_rank_b": "low_rank_a+low_rank_b",
+   "low_rank_a+low_rank_b+native": "low_rank_a+low_rank_b+native"
+  },
+  "distance_to_own_alone_result": {
+   "none": 0.273,
+   "native": 0.251,
+   "low_rank_a": 0.34,
+   "low_rank_b": 0.332,
+   "low_rank_a+low_rank_b": 0.406,
+   "low_rank_a+low_rank_b+native": 0.476
+  },
+  "distance_none_to_others": {
+   "none": 0.273,
+   "native": 1.514,
+   "low_rank_a": 0.494,
+   "low_rank_b": 4.379,
+   "low_rank_a+low_rank_b": 4.353,
+   "low_rank_a+low_rank_b+native": 5.079
+  },
+  "tokens_compared_per_selection": 45,
+  "p_below_0.01_together_against_alone": 1
+ },
+ "repeatability": {
+  "note": "the engine does not repeat its own text at temperature 0, with or without low-rank profiles",
+  "kit_without_low_rank_repeated_texts": {
+   "none": "2 of 8",
+   "native": "1 of 8"
+  },
+  "kit_with_low_rank_loaded_repeated_texts": {
+   "none": "0 of 8",
+   "native": "0 of 8"
+  },
+  "max_tokens": 384
+ },
+ "speed": {
+  "method": "paired recorder, 20 cases, 3 repetitions, 512 new tokens at most, one request at a time",
+  "selections": {
+   "native": {
+    "requests_per_mode": 60,
+    "completed_per_mode": [
+     60,
+     60
+    ],
+    "first_token_seconds": {
+     "off_median": 0.2746,
+     "selected_median": 0.2768,
+     "change_percent": 0.8
+    },
+    "decode_tokens_per_second": {
+     "off_median": 360.765,
+     "selected_median": 349.9809,
+     "change_percent": -3.0
+    }
+   },
+   "low_rank_a": {
+    "requests_per_mode": 60,
+    "completed_per_mode": [
+     60,
+     60
+    ],
+    "first_token_seconds": {
+     "off_median": 0.2712,
+     "selected_median": 0.2722,
+     "change_percent": 0.4
+    },
+    "decode_tokens_per_second": {
+     "off_median": 367.3754,
+     "selected_median": 347.027,
+     "change_percent": -5.5
+    }
+   },
+   "low_rank_b": {
+    "requests_per_mode": 60,
+    "completed_per_mode": [
+     60,
+     60
+    ],
+    "first_token_seconds": {
+     "off_median": 0.2743,
+     "selected_median": 0.2752,
+     "change_percent": 0.3
+    },
+    "decode_tokens_per_second": {
+     "off_median": 356.9831,
+     "selected_median": 340.6164,
+     "change_percent": -4.6
+    }
+   },
+   "low_rank_a+low_rank_b": {
+    "requests_per_mode": 60,
+    "completed_per_mode": [
+     60,
+     60
+    ],
+    "first_token_seconds": {
+     "off_median": 0.2744,
+     "selected_median": 0.2753,
+     "change_percent": 0.3
+    },
+    "decode_tokens_per_second": {
+     "off_median": 353.5041,
+     "selected_median": 329.687,
+     "change_percent": -6.7
+    }
+   },
+   "low_rank_a+low_rank_b+native": {
+    "requests_per_mode": 60,
+    "completed_per_mode": [
+     60,
+     60
+    ],
+    "first_token_seconds": {
+     "off_median": 0.2722,
+     "selected_median": 0.2743,
+     "change_percent": 0.8
+    },
+    "decode_tokens_per_second": {
+     "off_median": 352.4349,
+     "selected_median": 331.5198,
+     "change_percent": -5.9
+    }
+   }
+  },
+  "low_rank_loaded_against_kit_without": {
+   "method": "the same recorder on the kit without low-rank profiles and on the kit with both loaded, one engine start each; no low-rank profile selected",
+   "selections": {
+    "none": {
+     "requests_per_kit": 60,
+     "completed_per_kit": [
+      60,
+      60
+     ],
+     "first_token_seconds": {
+      "without_low_rank_median": 0.2681,
+      "low_rank_loaded_median": 0.2746,
+      "change_percent": 2.4
+     },
+     "decode_tokens_per_second": {
+      "without_low_rank_median": 351.4482,
+      "low_rank_loaded_median": 360.765,
+      "change_percent": 2.7
+     }
+    },
+    "native": {
+     "requests_per_kit": 60,
+     "completed_per_kit": [
+      60,
+      60
+     ],
+     "first_token_seconds": {
+      "without_low_rank_median": 0.2703,
+      "low_rank_loaded_median": 0.2768,
+      "change_percent": 2.4
+     },
+     "decode_tokens_per_second": {
+      "without_low_rank_median": 350.6554,
+      "low_rank_loaded_median": 349.9809,
+      "change_percent": -0.2
+     }
+    }
+   }
+  }
+ },
+ "limits": {
+  "speed_spread_between_engine_starts_measured": false,
+  "equal_text_for_unselected_rows_shown": false,
+  "log_probability_checks_beyond_first_token": false,
+  "native_with_one_low_rank_profile_tested": false,
+  "prefix_cache_unselected_after_profile_tested": false,
+  "gpu_docker_activation_tested": false,
+  "padded_tensor_parallel_partition_tested": false,
+  "ranks_above_24_in_engine_tested": false,
+  "more_than_two_low_rank_profiles_tested": false,
+  "image_requests_tested": false
+ }
+}

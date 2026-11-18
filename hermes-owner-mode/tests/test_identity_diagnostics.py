@@ -169,7 +169,7 @@ class IdentityDiagnostics(unittest.TestCase):
     def test_audit_accepts_only_fixed_identity_reasons(self):
         rows = []
         proxy = ProviderProxy.__new__(ProviderProxy)
-        proxy.audit, proxy.scales = rows.append, {}
+        proxy.audit = rows.append
         proxy.record("main", "off", "off")
         self.assertEqual(rows[-1]["identity_reason"], "no_context")
         for value in ["private_sender_777", "no_ingress_record", {"secret": "prompt"}, None]:

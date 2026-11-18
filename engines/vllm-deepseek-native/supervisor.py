@@ -264,7 +264,7 @@ def native_coverage(directory, profile, *, started_unix):
     return {'bindings': len(spec.layers) * 4, 'partitions': len(spec.tensors) * 4, 'workers': records}
 
 
-def healthy(host, port, served_model, profile, *, require_profile=True):
+def healthy(host, port, served_model, profile, *, require_profile=True, low_rank=()):
     host = '127.0.0.1' if host == '0.0.0.0' else host
     base = 'http://' + host + ':' + str(port)
     with urllib.request.urlopen(base + '/health', timeout=5) as response:
@@ -280,6 +280,6 @@ def healthy(host, port, served_model, profile, *, require_profile=True):
         profiles = json.load(response)['data']
     if (not isinstance(profiles, list) or len(profiles) > 256
             or any(not isinstance(row, dict) or row.get('loaded') is not True for row in profiles)
-            or (require_profile and (len(profiles) != 1 or profiles[0].get('name') != profile.name))):
+            or (require_profile and [row.get('name') for row in profiles] != [profile.name, *low_rank])):
         raise ValueError('Native profile is not loaded')
     return models[0]['max_model_len']
