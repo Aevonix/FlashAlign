@@ -63,8 +63,14 @@ def public_manifest(manifest):
               "engine": ("name", "version", "commit", "settings_sha256", "build_sha256"),
               "hardware": ("accelerator", "accelerator_count", "memory_gib", "power_limit_watts", "cpu"),
               "speculation": ("enabled", "method", "draft_model", "draft_revision", "draft_tokens")}
-    return {section: {key: _public_scalar(values[key]) for key in allowed if key in values}
-            for section, allowed in fields.items() if isinstance(values := manifest.get(section), dict)}
+    def public(values, allowed):
+        return {key: _public_scalar(values[key]) for key in allowed if key in values}
+    result = {section: public(values, allowed)
+              for section, allowed in fields.items() if isinstance(values := manifest.get(section), dict)}
+    if isinstance(manifest.get("profile"), list):
+        # A profile set: one section per profile, in set order, each with its strength.
+        result["profile"] = [public(values, (*fields["profile"], "scale")) for values in manifest["profile"]]
+    return result
 
 
 def public_settings(settings):
@@ -120,6 +126,8 @@ def public_report(report, performance=None):
 
 def evidence_card(report, performance=None):
     clean = public_report(report, performance)
+    if not isinstance(clean["manifest"]["profile"], dict):
+        raise ValueError("An evidence card describes one profile; export the public report for a profile set")
     return {"schema": "flashalign.profile-evidence.v1", "profile": clean["manifest"]["profile"],
             "model": clean["manifest"]["model"], "engine": clean["manifest"]["engine"],
             "hardware": clean["manifest"]["hardware"], "speculation": clean["manifest"]["speculation"],

@@ -87,15 +87,41 @@ The adapter recognizes these exact HTTP 400 messages for `invalid_owner_mode`:
 | Invalid scale | `owner_mode_scale must be a number in (0, 2]` |
 
 The engine error string for scale is matched verbatim. This adapter accepts
-only `(0, 1]`. In Verified contacts mode, only the profiles-unavailable response
-causes one retry in standard mode. Always On returns the failure without a
-stock retry. Other errors are returned to the caller. Recheck this contract
+only `(0, 1]`. In Verified contacts mode, a profiles-unavailable or
+unknown-profile response drops optional profiles and retries. For a set, the
+adapter asks the engine which profiles it has and retries once with those. An
+engine that cannot answer keeps none of the optional profiles. When no profile
+remains, or the engine rejects the reduced set as well, the adapter retries
+once in standard mode. One request causes at most two retries. A missing
+required profile and every Always On failure are returned without a retry in
+standard mode. Other errors are returned to the caller. Recheck this contract
 when upgrading an engine.
+
+## Profile sets
+
+An engine may accept an ordered set of profiles for one request. `owner_mode`
+is then an array of two to eight distinct profile names. `owner_mode_scale`,
+when present, is an array of the same length with one strength per profile.
+One profile keeps the scalar form. The request signature covers the whole set.
+
+```json
+{"owner_mode": ["first-profile", "second-profile"], "owner_mode_scale": [1.0, 0.5]}
+```
+
+The engine applies every profile of the set or rejects the request. It never
+applies part of a set. It returns `X-Owner-Mode-Effective` as the applied names
+in request order, joined with commas. When it reports profile digests or
+generations, `X-FlashAlign-Profile-Digest` and `X-FlashAlign-Generation` carry
+one value per profile in the same order, joined with commas.
+
+An engine that takes one profile per request answers an array with the
+invalid-type error above. The adapter returns that error to the caller.
 
 ## Isolation and profile loading
 
 Isolate caches by every effective profile, scale and model-revision dimension,
-or bypass profile-mode cache reads and writes. Standard requests must not
+or bypass profile-mode cache reads and writes. For a profile set, the key covers
+every member's content, its strength and the set's order. Standard requests must not
 reuse profile-mode cache entries or transforms. The engine must validate the
 profile format and reject unsupported extensions before advertising support.
 

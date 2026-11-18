@@ -92,7 +92,7 @@ let elapsed=0,playing=false,previous=null;
 function text(id,value){byId(id).textContent=value}
 function tag(value){const el=document.createElement('span');el.className='tag';el.textContent=value;byId('meta').append(el)}
 tag(data.manifest.model.id);tag(data.manifest.engine.name+' '+data.manifest.engine.version);tag(data.manifest.model.quantization);
-tag('Speculative decoding '+(data.manifest.speculation.enabled?'on':'off'));tag('Profile: '+data.manifest.profile.name+' · scale '+data.profile_scale);
+tag('Speculative decoding '+(data.manifest.speculation.enabled?'on':'off'));tag('Profile: '+[].concat(data.manifest.profile).map(function(p){return p.name}).join(' + ')+' · scale '+[].concat(data.profile_scale).join(', '));
 text('prompt',data.messages.map(m=>m.role.toUpperCase()+': '+m.content).join('\n\n'));
 text('qualification',data.note||'');byId('qualification').hidden=!data.note;
 text('disclosure','Recorded sequentially, not a simultaneous load test. Requests are replayed from their own start times. '+data.warmups+' warmup pair(s); cache state was not controlled. Sample '+(data.repetition+1)+'. TTFT includes reasoning, network and queue time. Output token count may include reasoning. No synthetic text or token counts.');

@@ -22,6 +22,14 @@ bash ./flashalign.sh doctor --probe
 The probe checks the effective response mode. It does not test refusal behavior
 or prove that every model layer executed the intended transform.
 
+To detect a changed profile, add `"profile_digest"` to the client configuration
+with the digest the engine reports in `status --json` (`runtime.profile_digest`).
+`status` then shows whether the engine's current digest matches the pin, and
+`doctor` reports `profile_digest_drift` when it differs. An engine that reports
+no digest is shown as not reported; that is not treated as drift. The provider
+proxy pins digests per profile; see
+[digest pins](../hermes-owner-mode/README.md#digest-pins).
+
 ## Dashboard and JSON
 
 ```sh

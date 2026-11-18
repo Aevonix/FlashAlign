@@ -245,6 +245,35 @@ that fits the deployment's context after reserving output space, and check
 `prompt_tokens` in the resulting record. The fixture tests retrieval of one
 fact (`Cedar, Tuesday`) and cache reuse.
 
+## Measure a profile set
+
+On an engine that takes a [profile set](engine-contract.md), the profile side of
+a comparison can be a set. Make `profile` in the manifest a list of two to eight
+sections, in the order the request names them:
+
+```json
+"profile": [
+  {"name": "first-profile", "artifact_sha256": "SHA256_OF_ITS_PROFILE_SAFETENSORS"},
+  {"name": "second-profile", "artifact_sha256": "SHA256_OF_ITS_PROFILE_SAFETENSORS", "scale": 0.5}
+]
+```
+
+Each section gives its own strength as `scale`; without one the strength is 1.
+`--scale` stays at its default for a set. The FR443 commands and `record` then
+send the whole set on the profile side of every pair and stock on the other.
+The engine must confirm exactly these names in this order. A `content_digest`
+in a section requires the engine to confirm that digest at that position.
+
+A report of a set lists the sections and their strengths. `compare` accepts
+reports of single profiles and of sets together when model, engine, settings
+and judge match, so it shows what each profile does alone beside what the set
+does. An evidence card describes one profile and is not written for a set.
+Profile evaluation and strength calibration take one profile.
+
+The lm-evaluation-harness adapter takes a set as a list:
+`flashalign_profile=["first-profile", "second-profile"]`, with one strength for
+all of them or a list in `flashalign_scale`.
+
 ## Score XSTest
 
 Check out XSTest at the revision in the source manifest. Convert its original

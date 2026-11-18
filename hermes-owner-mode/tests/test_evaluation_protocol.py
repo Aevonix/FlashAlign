@@ -74,6 +74,7 @@ class EvaluationTests(unittest.TestCase):
             self.fault = None
             raise httpx.ConnectError("synthetic", request=request)
         mode = payload["owner_mode"]
+        mode = ",".join(mode) if isinstance(mode, list) else mode
         model = "other" if self.fault == "model" else "model"
         finish = self.fault if self.fault in {"length", "tool_calls", "content_filter"} else "stop"
         content = "" if self.fault in {"empty", "reasoning"} else mode+": synthetic final answer"
@@ -89,6 +90,8 @@ class EvaluationTests(unittest.TestCase):
         if self.fault != "missing_done":
             text += "data: [DONE]\n\n"
         headers = {"X-Owner-Mode-Effective": "wrong" if self.fault == "mode" else mode}
+        if mode != "off" and getattr(self, "digests", None):
+            headers["X-FlashAlign-Profile-Digest"] = self.digests
         return httpx.Response(200, headers=headers, text=text)
 
     def client(self, *args, **kwargs):
@@ -329,6 +332,70 @@ class EvaluationTests(unittest.TestCase):
         report["manifest"]["hardware"]["cpu"] = "/private/deployment"
         with self.assertRaises(ValueError):
             public_report(report)
+
+    def set_manifest(self):
+        manifest = copy.deepcopy(MANIFEST)
+        manifest["profile"] = [{"name": "first", "artifact_sha256": "a"*64, "content_digest": "1"*64, "scale": .5},
+                               {"name": "second", "artifact_sha256": "b"*64}]
+        return manifest
+
+    def test_a_profile_set_runs_through_collection_judging_and_comparison(self):
+        self.digests = "1"*64 + "," + "2"*64
+        result = collect_run(self.prepared, self.config, self.set_manifest(), self.options, self.root/"run",
+                             registry=self.registry, client_factory=self.client)
+        self.assertTrue(result["collection_valid"])
+        names = ["first", "second"]
+        self.assertEqual([r["owner_mode"] for r in self.requests], ["off", names, names, "off"])
+        self.assertEqual([r.get("owner_mode_scale") for r in self.requests], [None, [.5, 1.], [.5, 1.], None])
+        run, _, entries = read_collection(self.root/"run", registry=self.registry)
+        self.assertEqual(run["descriptor"]["scale"], [.5, 1.])
+        active = [e["record"] for e in entries if e["record"]["mode"] == "profile"]
+        self.assertEqual([(r["requested_profile"], r["scale"], r["metadata"]["effective_profile"]) for r in active],
+                         [(names, [.5, 1.], "first,second")] * 2)
+        report = self.score_fixture()
+        self.assertTrue(report["final_behavioral_gate_valid"])
+        self.assertEqual(report["profile_strength"], [.5, 1.])
+        public = public_report(report, performance_summary(self.root/"run", registry=self.registry))
+        self.assertEqual(public["manifest"]["profile"],
+                         [{"name": "first", "artifact_sha256": "a"*64, "content_digest": "1"*64, "scale": .5},
+                          {"name": "second", "artifact_sha256": "b"*64}])
+        # One of the set's profiles measured alone, on the same model, engine, settings and judge.
+        alone = copy.deepcopy(report)
+        alone["manifest"]["profile"], alone["profile_strength"] = {"name": "first", "artifact_sha256": "a"*64}, 1.
+        compared = compare_reports([alone, report])
+        self.assertEqual(compared["candidates"][0]["profile"]["name"], "first")
+        self.assertEqual([p["name"] for p in compared["candidates"][1]["profile"]], names)
+        self.assertEqual(compared["candidates"][1]["strength"], [.5, 1.])
+        with self.assertRaisesRegex(ValueError, "one profile"):
+            evidence_card(report)
+
+    def test_a_profile_set_checks_each_declared_digest_at_its_position(self):
+        for index, digests in enumerate(("2"*64 + "," + "1"*64, "1"*64, None)):
+            with self.subTest(digests=digests):
+                self.digests = digests
+                result = collect_run(self.prepared, self.config, self.set_manifest(), self.options,
+                                     self.root/f"drift-{index}", registry=self.registry, client_factory=self.client)
+                self.assertFalse(result["collection_valid"])
+                _, _, entries = read_collection(self.root/f"drift-{index}", registry=self.registry)
+                self.assertEqual({e["record"]["error"] for e in entries if e["record"]["mode"] == "profile"},
+                                 {"ProfileDigestMismatch"})
+
+    def test_a_profile_set_declares_its_strengths_in_the_manifest(self):
+        with self.assertRaisesRegex(ValueError, "strength in the manifest"):
+            collect_run(self.prepared, self.config, self.set_manifest(), self.options, self.root/"scaled",
+                        scale=.5, registry=self.registry, client_factory=self.client)
+        manifest = self.set_manifest()
+        manifest["profile"][0]["allowed_strengths"] = [1.]
+        with self.assertRaisesRegex(ValueError, "outside the artifact declaration"):
+            collect_run(self.prepared, self.config, manifest, self.options, self.root/"undeclared",
+                        registry=self.registry, client_factory=self.client)
+        manifest = self.set_manifest()
+        manifest["profile"][0]["format"] = "flashalign.native_wo_b.v1"
+        with self.assertRaisesRegex(ValueError, "strength one"):
+            collect_run(self.prepared, self.config, manifest, self.options, self.root/"native",
+                        registry=self.registry, client_factory=self.client)
+        self.assertEqual(self.requests, [])
+        self.assertFalse(any((self.root/name).exists() for name in ("scaled", "undeclared", "native")))
 
     def test_partial_judgments_have_fixed_denominators(self):
         self.run_subject()

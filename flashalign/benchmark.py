@@ -16,6 +16,7 @@ import time
 
 from . import Client
 from .benchmark_io import loads, read_bytes
+from owner_mode.client import profile_names
 
 
 SCHEMA = "flashalign-benchmark-v1"
@@ -95,8 +96,7 @@ def read_recording(path):
         definition = {**case, "case_sha256": checksum}
         if cases.setdefault(case["id"], definition) != definition or indices.setdefault(index, case["id"]) != case["id"]:
             raise ValueError("Recorded case fields changed across requests")
-        profile = "off" if row["mode"] == "off" else run["manifest"]["profile"]["name"]
-        scale = None if row["mode"] == "off" else run.get("scale")
+        profile, scale = ("off", None) if row["mode"] == "off" else requested(run["manifest"], run.get("scale"))
         if row.get("requested_profile") != profile or row.get("requested_scale") != scale:
             raise ValueError("Recorded profile differs from the declared run")
     if not cases or set(indices) != set(range(len(cases))):
@@ -183,27 +183,47 @@ def validate_manifest(manifest):
     }
     if not isinstance(manifest, dict) or set(manifest) != set(fields):
         raise ValueError("Manifest must contain model, engine, hardware, speculation and profile")
-    for section, allowed in fields.items():
-        values = manifest[section]
+    # A profile set is a list of two to eight profile sections, each with its own strength.
+    profiles = manifest["profile"] if isinstance(manifest["profile"], list) else [manifest["profile"]]
+    if isinstance(manifest["profile"], list) and not 2 <= len(profiles) <= 8:
+        raise ValueError("A profile set lists two to eight profiles")
+    sections = [(section, manifest[section], fields[section]) for section in fields if section != "profile"]
+    sections += [("profile", values, fields["profile"] | ({"scale"} if len(profiles) > 1 else set()))
+                 for values in profiles]
+    for _, values, allowed in sections:
         if not isinstance(values, dict) or not values or set(values) - allowed:
             raise ValueError("Manifest has an unknown or empty section")
         if any(type(v) not in (str, int, float, bool) or isinstance(v, str) and
                (len(v) > 512 or "://" in v or "\n" in v) for v in values.values()):
             raise ValueError("Manifest values must be short, nonsecret scalar descriptions")
     for section, field in (("model", "id"), ("model", "revision"), ("model", "quantization"),
-                           ("engine", "name"), ("engine", "version"),
-                           ("profile", "name"), ("profile", "artifact_sha256")):
+                           ("engine", "name"), ("engine", "version")):
         if not isinstance(manifest[section].get(field), str) or not manifest[section][field]:
             raise ValueError("Manifest is missing required model, engine or profile provenance")
     if type(manifest["speculation"].get("enabled")) is not bool:
         raise ValueError("Declare whether speculative decoding is enabled")
-    profile_hash = manifest["profile"]["artifact_sha256"]
-    if len(profile_hash) != 64 or any(c not in "0123456789abcdef" for c in profile_hash):
-        raise ValueError("profile.artifact_sha256 must be the SHA-256 of profile.safetensors")
+    for profile in profiles:
+        if any(not isinstance(profile.get(field), str) or not profile[field] for field in ("name", "artifact_sha256")):
+            raise ValueError("Manifest is missing required model, engine or profile provenance")
+        profile_hash = profile["artifact_sha256"]
+        if len(profile_hash) != 64 or any(c not in "0123456789abcdef" for c in profile_hash):
+            raise ValueError("profile.artifact_sha256 must be the SHA-256 of profile.safetensors")
+        if "scale" in profile and (not number(profile["scale"]) or not 0 < profile["scale"] <= 1):
+            raise ValueError("A profile's scale must be in (0, 1]")
+    if len(profiles) > 1:
+        profile_names([profile["name"] for profile in profiles])
     build_hash = manifest["engine"].get("build_sha256")
     if build_hash is not None and (not isinstance(build_hash, str) or len(build_hash) != 64
                                    or any(c not in "0123456789abcdef" for c in build_hash)):
         raise ValueError("engine.build_sha256 must be a SHA-256 digest")
+
+
+def requested(manifest, scale):
+    """What the profile mode sends: a name and a strength, or for a set the names and one strength each."""
+    profile = manifest["profile"]
+    if not isinstance(profile, list):
+        return profile["name"], scale
+    return [item["name"] for item in profile], [item.get("scale", 1.) for item in profile]
 
 
 def number(value):
@@ -336,7 +356,8 @@ def aggregate(records, manifest, options, *, cases_sha256, labels=None):
     report = {
         "schema": SCHEMA, "manifest": manifest, "manifest_provenance": "operator_supplied",
         "request_settings": options, "request_settings_sha256": digest(options),
-        "profile_scales": sorted({r["requested_scale"] for r in measured if r["mode"] == "profile"}),
+        "profile_scales": sorted({canonical(r["requested_scale"]): r["requested_scale"] for r in measured
+                                  if r["mode"] == "profile"}.values(), key=lambda scale: (isinstance(scale, list), scale)),
         "cases_sha256": cases_sha256, "unique_cases": len({r["case_id"] for r in measured}),
         "measured_requests": len(measured), "warmup_requests": len(records) - len(measured),
         "modes": modes, "judgments": None,
@@ -394,12 +415,14 @@ def record_run(config, manifest, cases, output, *, options, repetitions=1, warmu
         raise ValueError("Client model and benchmark manifest model differ")
     if not number(scale) or not 0 < scale <= 1:
         raise ValueError("Scale must be in (0, 1]")
-    profile = manifest["profile"]["name"]
+    if isinstance(manifest["profile"], list) and scale != 1:
+        raise ValueError("Give each profile of a set its strength in the manifest")
+    profile, strength = requested(manifest, scale)
     if profile == "off":
         raise ValueError("The comparison profile cannot be off")
     target = private_directory(output)
     run = {"schema": SCHEMA, "created_utc": datetime.now(timezone.utc).isoformat(),
-           "manifest": manifest, "request_settings": options, "scale": scale,
+           "manifest": manifest, "request_settings": options, "scale": strength,
            "repetitions": repetitions, "warmups": warmups, "cases_sha256": digest(cases),
            "case_definitions": cases}
     write_private(target / "run.json", run)
@@ -418,9 +441,10 @@ def record_run(config, manifest, cases, output, *, options, repetitions=1, warmu
                                "demo_safe": case.get("demo_safe", False), "messages": case["messages"],
                                "phase": phase, "repetition": repetition, "order": order, "mode": mode,
                                "requested_profile": "off" if mode == "off" else profile,
-                               "requested_scale": None if mode == "off" else scale,
+                               "requested_scale": None if mode == "off" else strength,
                                "utc": datetime.now(timezone.utc).isoformat()}
-                        row.update(capture(client, case, row["requested_profile"], options, scale=scale))
+                        row.update(capture(client, case, row["requested_profile"], options,
+                                           scale=1. if mode == "off" else strength))
                         records.append(row)
                         recording.write(canonical(row) + "\n")
                         recording.flush()

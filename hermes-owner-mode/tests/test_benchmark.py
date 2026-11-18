@@ -32,6 +32,10 @@ MANIFEST = {"model": {"id": "model", "revision": "pinned", "quantization": "BF16
             "engine": {"name": "synthetic", "version": "test"},
             "hardware": {"accelerator": "none"}, "speculation": {"enabled": True, "method": "unchanged"},
             "profile": {"name": "profile", "artifact_sha256": "0" * 64}}
+def canonical_profile(profile):
+    return ",".join(profile) if isinstance(profile, list) else profile
+
+
 CASE = {"id": "safe", "group": "safe", "demo_safe": True,
         "messages": [{"role": "user", "content": "A benign synthetic fixture."}]}
 
@@ -74,7 +78,8 @@ class BenchmarkTests(unittest.TestCase):
                   {"choices": [{"delta": {}, "finish_reason": "stop"}],
                    "usage": {"prompt_tokens": 7, "completion_tokens": 3}}]
         body = "".join("data: " + json.dumps(event) + "\n\n" for event in events) + "data: [DONE]\n\n"
-        return httpx.Response(200, headers={"X-Owner-Mode-Effective": profile}, text=body)
+        effective = ",".join(profile) if isinstance(profile, list) else profile
+        return httpx.Response(200, headers={"X-Owner-Mode-Effective": effective}, text=body)
 
     def factory(self, *args, **kwargs):
         return Client(*args, **kwargs, transport=httpx.MockTransport(self.reply))
@@ -96,6 +101,41 @@ class BenchmarkTests(unittest.TestCase):
         self.assertNotIn("Safe answer", json.dumps(report))
         self.assertNotIn(str(self.key), json.dumps(report))
         self.assertNotIn("base_url", json.dumps(report))
+
+    def test_a_profile_set_is_the_profile_side_of_every_pair(self):
+        manifest = copy.deepcopy(MANIFEST)
+        manifest["profile"] = [{"name": "first", "artifact_sha256": "1" * 64, "scale": .5},
+                               {"name": "second", "artifact_sha256": "2" * 64}]
+        config = {"base_url": "http://localhost/v1", "model": "model", "key_file": self.key}
+        report = record_run(config, manifest, [CASE], self.root / "set", options={"max_tokens": 12},
+                            repetitions=2, warmups=0, client_factory=self.factory)
+        names = ["first", "second"]
+        self.assertEqual([x["owner_mode"] for x in self.requests], ["off", names, names, "off"])
+        self.assertEqual([x.get("owner_mode_scale") for x in self.requests], [None, [.5, 1.], [.5, 1.], None])
+        self.assertEqual(report["profile_scales"], [[.5, 1.]])
+        self.assertEqual(report["modes"]["profile"]["completed"], 2)
+        run, rows, _ = read_recording(self.root / "set")
+        self.assertEqual(run["scale"], [.5, 1.])
+        self.assertEqual({canonical_profile(r["requested_profile"]) for r in rows}, {"off", "first,second"})
+        build_demo(self.root / "set", "safe", self.root / "set.html")
+        # Strengths of a set live in the manifest; one command-line strength cannot describe them.
+        with self.assertRaisesRegex(ValueError, "strength in the manifest"):
+            record_run(config, manifest, [CASE], self.root / "scaled", options={}, scale=.5, client_factory=self.factory)
+        self.assertFalse((self.root / "scaled").exists())
+
+    def test_a_profile_set_manifest_is_checked_profile_by_profile(self):
+        from flashalign.benchmark import validate_manifest
+        first, second = {"name": "first", "artifact_sha256": "1" * 64}, {"name": "second", "artifact_sha256": "2" * 64}
+        validate_manifest({**MANIFEST, "profile": [first, {**second, "scale": .25}]})
+        for bad in ([first], [first, first], [first, {"name": "off", "artifact_sha256": "2" * 64}],
+                    [first, {"name": "second"}], [first, {**second, "scale": 0}], [first, {**second, "scale": True}],
+                    [first, {**second, "secret": "x"}], [first, "second"],
+                    [{"name": str(index), "artifact_sha256": "3" * 64} for index in range(9)]):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                validate_manifest({**MANIFEST, "profile": bad})
+        # One profile takes its strength from the command line, as before.
+        with self.assertRaises(ValueError):
+            validate_manifest({**MANIFEST, "profile": {**first, "scale": .5}})
 
     def test_no_usage_does_not_count_chunks_as_tokens(self):
         result = metrics([{"at_s": .1, "content": "many tokens in one chunk"}, {"at_s": .2, "content": "more"}], .3)
@@ -334,6 +374,28 @@ class EvaluationAdapterTests(unittest.TestCase):
                 self.assertEqual(asyncio.run(run()), ["4"])
                 self.assertEqual(adapter.options["num_concurrent"], 1)
                 self.assertEqual(calls[0], calls[1])
+
+    def test_the_adapter_sends_a_profile_set_with_its_strengths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            key = Path(tmp) / "key"
+            key.write_bytes(b"x" * 32)
+            key.chmod(0o600)
+            calls = []
+            def reply(request):
+                calls.append(json.loads(request.content))
+                self.assertIn("X-Owner-Mode-Auth", request.headers)
+                return httpx.Response(200, headers={"X-Owner-Mode-Effective": getattr(self, "effective", "first,second")},
+                                      json={"choices": [{"message": {"content": "4"}}]})
+            cls = type("Adapter", (SignedEvaluationMixin, FakeAPI), {})
+            with Client("http://localhost/v1", "model", key_file=key, transport=httpx.MockTransport(reply)) as client:
+                adapter = cls(flashalign_client=client, flashalign_profile=["first", "second"],
+                              flashalign_scale=[.5, 1.], base_url="http://localhost/v1/chat/completions")
+                adapter.model_call(CASE["messages"], gen_kwargs={"max_tokens": 10})
+                self.assertEqual((calls[0]["owner_mode"], calls[0]["owner_mode_scale"]), (["first", "second"], [.5, 1.]))
+                # An engine that applied only part of the set is not a measurement of the set.
+                self.effective = "first"
+                with self.assertRaises(Exception):
+                    adapter.model_call(CASE["messages"], gen_kwargs={"max_tokens": 10})
 
 
 if __name__ == "__main__":
